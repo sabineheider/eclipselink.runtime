@@ -19,6 +19,10 @@
  *       - 350487: JPA 2.1 Specification defined support for Stored Procedure Calls
  *     01/11/2013-2.5 Guy Pelletier 
  *       - 389090: JPA 2.1 DDL Generation Support
+ *     01/24/2013-2.5 Guy Pelletier 
+ *       - 389090: JPA 2.1 DDL Generation Support
+ *     09 Jan 2013-2.5 Gordon Yorke
+ *       - 397772: JPA 2.1 Entity Graph Support
  ******************************************************************************/  
 package org.eclipse.persistence.internal.localization.i18n;
 
@@ -182,11 +186,14 @@ public class ExceptionLocalizationResource extends ListResourceBundle {
                                            { "criteria_no_constructor_found", "An exception occured looking on class: {0} for constructor using selection criteria types as arguments.  If this CriteriaQuery was not intended to be a constructor query please verify that the selection matches the return type."},
                                            { "MULTIPLE_SELECTIONS_PASSED_TO_QUERY_WITH_PRIMITIVE_RESULT", "'multiSelect' was invoked on a CriteriaQuery with a primitive result type.  Either the return type is incorrect or 'select' should be used instead."},
                                            { "CRITERIA_NON_LITERAL_PASSED_TO_IN", "'in(Expression<?>... values)' was invoked with an expression type: {0} that was neither a literal nor a parameter.  This is not supported."},
+                                           { "CRITERIA_NO_ROOT_FOR_COMPOUND_QUERY", "Attempting to create a Criteria query with no Root."},
                                            { "NO_PARAMETER_WITH_NAME", "No parameter with name : {0} was found within the query: {1}."},
                                            { "NO_PARAMETER_WITH_INDEX", "No parameter with index : {0} was found within the query: {1}."},
+                                           { "INCORRECT_PARAMETER_TYPE", "The parameter at index : {0} was not of type: {1}."},
                                            { "PARAMETER_NILL_NOT_FOUND", "Null parameter passed to getParameterValue()"},
                                            { "NO_VALUE_BOUND", "No value was bound to parameter named: {0}"},
                                            { "NULL_PARAMETER_PASSED_TO_SET_PARAMETER", "Null parameter was passed to 'setParameter'.  Can not index parameters by 'Null'."},
+                                           { "position_param_not_found", "There was not parameter bound at position: {0}."},
                                            { "pathnode_is_primitive_node", "Criteria expression is of primitive type and can not be further navigated."},
                                            { "pathnode_type_does_not_apply_to_primitive_node", "Criteria expression is of primitive type and can not be further navigated.  Primitive Expressions do not allow 'type'."},
                                            { "cache_impl_class_has_no_descriptor_is_not_a_persistent_type", "The class [{0}] is not a persistent type - it has no associated descriptor."},                                           
@@ -203,6 +210,8 @@ public class ExceptionLocalizationResource extends ListResourceBundle {
                                            { "jpa21-ddl-source-script-not-found", "The source script: {0} for the generateSchema call was not found."},
                                            { "jpa21-ddl-source-script-sql-exception", "An error occured executing {0} from the source ddl generation script: {1}."},
                                            { "jpa21-ddl-source-script-io-exception", "An IO error occured with the source ddl generation script: {0}."},
+                                           { "jpa21-ddl-drop-script-target-not-specified", "When the generating DDL to scripts, a drop script target must be specified using the [javax.persistence.ddl-drop-script-target] property."},
+                                           { "jpa21-ddl-create-script-target-not-specified", "When the generating DDL to scripts, a drop script target must be specified using the [javax.persistence.ddl-create-script-target] property."},
                                            //criteria API IllegalArgumentExceptions
                                            { "jpa_criteriaapi_no_corresponding_element_in_result", "Element {0} does not correspond to an element in the query result."},
                                            { "jpa_criteriaapi_invalid_result_index", "index {0} invalid for result list of size {1}."},
@@ -212,9 +221,22 @@ public class ExceptionLocalizationResource extends ListResourceBundle {
                                            { "jpa_criteriaapi_alias_reused", "More than one selection item uses the same alias name.  Duplicate names used were: {0}"},
                                            { "cannot_read_through_txn_for_unsynced_pc", "The property was set to join this persistence context to the currently active transaction but this is not a SYNCHRONIZED persistence context."},
                                            { "unable_to_unwrap_jpa", "Provider does not support unwrapping {0} to {1}"},
-                                           { "argument_keyed_named_query_with_JPA", "Multiple queries with name: {0} exist but names must be unique when using EntityManagerFactory.addNamedQuery()"}
+                                           { "argument_keyed_named_query_with_JPA", "Multiple queries with name: {0} exist but names must be unique when using EntityManagerFactory.addNamedQuery()"},
+                                           { "null_argument_get_attributegroup", "Search name for AttributeGroup must not be null."},
+                                           { "add_attribute_key_was_null", "When specifying an AttributeGroup for a subclass of an attribute's type the type parameter must not be null"},
+                                           { "managed_component_not_found", "An attribute: {1} listed in entity graph: {0} references a subgraph named: {2} which can not be found."},
+                                           { "only_one_root_subgraph", "Only the root subgraph may be listed without a type.  Any subgraphs that represent subclasses must have the type set."},
+                                           { "subclass_sought_not_a_managed_type", "subgraph type sought: {0} is not a managed type for this attribute: {1}."},
+                                           { "attribute_is_not_map_with_managed_key", "Can not added key subgraph to entity graph as attribute : {0} in class : {1} is not a Map with a managed type key."},
+                                           { "no_entity_graph_of_name", "No EntityGraph exists with name {0}"},
+                                           { "not_usable_passed_to_entitygraph_hint", "value {1} passed to query hint {0} is not appropriate for this query hint"},
+                                           { "operation_not_supported", "Calling {0} on a {1} is not supported by the specification."},
+                                           { "pu_configured_for_resource_local", "Unable to create EntityManager with SynchronizationType because PersistenceUnit is configured with resource-local transactions."},
+                                           { "getpersistenceunitutil_called_on_closed_emf", "getPersistenceUnitUtil() was called on a closed EntityManagerFactory."},
+                                           { "named_entity_graph_exists", "NamedEntityGraph with name {0} found on {1} already exists in this persistence unit."},
+                                           { "cannot_get_from_non_correlated_query", "getCorrelationParent() called on a from-clause that was not obtained through correlation." }
                                            
-                                        };
+										};
     /**
      * Return the lookup table.
      */
@@ -222,3 +244,4 @@ public class ExceptionLocalizationResource extends ListResourceBundle {
         return contents;
     }
 }
+

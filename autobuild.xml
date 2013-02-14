@@ -37,7 +37,7 @@
 *  automated build process using Hudson for EclipseLink at Eclipse and is intended
 *  to be called by Hudson (generic user).
 *
-*  All publishing commands are now in a separate xml file (publishbuild.xml)
+*  All publishing commands are now external to this file (see eclipselink.releng: publish.sh)
 *================================================================================= -->
 <project name="AutoBuild" basedir="." default="build-nightly">
 <echo message="---- AutoBuild.xml ----"/>
@@ -726,6 +726,7 @@
                 <include name="${eclipselink.tst.src.prefix}-${version.string}${eclipselink.zip.suffix}"/>
                 <include name="${eclipselink.tst.jar.prefix}-${version.string}${eclipselink.zip.suffix}"/>
                 <include name="${eclipselink.install.prefix}*${version.qualifier}-shared-lib.zip"/>
+                <include name="eclipselink-tools-*.zip"/>
                 <!-- copy all test results pages -->
                 <include name="**/eclipselink-*${version.string}.html"/>
                 <include name="**/ResultSummary.dat"/>
@@ -733,13 +734,15 @@
             </fileset>
         </copy>
         <!-- Copy for maven to run -->
-        <copy todir="${tmp.maven.dir}" file="${basedir}/pom.xml.template"  failonerror="false"/>
-        <copy todir="${tmp.maven.dir}" file="${basedir}/uploadToMaven.xml" failonerror="false"/>
+        <copy todir="${tmp.maven.dir}" file="${basedir}/pom.xml.template"        failonerror="false"/>
+        <copy todir="${tmp.maven.dir}" file="${basedir}/uploadToMaven.xml"       failonerror="false"/>
+        <!-- copy todir="${tmp.maven.dir}" file="${basedir}/uploadToSonatypeOSS.xml" failonerror="false"/ -->
     </target>
 
     <target name="publish-milestone-maven">
         <echo message="Publish-milestone-maven: "/>
-        <echo message="    using: ${releng.repo.dir}/upload${branch}ToMaven.xml"/>
+        <!-- echo message="    using: ${releng.repo.dir}/upload${branch}ToMaven.xml"/ -->
+        <echo message="    using: ${basedir}/uploadToMaven.xml"/>
         <echo message="    from dir '${tmp.maven.dir}'"/>
         <echo message="    target: 'upload-maven-all'"/>
         <echo message="    properties: "/>
@@ -752,7 +755,8 @@
         <echo message="        build.date      ='${build.date}'"/>
         <echo message="        build.type      ='${build.type}'"/>
         <echo message="        bundle.dir      ='${tmp.maven.dir}'"/>
-        <ant antfile="${releng.repo.dir}/upload${branch}ToMaven.xml" dir="${tmp.maven.dir}" target="upload-maven-all">
+        <!-- ant antfile="${releng.repo.dir}/upload${branch}ToMaven.xml" dir="${tmp.maven.dir}" target="upload-maven-all" -->
+        <ant antfile="uploadToMaven.xml" dir="${tmp.maven.dir}" target="upload-maven-all">
             <property name="build.deps.dir"   value="${build.deps.dir}"/>
             <property name="custom.tasks.lib" value="${releng.repo.dir}/ant_customizations.jar"/>
             <property name="release.version"  value="${release.version}"/>

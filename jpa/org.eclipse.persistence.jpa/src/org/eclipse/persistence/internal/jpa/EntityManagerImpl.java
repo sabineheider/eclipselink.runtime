@@ -696,6 +696,9 @@ public class EntityManagerImpl implements org.eclipse.persistence.jpa.JpaEntityM
     public <T> T find(Class<T> entityClass, Object primaryKey, LockModeType lockMode, Map<String, Object> properties) {
         try {
             verifyOpen();
+            if (lockMode != null && !lockMode.equals(LockModeType.NONE)){
+                checkForTransaction(true);
+            }
             AbstractSession session = this.databaseSession;
             ClassDescriptor descriptor = session.getDescriptor(entityClass);
             // PERF: Avoid uow creation for read-only.
@@ -1913,7 +1916,7 @@ public class EntityManagerImpl implements org.eclipse.persistence.jpa.JpaEntityM
             this.extendedPersistenceContext.setShouldOrderUpdates(this.shouldOrderUpdates);
             this.extendedPersistenceContext.setShouldCascadeCloneToJoinedRelationship(true);
             this.extendedPersistenceContext.setShouldStoreByPassCache(this.cacheStoreBypass);
-            if (txn != null  && syncType.equals(SynchronizationType.SYNCHRONIZED)) {
+            if (txn != null  && (syncType == null || syncType.equals(SynchronizationType.SYNCHRONIZED))) {
                 // if there is an active txn we must register with it on
                 // creation of PC
                 transaction.registerUnitOfWorkWithTxn(this.extendedPersistenceContext);
@@ -2621,8 +2624,10 @@ public class EntityManagerImpl implements org.eclipse.persistence.jpa.JpaEntityM
     public LockModeType getLockMode(Object entity) {
         try {
             verifyOpen();
+            checkForTransaction(true);
             UnitOfWorkImpl uowImpl = getActivePersistenceContext(checkForTransaction(false));
             LockModeType lockMode = LockModeType.NONE;
+
             if (!contains(entity, uowImpl)) {
                 throw new IllegalArgumentException(ExceptionLocalization.buildMessage("cant_getLockMode_of_not_managed_object", new Object[] { entity }));
             }
@@ -2828,35 +2833,50 @@ public class EntityManagerImpl implements org.eclipse.persistence.jpa.JpaEntityM
         return false;
     }
 
-    // TODO: JPA 2.1 API
-    
-    public <T> T copy(T entity, EntityGraph<? super T> entityGraph, Map<String, Object> properties) {
-        // TODO: JPA 2.1 functionality
-        throw new RuntimeException("Not implemented ... WIP ...");
-    }
-
     public <T> EntityGraph<T> createEntityGraph(Class<T> rootType) {
-        // TODO: JPA 2.1 functionality
-        throw new RuntimeException("Not implemented ... WIP ...");
+        ClassDescriptor descriptor = getAbstractSession().getDescriptor(rootType);
+        if (descriptor == null || descriptor.isAggregateDescriptor()){
+            throw new IllegalArgumentException(ExceptionLocalization.buildMessage("unknown_bean_class", new Object[]{rootType.getName()}));
+        }
+        return new EntityGraphImpl<T>(new AttributeGroup(null, rootType), descriptor);
     }
 
     public EntityGraph<?> createEntityGraph(String graphName) {
-        // TODO: JPA 2.1 functionality
-        throw new RuntimeException("Not implemented ... WIP ...");
+        AttributeGroup group = this.getAbstractSession().getAttributeGroups().get(graphName);
+        if (group == null){
+            throw new IllegalArgumentException(ExceptionLocalization.buildMessage("no_entity_graph_of_name", new Object[]{graphName}));
+        }
+        ClassDescriptor descriptor = this.getAbstractSession().getDescriptor(group.getType());
+        return new EntityGraphImpl(group.clone(), descriptor);
     }
 
     public <T> EntityGraph<T> getEntityGraph(String graphName) {
-        // TODO: JPA 2.1 functionality
-        throw new RuntimeException("Not implemented ... WIP ...");
+        AttributeGroup group = this.getAbstractSession().getAttributeGroups().get(graphName);
+        if (group == null){
+            throw new IllegalArgumentException(ExceptionLocalization.buildMessage("no_entity_graph_of_name", new Object[]{graphName}));
+        }
+        return new EntityGraphImpl(group);
     }
 
+    @Override
     public <T> List<EntityGraph<? super T>> getEntityGraphs(Class<T> entityClass) {
-        // TODO: JPA 2.1 functionality
-        throw new RuntimeException("Not implemented ... WIP ...");
+        ClassDescriptor descriptor = getAbstractSession().getDescriptor(entityClass);
+        if (descriptor == null || descriptor.isAggregateDescriptor()){
+            throw new IllegalArgumentException(ExceptionLocalization.buildMessage("unknown_bean_class", new Object[]{entityClass.getName()}));
+        }
+        List<EntityGraph<? super T>> result = new ArrayList<EntityGraph<? super T>>();
+        for (AttributeGroup group : descriptor.getAttributeGroups().values()){
+            result.add(new EntityGraphImpl(group));
+        }
+        if (descriptor.hasInheritance()){
+            while(descriptor.getInheritancePolicy().getParentDescriptor() != null){
+                descriptor = descriptor.getInheritancePolicy().getParentDescriptor();
+                for (AttributeGroup group : descriptor.getAttributeGroups().values()){
+                    result.add(new EntityGraphImpl(group));
+                }
+            }
+        }
+        return result;
     }
 
-    public <T> T merge(T entity, EntityGraph<? super T> entityGraph, Map<String, Object> properties) {
-        // TODO: JPA 2.1 functionality
-        throw new RuntimeException("Not implemented ... WIP ...");
-    }
 }

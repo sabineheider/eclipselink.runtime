@@ -88,6 +88,7 @@ public class QueryImpl {
     protected String queryName = null;
     protected Map<String, Object> parameterValues = null;
     protected Map<String, Parameter<?>> parameters;
+    protected Map<String, Integer> parameterPositions = null;
     protected int firstResultIndex = UNDEFINED; 
     protected int maxResults = UNDEFINED; 
 
@@ -104,6 +105,7 @@ public class QueryImpl {
      */
     protected QueryImpl(EntityManagerImpl entityManager) {
         this.parameterValues = new HashMap<String, Object>();
+        this.parameterPositions = new HashMap<String, Integer>();
         this.entityManager = entityManager;
         this.isShared = true;
     }
@@ -215,7 +217,7 @@ public class QueryImpl {
         }
 
         // Set a pessimistic locking on the query if specified.
-        if (this.lockMode != null) {
+        if (this.lockMode != null && !this.lockMode.equals(LockModeType.NONE)) {
             // We need to throw TransactionRequiredException if there is no
             // active transaction
             this.entityManager.checkForTransaction(true);
@@ -333,6 +335,12 @@ public class QueryImpl {
                     // have to continually prepare on each usage
                     this.databaseQuery.checkPrepare(this.entityManager.getActiveSessionIfExists(), new DatabaseRecord());
                 }
+                if (this.databaseQuery.isObjectLevelReadQuery() && ((ObjectLevelReadQuery)this.databaseQuery).getLockModeType() != null){
+                    this.lockMode = LockModeType.valueOf(((ObjectLevelReadQuery)this.databaseQuery).getLockModeType());
+                }
+                if (this.databaseQuery.isReadQuery()){
+                    this.maxResults = ((ReadQuery)this.databaseQuery).getInternalMax();
+                }
             } else {
                 throw new IllegalArgumentException(ExceptionLocalization.buildMessage("unable_to_find_named_query", new Object[] { this.queryName }));
             }
@@ -383,7 +391,13 @@ public class QueryImpl {
             int count = 0;
             if (query.getArguments() != null && !query.getArguments().isEmpty()) {
                 for (String argName : query.getArguments()) {
-                    Parameter<?> param = new ParameterExpressionImpl(null, query.getArgumentTypes().get(count), argName);
+                    Integer position = parameterPositions.get(argName);
+                    Parameter<?> param = null;
+                    if (position == null){
+                        param = new ParameterExpressionImpl(null, query.getArgumentTypes().get(count), argName);
+                    } else {
+                        param = new ParameterExpressionImpl(null, query.getArgumentTypes().get(count), position);
+                    }
                     this.parameters.put(argName, param);
                     ++count;
                 }
@@ -405,8 +419,8 @@ public class QueryImpl {
         try {
             entityManager.verifyOpen();
 
-            if (!getDatabaseQueryInternal().isReadQuery()) {
-                throw new IllegalArgumentException(ExceptionLocalization.buildMessage("invalid_lock_query", (Object[]) null));
+            if (!getDatabaseQueryInternal().isObjectLevelReadQuery()) {
+                throw new IllegalStateException(ExceptionLocalization.buildMessage("invalid_lock_query", (Object[]) null));
             }
 
             return this.lockMode;
@@ -671,6 +685,20 @@ public class QueryImpl {
         return QueryHintsHandler.apply(hints, query, classLoader, session);
     }
 
+
+    /**
+     * Return the identifier of this parameter.  This will be the name if it is set, else it will be the position
+     * @param param
+     * @return
+     */
+    public static String getParameterId(Parameter param){
+        Integer id= param.getPosition();
+        if (id == null ){
+            return String.valueOf(param.getName());
+        }
+        return String.valueOf(id);
+    }
+    
     /**
      * Return a boolean indicating whether a value has been bound to the
      * parameter.
@@ -682,7 +710,7 @@ public class QueryImpl {
     public boolean isBound(Parameter<?> param) {
         if (param == null)
             return false;
-        return this.parameterValues.containsKey(param.getName());
+        return this.parameterValues.containsKey(getParameterId(param));
     }
 
     /**
@@ -729,8 +757,8 @@ public class QueryImpl {
         try {
             entityManager.verifyOpen();
 
-            if (!getDatabaseQueryInternal().isReadQuery()) {
-                throw new IllegalArgumentException(ExceptionLocalization.buildMessage("invalid_lock_query", (Object[]) null));
+            if (!getDatabaseQueryInternal().isObjectLevelReadQuery()) {
+                throw new IllegalStateException(ExceptionLocalization.buildMessage("invalid_lock_query", (Object[]) null));
             }
 
             this.lockMode = lockMode;
@@ -848,6 +876,7 @@ public class QueryImpl {
      */
     protected void setParameterInternal(int position, Object value) {
         setParameterInternal(String.valueOf(position), value, true);
+        this.parameterPositions.put(String.valueOf(position), position);
     }
     
     /**
@@ -926,7 +955,8 @@ public class QueryImpl {
     public FlushModeType getFlushMode() {
         try {
             entityManager.verifyOpen();
-            if (getDatabaseQueryInternal().getFlushOnExecute())
+            Boolean flushOnExecute = getDatabaseQueryInternal().getFlushOnExecute();
+            if ((flushOnExecute == null) || flushOnExecute)
                 return FlushModeType.AUTO;
             return FlushModeType.COMMIT;
         } catch (RuntimeException e) {
@@ -972,7 +1002,8 @@ public class QueryImpl {
             Parameter param = (Parameter) getInternalParameters().get(String.valueOf(position));
             if (param == null) {
                 throw new IllegalArgumentException(ExceptionLocalization.buildMessage("NO_PARAMETER_WITH_INDEX", new Object[] { position, this.databaseQuery }));
-
+            } else if (param.getParameterType() != null && type != null && !type.isAssignableFrom(param.getParameterType())){
+                throw new IllegalStateException(ExceptionLocalization.buildMessage("INCORRECT_PARAMETER_TYPE", new Object[] { position, this.databaseQuery }));
             }
             return param;
         } catch (RuntimeException e) {
@@ -1024,9 +1055,10 @@ public class QueryImpl {
     public <T> T getParameterValue(Parameter<T> param) {
         if (param == null)
             throw new IllegalArgumentException(ExceptionLocalization.buildMessage("PARAMETER_NILL_NOT_FOUND"));
-        return (T) this.getParameterValue(param.getName());
-    }
 
+        return (T) this.getParameterValue(getParameterId(param));
+    }
+    
     /**
      * Return the value bound to the named parameter.
      * 
@@ -1066,7 +1098,7 @@ public class QueryImpl {
     public Object getParameterValue(int position) {
         String param = String.valueOf(position);
         if (!this.parameterValues.containsKey(param)) {
-            throw new IllegalArgumentException(ExceptionLocalization.buildMessage("position_param_not_found", new Object[] { position }));
+            throw new IllegalStateException(ExceptionLocalization.buildMessage("position_param_not_found", new Object[] { position }));
         }
         return this.parameterValues.get(param);
     }

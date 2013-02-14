@@ -20,6 +20,8 @@
  *       - 374688: JPA 2.1 Converter support
  *     11/05/2012-2.5 Guy Pelletier 
  *       - 350487: JPA 2.1 Specification defined support for Stored Procedure Calls
+ *     01/23/2013-2.5 Guy Pelletier 
+ *       - 350487: JPA 2.1 Specification defined support for Stored Procedure Calls
  ******************************************************************************/  
 package org.eclipse.persistence.testing.models.jpa21.advanced;
 
@@ -744,7 +746,7 @@ public class EmployeePopulator {
         smallProjectExample10();
     }
 
-    public StoredProcedureDefinition buildMySQL2ResultSetProcedure() {
+    public StoredProcedureDefinition buildMySQLResultSetProcedure() {
         StoredProcedureDefinition proc = new StoredProcedureDefinition();
         proc.setName("Read_Multiple_Result_Sets");
         
@@ -1314,6 +1316,7 @@ public class EmployeePopulator {
 
         try {
             largeProject.setTeamLeader(employeeExample2());
+            largeProject.setExecutive(employeeExample15());
         } catch (Exception exception) {
             throw new RuntimeException(exception.toString());
         }
@@ -1327,6 +1330,7 @@ public class EmployeePopulator {
         }
 
         LargeProject largeProject = basicLargeProjectExample2();
+        largeProject.setExecutive(employeeExample15());
         registerObject(largeProject, "0002");
         return largeProject;
     }
@@ -1337,6 +1341,7 @@ public class EmployeePopulator {
         }
 
         LargeProject largeProject = basicLargeProjectExample3();
+        largeProject.setExecutive(employeeExample15());
         registerObject(largeProject, "0003");
         return largeProject;
     }
@@ -1351,6 +1356,7 @@ public class EmployeePopulator {
 
         try {
             largeProject.setTeamLeader(employeeExample3());
+            largeProject.setExecutive(employeeExample15());
         } catch (Exception exception) {
             throw new RuntimeException(exception.toString());
         }
@@ -1368,6 +1374,7 @@ public class EmployeePopulator {
 
         try {
             largeProject.setTeamLeader(employeeExample5());
+            largeProject.setExecutive(employeeExample15());
         } catch (Exception exception) {
             throw new RuntimeException(exception.toString());
         }
@@ -1415,7 +1422,7 @@ public class EmployeePopulator {
                 }
                 
                 if (platform.isMySQL()) {
-                    schema.replaceObject(buildMySQL2ResultSetProcedure());
+                    schema.replaceObject(buildMySQLResultSetProcedure());
                 }
             } finally {
                 if (useFastTableCreatorAfterInitialCreate && !isFirstCreation) {

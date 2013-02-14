@@ -11,7 +11,7 @@
 package org.eclipse.persistence.jpars.test.model.employee;
 
 import static javax.persistence.CascadeType.ALL;
-import static javax.persistence.FetchType.EAGER;
+import static javax.persistence.CascadeType.PERSIST;
 import static javax.persistence.FetchType.LAZY;
 
 import java.util.ArrayList;
@@ -20,6 +20,7 @@ import java.util.List;
 import javax.persistence.AttributeOverride;
 import javax.persistence.AttributeOverrides;
 import javax.persistence.Basic;
+import javax.persistence.CascadeType;
 import javax.persistence.CollectionTable;
 import javax.persistence.Column;
 import javax.persistence.ElementCollection;
@@ -49,14 +50,20 @@ import org.eclipse.persistence.annotations.PrivateOwned;
                 name = "Employee.getManager",
                 query = "select u.firstName, u.lastName, u.manager from Employee u"),
         @NamedQuery(
-                        name = "Employee.getManagerById",
-                        query = "select u.firstName, u.lastName, u.manager from Employee u where u.id = :id"),
+                name = "Employee.getManagerById",
+                query = "select u.firstName, u.lastName, u.manager from Employee u where u.id = :id"),
         @NamedQuery(
-                        name="Employee.salaryMax", 
-                        query="SELECT e.id, max(e.salary) from Employee e GROUP BY e.id, e.salary"),
+                name = "Employee.salaryMax",
+                query = "SELECT e.id, max(e.salary) AS max_salary from Employee e GROUP BY e.id, e.salary"),
         @NamedQuery(
-                        name="Employee.count", 
-                        query="SELECT count(e) FROM Employee e")                        
+                name = "Employee.count",
+                query = "SELECT count(e) FROM Employee e"),
+        @NamedQuery(
+                name = "Employee.getPhoneNumbers",
+                query = "SELECT e.firstName, e.lastName, pn FROM Employee e JOIN e.phoneNumbers pn"),
+        @NamedQuery(
+                name = "Employee.findAll", 
+                query = "SELECT e FROM Employee e ORDER BY e.id")
 })
 @Entity
 @Table(name = "JPARS_EMPLOYEE")
@@ -92,6 +99,7 @@ public class Employee {
 
     @Version
     private Long version;
+    
     @ManyToMany
     @JoinTable(joinColumns = @JoinColumn(name = "EMP_ID"), inverseJoinColumns = @JoinColumn(name = "PROJ_ID"), name = "JPARS_PROJ_EMP")
     private List<Project> projects = new ArrayList<Project>();
@@ -103,7 +111,7 @@ public class Employee {
     @OneToMany(mappedBy = "manager")
     private List<Employee> managedEmployees = new ArrayList<Employee>();
 
-    @OneToMany(mappedBy = "employee", cascade = ALL, fetch = EAGER)
+    @OneToMany(mappedBy = "employee", cascade = ALL, fetch = LAZY)
     @PrivateOwned
     private List<PhoneNumber> phoneNumbers = new ArrayList<PhoneNumber>();
 
@@ -122,6 +130,13 @@ public class Employee {
     @CollectionTable(name = "JPARS_RESPONS")
     private List<String> responsibilities = new ArrayList<String>();
 
+    @OneToMany(mappedBy="employee", cascade=CascadeType.ALL)
+    private List<Expertise> expertiseAreas = new ArrayList<Expertise>();
+    
+    @ManyToOne(cascade = PERSIST, fetch = LAZY)
+    @JoinColumn(name = "OFFICE_ID")
+    private Office office;
+    
     public Employee() {
     }
 
@@ -275,6 +290,22 @@ public class Employee {
 
     public void removeResponsibility(String responsibility) {
         getResponsibilities().remove(responsibility);
+    }
+
+    public List<Expertise> getExpertiseAreas() {
+        return expertiseAreas;
+    }
+
+    public void setExpertiseAreas(List<Expertise> expertiseAreas) {
+        this.expertiseAreas = expertiseAreas;
+    }
+
+    public Office getOffice() {
+        return office;
+    }
+
+    public void setOffice(Office office) {
+        this.office = office;
     }
 
     public String toString() {

@@ -48,6 +48,7 @@ import javax.xml.stream.XMLOutputFactory;
 import javax.xml.stream.XMLStreamWriter;
 import javax.xml.transform.stream.StreamSource;
 
+import org.eclipse.persistence.config.PersistenceUnitProperties;
 import org.eclipse.persistence.descriptors.ClassDescriptor;
 import org.eclipse.persistence.descriptors.FetchGroupManager;
 import org.eclipse.persistence.dynamic.DynamicEntity;
@@ -71,28 +72,29 @@ import org.eclipse.persistence.jpa.JpaHelper;
 import org.eclipse.persistence.jpa.PersistenceProvider;
 import org.eclipse.persistence.jpa.dynamic.JPADynamicHelper;
 import org.eclipse.persistence.jpa.rs.config.ConfigDefaults;
+import org.eclipse.persistence.jpa.rs.exceptions.JPARSConfigurationException;
 import org.eclipse.persistence.jpa.rs.exceptions.JPARSException;
 import org.eclipse.persistence.jpa.rs.logging.LoggingLocalization;
+import org.eclipse.persistence.jpa.rs.util.IdHelper;
+import org.eclipse.persistence.jpa.rs.util.JPARSLogger;
+import org.eclipse.persistence.jpa.rs.util.JTATransactionWrapper;
+import org.eclipse.persistence.jpa.rs.util.PreLoginMappingAdapter;
+import org.eclipse.persistence.jpa.rs.util.ResourceLocalTransactionWrapper;
+import org.eclipse.persistence.jpa.rs.util.TransactionWrapper;
+import org.eclipse.persistence.jpa.rs.util.list.MultiResultQueryList;
+import org.eclipse.persistence.jpa.rs.util.list.MultiResultQueryListItem;
+import org.eclipse.persistence.jpa.rs.util.list.SingleResultQueryList;
+import org.eclipse.persistence.jpa.rs.util.metadatasources.DynamicXMLMetadataSource;
 import org.eclipse.persistence.jpa.rs.util.metadatasources.JavaLangMetadataSource;
 import org.eclipse.persistence.jpa.rs.util.metadatasources.JavaMathMetadataSource;
 import org.eclipse.persistence.jpa.rs.util.metadatasources.JavaUtilMetadataSource;
+import org.eclipse.persistence.jpa.rs.util.metadatasources.LinkMetadataSource;
 import org.eclipse.persistence.jpa.rs.util.metadatasources.MultiResultQueryListItemMetadataSource;
 import org.eclipse.persistence.jpa.rs.util.metadatasources.MultiResultQueryListMetadataSource;
 import org.eclipse.persistence.jpa.rs.util.metadatasources.SimpleHomogeneousListMetadataSource;
 import org.eclipse.persistence.jpa.rs.util.metadatasources.SingleResultQueryListMetadataSource;
-import org.eclipse.persistence.jpa.rs.util.list.MultiResultQueryListItem;
-import org.eclipse.persistence.jpa.rs.util.list.MultiResultQueryList;
-import org.eclipse.persistence.jpa.rs.util.list.SingleResultQueryList;
-import org.eclipse.persistence.jpa.rs.util.metadatasources.DynamicXMLMetadataSource;
-import org.eclipse.persistence.jpa.rs.util.IdHelper;
-import org.eclipse.persistence.jpa.rs.util.JPARSLogger;
-import org.eclipse.persistence.jpa.rs.util.JTATransactionWrapper;
 import org.eclipse.persistence.jpa.rs.util.xmladapters.LinkAdapter;
-import org.eclipse.persistence.jpa.rs.util.metadatasources.LinkMetadataSource;
-import org.eclipse.persistence.jpa.rs.util.PreLoginMappingAdapter;
 import org.eclipse.persistence.jpa.rs.util.xmladapters.RelationshipLinkAdapter;
-import org.eclipse.persistence.jpa.rs.util.ResourceLocalTransactionWrapper;
-import org.eclipse.persistence.jpa.rs.util.TransactionWrapper;
 import org.eclipse.persistence.mappings.DatabaseMapping;
 import org.eclipse.persistence.mappings.ForeignReferenceMapping;
 import org.eclipse.persistence.mappings.ObjectReferenceMapping;
@@ -138,6 +140,8 @@ public class PersistenceContext {
     protected URI baseURI = null;
 
     protected TransactionWrapper transaction = null;
+    
+    private Boolean weavingEnabled = null;
 
     protected PersistenceContext() {
     }
@@ -170,6 +174,13 @@ public class PersistenceContext {
         setBaseURI(defaultURI);
     }
 
+    public boolean isWeavingEnabled() {
+        if (this.weavingEnabled == null) {
+            this.weavingEnabled = getWeavingProperty();
+        }
+        return this.weavingEnabled;
+    }
+
     /**
      * This method is used to help construct a JAXBContext from an existing EntityManagerFactory.
      * 
@@ -181,7 +192,7 @@ public class PersistenceContext {
      * @param session
      */
     @SuppressWarnings("rawtypes")
-    protected void addDynamicXMLMetadataSources(List<Object> metadataSources, DatabaseSession session) {
+    protected void addDynamicXMLMetadataSources(List<Object> metadataSources, AbstractSession session) {
         Set<String> packages = new HashSet<String>();
         Iterator<Class> i = session.getDescriptors().keySet().iterator();
         while (i.hasNext()){
@@ -218,11 +229,11 @@ public class PersistenceContext {
     }
 
     /**
-     * Create a JAXBConext based on the EntityManagerFactory for this PersistenceContext
+     * Create a JAXBContext based on the EntityManagerFactory for this PersistenceContext
      * @param session
      * @return
      */
-    protected JAXBContext createDynamicJAXBContext(DatabaseSession session) throws JAXBException, IOException {
+    protected JAXBContext createDynamicJAXBContext(AbstractSession session) throws JAXBException, IOException {
         JAXBContext jaxbContext = (JAXBContext) session.getProperty(JAXBContext.class.getName());
         if (jaxbContext != null) {
             return jaxbContext;
@@ -230,7 +241,7 @@ public class PersistenceContext {
 
         Map<String, Object> properties = createJAXBProperties(session);      
 
-        ClassLoader cl = session.getPlatform().getConversionManager().getLoader();
+        ClassLoader cl = session.getDatasourcePlatform().getConversionManager().getLoader();
         jaxbContext = DynamicJAXBContextFactory.createContextFromOXM(cl, properties);
 
         session.setProperty(JAXBContext.class.getName(), jaxbContext);
@@ -270,7 +281,7 @@ public class PersistenceContext {
      * @throws IOException
      */
     @SuppressWarnings({ "unchecked", "rawtypes" })
-    protected Map<String, Object> createJAXBProperties(DatabaseSession session) throws IOException {
+    protected Map<String, Object> createJAXBProperties(AbstractSession session) throws IOException {
         Map<String, Object> properties = new HashMap<String, Object>(1);
         List<Object> metadataLocations = new ArrayList<Object>();
 
@@ -853,7 +864,7 @@ public class PersistenceContext {
     }
 
     @SuppressWarnings("rawtypes")
-    protected Query buildQuery(Map<String, String> tenantId, String name, Map<?, ?> parameters, Map<String, ?> hints) {
+    public Query buildQuery(Map<String, String> tenantId, String name, Map<?, ?> parameters, Map<String, ?> hints) {
         EntityManager em = getEmf().createEntityManager(tenantId);
         Query query = em.createNamedQuery(name);
         DatabaseQuery dbQuery = ((EJBQueryImpl<?>) query).getDatabaseQuery();
@@ -1035,7 +1046,7 @@ public class PersistenceContext {
             for (DatabaseMapping mapping: descriptor.getMappings()){
                 if (mapping instanceof XMLInverseReferenceMapping){
                     // we require Fetch groups to handle relationships
-                    throw new JPARSException(LoggingLocalization.buildMessage("weaving_required_for_relationships", new Object[]{}));
+                    throw new JPARSConfigurationException(LoggingLocalization.buildMessage("weaving_required_for_relationships", new Object[]{}));
                 }
             }
         }
@@ -1228,5 +1239,39 @@ public class PersistenceContext {
             throw new JPARSException(ex.getMessage());
         }
         return adapters;
+    }
+    
+    
+    private boolean getWeavingProperty() {
+        // Initialize the properties with their defaults first
+        boolean restWeavingEnabled = true;
+        boolean fetchGroupWeavingEnabled = true;
+        boolean weavingEnabled = true;
+
+        Map<String, Object> properties = this.emf.getProperties();
+
+        for (Map.Entry<String, Object> entry : properties.entrySet()) {
+            String key = entry.getKey();
+            Object value = entry.getValue();
+
+            if (key.equals(PersistenceUnitProperties.WEAVING)) {
+                if (!("true".equalsIgnoreCase((String) value)) && !("static".equalsIgnoreCase((String) value))) {
+                    weavingEnabled = false;
+                }
+            }
+
+            if (key.equals(PersistenceUnitProperties.WEAVING_REST)) {
+                if (!("true".equalsIgnoreCase((String) value))) {
+                    restWeavingEnabled = false;
+                }
+            }
+
+            if (key.equals(PersistenceUnitProperties.WEAVING_FETCHGROUPS)) {
+                if (!("true".equalsIgnoreCase((String) value))) {
+                    fetchGroupWeavingEnabled = false;
+                }
+            }
+        }
+        return (weavingEnabled && restWeavingEnabled && fetchGroupWeavingEnabled);
     }
 }

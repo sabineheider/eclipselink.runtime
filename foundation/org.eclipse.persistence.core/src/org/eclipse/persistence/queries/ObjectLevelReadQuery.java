@@ -2401,6 +2401,14 @@ public abstract class ObjectLevelReadQuery extends ObjectBuildingQuery {
         setIsPrepared(false);
         setWasDefaultLockMode(false);
     }
+    
+    /**
+     * INTERNAL:
+     * returns the javax.persistence.LockModeType string value set on this query.
+     */
+    public String getLockModeType(){
+        return this.lockModeType;
+    }
 
     /**
      * INTERNAL:
@@ -2715,7 +2723,10 @@ public abstract class ObjectLevelReadQuery extends ObjectBuildingQuery {
      * singleton primary key, direct mapped, simple type, no inheritance, uow isolated objects.
      */
     public void setIsResultSetOptimizedQuery(boolean isResultSetOptimizedQuery) {
-        this.isResultSetOptimizedQuery = isResultSetOptimizedQuery;
+        if (this.isResultSetOptimizedQuery != isResultSetOptimizedQuery) {
+            setIsPrepared(false);
+            this.isResultSetOptimizedQuery = isResultSetOptimizedQuery;
+        }
     }
     
     /**

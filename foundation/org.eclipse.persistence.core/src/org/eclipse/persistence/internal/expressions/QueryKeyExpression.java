@@ -61,6 +61,8 @@ public class QueryKeyExpression extends ObjectExpression {
     
     protected IndexExpression index;
     
+    protected boolean isClonedForSubQuery = false;
+    
     public QueryKeyExpression() {
         this.shouldQueryToManyRelationship = false;
         this.hasQueryKey = true;
@@ -641,6 +643,73 @@ public class QueryKeyExpression extends ObjectExpression {
     public Expression normalize(ExpressionNormalizer normalizer) {
         return normalize(normalizer, this, null);
     }
+    
+    /**
+     * INTERNAL:
+     * Check if new expression need to be created for sub queries and re-normalized.
+     */
+    protected Expression checkJoinForSubSelectWithParent(ExpressionNormalizer normalizer, Expression base, List<Expression> foreignKeyJoinPointer) {
+        SQLSelectStatement statement = normalizer.getStatement();
+        if(!isClonedForSubQuery && statement.isSubSelect() && statement.getParentStatement().getBuilder().equals(getBuilder())) {
+            if (baseExpression.isQueryKeyExpression()) {
+                QueryKeyExpression baseQueryKeyExpression = (QueryKeyExpression) baseExpression;
+                DatabaseMapping mapping = baseQueryKeyExpression.getMapping();
+                if (mapping != null && mapping.isOneToOneMapping()) {
+                    if (statement.getOptimizedClonedExpressions().containsKey(this)) {
+                        return statement.getOptimizedClonedExpressions().get(this);
+                    }
+                    
+                    QueryKeyExpression clonedBaseExpression = null;
+                    if (baseQueryKeyExpression.hasBeenNormalized()) {
+                        // Call normalize again to get same expression.
+                        clonedBaseExpression = (QueryKeyExpression) baseQueryKeyExpression.normalize(normalizer);
+                    }
+                    
+                    if (clonedBaseExpression == null && baseQueryKeyExpression.getBaseExpression().isQueryKeyExpression()) {
+                        DatabaseMapping basebaseExprMapping = ((QueryKeyExpression)baseQueryKeyExpression.getBaseExpression()).getMapping();
+                        if (basebaseExprMapping != null && basebaseExprMapping.isOneToOneMapping()) {
+                            // Let base expression normalization re-create base base expression and normalize it if needed.
+                            clonedBaseExpression = (QueryKeyExpression) baseQueryKeyExpression.normalize(normalizer);
+                        }
+                    }
+                    
+                    if (clonedBaseExpression == null) {
+                        // Clone base expression & normalize
+                        clonedBaseExpression = new QueryKeyExpression(baseQueryKeyExpression.getName(), baseQueryKeyExpression.getBaseExpression());
+                        clonedBaseExpression.shouldQueryToManyRelationship = baseQueryKeyExpression.shouldQueryToManyRelationship;
+                        clonedBaseExpression.shouldUseOuterJoin = baseQueryKeyExpression.shouldUseOuterJoin;
+                        clonedBaseExpression.hasQueryKey = baseQueryKeyExpression.hasQueryKey;
+                        clonedBaseExpression.hasMapping = baseQueryKeyExpression.hasMapping;
+                        clonedBaseExpression.isAttributeExpression = baseQueryKeyExpression.isAttributeExpression;
+                        clonedBaseExpression.isClonedForSubQuery = true;
+                        
+                        clonedBaseExpression = (QueryKeyExpression) clonedBaseExpression.normalize(normalizer);
+                        statement.addOptimizedClonedExpressions(baseQueryKeyExpression, clonedBaseExpression);
+                    }
+                    
+                    // Clone expression, normalize & return.
+                    QueryKeyExpression clonedExpression = new QueryKeyExpression(name, clonedBaseExpression);
+                    clonedExpression.shouldQueryToManyRelationship = this.shouldQueryToManyRelationship;
+                    clonedExpression.shouldUseOuterJoin = this.shouldUseOuterJoin;
+                    clonedExpression.hasQueryKey = this.hasQueryKey;
+                    clonedExpression.hasMapping = this.hasMapping;
+                    clonedExpression.isAttributeExpression = this.isAttributeExpression;
+                    clonedExpression.isClonedForSubQuery = true;
+                    
+                    if (base == this) {
+                        clonedExpression = (QueryKeyExpression) clonedExpression.normalize(normalizer, clonedExpression, foreignKeyJoinPointer);
+                    } else {
+                        // Caller invoked overloaded method with different base, RelationExpression in this case.
+                        clonedExpression = (QueryKeyExpression) clonedExpression.normalize(normalizer, base, foreignKeyJoinPointer);
+                    }
+                    statement.addOptimizedClonedExpressions(this, clonedExpression);
+                    return clonedExpression;
+                }
+            }
+        }
+        
+        return null;
+    }
 
     /**
      * INTERNAL:
@@ -651,6 +720,13 @@ public class QueryKeyExpression extends ObjectExpression {
     public Expression normalize(ExpressionNormalizer normalizer, Expression base, List<Expression> foreignKeyJoinPointer) {
         if (this.hasBeenNormalized) {
             return this;
+        }
+        // Bug 397619 - It should only be normalized by parent.
+        // If subselect & not normalized, always clone and normalize
+        // if it has parent builder.
+        Expression clonedExpression = checkJoinForSubSelectWithParent(normalizer, base, foreignKeyJoinPointer);
+        if (clonedExpression != null) {
+            return clonedExpression;
         }
         super.normalize(normalizer);
         DatabaseMapping mapping = getMapping();

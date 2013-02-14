@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 1998, 2012 Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1998, 2013 Oracle and/or its affiliates. All rights reserved.
  * This program and the accompanying materials are made available under the 
  * terms of the Eclipse Public License v1.0 and Eclipse Distribution License v. 1.0 
  * which accompanies this distribution. 
@@ -47,11 +47,6 @@ public class OracleArrayType extends ComplexDatabaseType implements Cloneable {
     }
 
     @Override
-    public boolean isCollection() {
-        return true;
-    }
-
-    @Override
     public boolean isJDBCType() {
         return true;
     }
@@ -60,9 +55,32 @@ public class OracleArrayType extends ComplexDatabaseType implements Cloneable {
     public boolean isComplexDatabaseType() {
         return true;
     }
+    
+    @Override
+    public boolean isArray() {
+        return true;
+    }
 
     public int getSqlCode() {
         return ARRAY;
+    }
+    
+    /**
+     * Oracle ARRAY types don't have a compatible type like PL/SQL
+     * types do, so we will use the type name
+     */
+    @Override
+    public String getCompatibleType() {
+        return typeName;
+    }
+    
+    /**
+     * Oracle ARRAY types don't have a compatible type like PL/SQL
+     * types do, so we will use the type name
+     */
+    @Override
+    public void setCompatibleType(String compatibleType) {
+        this.typeName = compatibleType;
     }
 
     public void buildBeginBlock(StringBuilder sb, PLSQLargument arg, PLSQLStoredProcedureCall call) {
@@ -70,13 +88,10 @@ public class OracleArrayType extends ComplexDatabaseType implements Cloneable {
     }
 
     public void buildInDeclare(StringBuilder sb, PLSQLargument inArg) {
-    	// Validate.
-    	if (!hasCompatibleType()) {
-    		throw QueryException.compatibleTypeNotSet(this);
-    	}
-    	if ((getTypeName() == null) || getTypeName().equals("")) {
-    		throw QueryException.typeNameNotSet(this);
-    	}
+        // Validate.
+        if ((getTypeName() == null) || getTypeName().equals("")) {
+            throw QueryException.typeNameNotSet(this);
+        }
         sb.append("  ");
         sb.append(databaseTypeHelper.buildTarget(inArg));
         sb.append(" ");
@@ -87,6 +102,19 @@ public class OracleArrayType extends ComplexDatabaseType implements Cloneable {
         sb.append(NL);
     }
 
+    public void buildOutDeclare(StringBuilder sb, PLSQLargument outArg) {
+        // Validate.
+        if ((getTypeName() == null) || getTypeName().equals("")) {
+            throw QueryException.typeNameNotSet(this);
+        }
+        sb.append("  ");
+        sb.append(databaseTypeHelper.buildTarget(outArg));
+        sb.append(" ");
+        sb.append(getTypeName());
+        sb.append(";");
+        sb.append(NL);
+    }
+    
     public void buildOutAssignment(StringBuilder sb, PLSQLargument outArg, PLSQLStoredProcedureCall call) {
         String target = databaseTypeHelper.buildTarget(outArg);
         sb.append("  :");

@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 1998, 2012 Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1998, 2013 Oracle and/or its affiliates. All rights reserved.
  * This program and the accompanying materials are made available under the 
  * terms of the Eclipse Public License v1.0 and Eclipse Distribution License v. 1.0 
  * which accompanies this distribution. 
@@ -93,6 +93,8 @@
  *       - 389090: JPA 2.1 DDL Generation Support (foreign key metadata support)
  *     11/22/2012-2.5 Guy Pelletier 
  *       - 389090: JPA 2.1 DDL Generation Support (index metadata support)
+ *     02/12/2013-2.5 Guy Pelletier 
+ *       - 397772: JPA 2.1 Entity Graph Support (XML support)
  ******************************************************************************/
 package org.eclipse.persistence.internal.jpa.metadata;
 
@@ -138,7 +140,7 @@ import org.eclipse.persistence.internal.jpa.metadata.converters.StructConverterM
 import org.eclipse.persistence.internal.jpa.metadata.listeners.EntityListenerMetadata;
 import org.eclipse.persistence.internal.jpa.metadata.partitioning.AbstractPartitioningMetadata;
 import org.eclipse.persistence.internal.jpa.metadata.queries.NamedQueryMetadata;
-import org.eclipse.persistence.internal.jpa.metadata.queries.PLSQLComplexTypeMetadata;
+import org.eclipse.persistence.internal.jpa.metadata.queries.ComplexTypeMetadata;
 import org.eclipse.persistence.internal.jpa.metadata.queries.SQLResultSetMappingMetadata;
 import org.eclipse.persistence.internal.jpa.metadata.sequencing.GeneratedValueMetadata;
 import org.eclipse.persistence.internal.jpa.metadata.sequencing.SequenceGeneratorMetadata;
@@ -154,6 +156,7 @@ import org.eclipse.persistence.internal.security.PrivilegedGetDeclaredMethod;
 import org.eclipse.persistence.internal.security.PrivilegedMethodInvoker;
 import org.eclipse.persistence.internal.sessions.AbstractSession;
 import org.eclipse.persistence.jpa.dynamic.JPADynamicTypeBuilder;
+import org.eclipse.persistence.queries.AttributeGroup;
 import org.eclipse.persistence.sequencing.Sequence;
 import org.eclipse.persistence.sessions.DatasourceLogin;
 import org.eclipse.persistence.sessions.Project;
@@ -286,8 +289,9 @@ public class MetadataProject {
     private Map<String, ConverterAccessor> m_converterAccessors;
     private Map<MetadataClass, ConverterAccessor> m_autoApplyConvertAccessors;
     
-    // Store PLSQL record and table types by name, to allow reuse.
-    private Map<String, PLSQLComplexTypeMetadata> m_plsqlComplexTypes;
+    // Store PLSQL record and table types, Oracle object types,
+    // array types and XMLType types by name, to allow reuse.
+    private Map<String, ComplexTypeMetadata> m_complexMetadataTypes;
     
     // Store partitioning policies by name, to allow reuse.
     private Map<String, AbstractPartitioningMetadata> m_partitioningPolicies;
@@ -367,7 +371,7 @@ public class MetadataProject {
         m_converterAccessors = new HashMap<String, ConverterAccessor>();
         m_autoApplyConvertAccessors = new HashMap<MetadataClass, ConverterAccessor>();
         m_partitioningPolicies = new HashMap<String, AbstractPartitioningMetadata>();
-        m_plsqlComplexTypes = new HashMap<String, PLSQLComplexTypeMetadata>();
+        m_complexMetadataTypes = new HashMap<String, ComplexTypeMetadata>();
         m_metamodelMappedSuperclasses = new HashMap<String, MappedSuperclassAccessor>();
         m_virtualClasses = new HashMap<String, ClassAccessor>();
         m_accessorsWithDerivedId = new HashMap<String, ClassAccessor>();
@@ -501,6 +505,14 @@ public class MetadataProject {
     
     /**
      * INTERNAL:
+     * Add the given entity graph (internal attribute group).
+     */
+    public void addEntityGraph(AttributeGroup entityGraph) {
+        getProject().getAttributeGroups().put(entityGraph.getName(), entityGraph);
+    }
+    
+    /**
+     * INTERNAL:
      * The avoid processing the same mapping file twice (e.g. user may 
      * explicitly specify the orm.xml file) we store the list of entity 
      * mappings in a map keyed on their URL.
@@ -549,6 +561,9 @@ public class MetadataProject {
         mappedSuperclass.processParentClass();
         
         m_mappedSuperclasseAccessors.put(mappedSuperclass.getJavaClassName(), mappedSuperclass);
+        
+        // add the mapped superclass to keep track of it in case it is not processed later (has no subclasses).  
+        m_session.getProject().addMappedSuperclass(mappedSuperclass.getJavaClassName(), mappedSuperclass.getDescriptor().getClassDescriptor(), false);
     }
 
     /**
@@ -642,7 +657,7 @@ public class MetadataProject {
              * but we do not need it until metamodel processing time avoiding a _persistence_new call.
              * See MetamodelImpl.initialize()
              */
-            m_session.getProject().addMappedSuperclass(accessor.getJavaClassName(), metadataDescriptor.getClassDescriptor());
+            m_session.getProject().addMappedSuperclass(accessor.getJavaClassName(), metadataDescriptor.getClassDescriptor(), true);
         }
     }
     
@@ -659,12 +674,12 @@ public class MetadataProject {
 
     /**
      * INTERNAL:
-     * Add the named PLSQL type.
+     * Add the named PLSQL or Oracle complex metadata type.
      */
-    public void addPLSQLComplexType(PLSQLComplexTypeMetadata type) {
+    public void addComplexMetadataType(ComplexTypeMetadata type) {
         // Check for another type with the same name.
-        if (type.shouldOverride(m_plsqlComplexTypes.get(type.getName()))) {
-            m_plsqlComplexTypes.put(type.getName(), type);
+        if (type.shouldOverride(m_complexMetadataTypes.get(type.getName()))) {
+            m_complexMetadataTypes.put(type.getName(), type);
         }
     }
     
@@ -1199,10 +1214,10 @@ public class MetadataProject {
     
     /**
      * INTERNAL:
-     * Return the named PLSQL type.
+     * Return the named PLSQL or Oracle complex metadata type.
      */
-    public PLSQLComplexTypeMetadata getPLSQLComplexType(String name) {
-        return m_plsqlComplexTypes.get(name);
+    public ComplexTypeMetadata getComplexTypeMetadata(String name) {
+        return m_complexMetadataTypes.get(name);
     }
     
     /**
@@ -1343,6 +1358,14 @@ public class MetadataProject {
      */
     public boolean hasEntity(String className) {
         return m_entityAccessors.containsKey(className);
+    }
+    
+    /**
+     * INTERNAL:
+     * Return true is there exist and entity graph already for the given name.
+     */
+    public boolean hasEntityGraph(String name) {
+        return getProject().getAttributeGroups().containsKey(name);
     }
     
     /**

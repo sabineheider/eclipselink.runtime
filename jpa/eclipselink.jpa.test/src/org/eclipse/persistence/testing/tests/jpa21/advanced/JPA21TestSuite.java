@@ -18,8 +18,11 @@
  *       - 389090: JPA 2.1 DDL Generation Support
  *     11/22/2012-2.5 Guy Pelletier 
  *       - 389090: JPA 2.1 DDL Generation Support (index metadata support)
+ *     01/23/2013-2.5 Guy Pelletier 
+ *       - 350487: JPA 2.1 Specification defined support for Stored Procedure Calls
  ******************************************************************************/  
 package org.eclipse.persistence.testing.tests.jpa21.advanced;
+
 
 import junit.framework.Test;
 import junit.framework.TestSuite;
@@ -30,12 +33,15 @@ public class JPA21TestSuite extends TestSuite {
         TestSuite fullSuite = new TestSuite();
         fullSuite.setName("JPA_2.1_TestSuite");
         
-        fullSuite.addTest(NamedStoredProcedureQueryTestSuite.suite());
+        fullSuite.addTest(StoredProcedureQueryTestSuite.suite());
         fullSuite.addTest(ConverterTestSuite.suite());
         fullSuite.addTest(CriteriaQueryTestSuite.suite());
         fullSuite.addTest(CriteriaQueryMetamodelTestSuite.suite());
         fullSuite.addTest(DDLTestSuite.suite());
         fullSuite.addTest(EntityManagerFactoryTestSuite.suite());
+        fullSuite.addTest(EntityGraphTestSuite.suite());
+        fullSuite.addTest(QueryTestSuite.suite());
+        fullSuite.addTest(EntityManagerTestSuite.suite());
         
         return fullSuite;
     }

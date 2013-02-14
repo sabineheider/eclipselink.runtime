@@ -13,6 +13,8 @@
  *       - 389090: JPA 2.1 DDL Generation Support
  *     01/16/2013-2.5 Guy Pelletier 
  *       - 389090: JPA 2.1 DDL Generation Support
+ *     02/04/2013-2.5 Guy Pelletier 
+ *       - 389090: JPA 2.1 DDL Generation Support
  ******************************************************************************/
 package org.eclipse.persistence.internal.jpa;
 
@@ -135,6 +137,11 @@ public class EntityManagerFactoryImpl implements EntityManagerFactory, Persisten
         ClassDescriptor descriptor = session.getDescriptor(entity);
         if (descriptor == null) {
             return null;
+        }
+        if (descriptor.hasFetchGroupManager()){
+            if (!descriptor.getFetchGroupManager().isAttributeFetched(entity, attributeName)){
+                return false;
+            }
         }
         DatabaseMapping mapping = descriptor.getMappingForAttributeName(attributeName);
         if (mapping == null) {
@@ -289,41 +296,28 @@ public class EntityManagerFactoryImpl implements EntityManagerFactory, Persisten
      * PUBLIC: Returns an EntityManager for this deployment.
      */
     public EntityManager createEntityManager() {
-        return createEntityManagerImpl(null, SynchronizationType.SYNCHRONIZED, true);
+        return createEntityManagerImpl(null, null);
     }
 
     /**
      * PUBLIC: Returns an EntityManager for this deployment.
      */
     public EntityManager createEntityManager(Map properties) {
-        return createEntityManagerImpl(properties, SynchronizationType.SYNCHRONIZED, true);
-    }
-    
-    /**
-     * Returns an EntityManager for this deployment. False indicates
-     * a connection is not required when an entity manager setup is used.
-     * E.g. when coming from generateSchema for SCRIPTS only.
-     */
-    public EntityManager createEntityManager(Map properties, boolean requiresConnection) {
-        return createEntityManagerImpl(properties, SynchronizationType.SYNCHRONIZED, requiresConnection);
+        return createEntityManagerImpl(properties, null);
     }
 
     public EntityManager createEntityManager(SynchronizationType synchronizationType) {
-        return createEntityManagerImpl(null, synchronizationType, true);
+        return createEntityManagerImpl(null, synchronizationType);
     }
     
     public EntityManager createEntityManager(SynchronizationType synchronizationType, Map map) {
-        return createEntityManagerImpl(map, synchronizationType, true);
+        return createEntityManagerImpl(map, synchronizationType);
     }
     
-    protected EntityManagerImpl createEntityManagerImpl(Map properties, SynchronizationType syncType, boolean requiresConnection) {
+    protected EntityManagerImpl createEntityManagerImpl(Map properties, SynchronizationType syncType) {
         EntityManagerSetupImpl setupImpl = delegate.getSetupImpl();
         
         if (setupImpl != null) {
-            // Set the requires connection flag before getting the session. When
-            // generateSchema is called to SCRIPT only, no connection is required.
-            setupImpl.setRequiresConnection(requiresConnection);
-            
             if (setupImpl.isMetadataExpired()) {
                 String sessionName = setupImpl.getSessionName();
                 EntityManagerSetupImpl storedImpl = null;
@@ -443,6 +437,9 @@ public class EntityManagerFactoryImpl implements EntityManagerFactory, Persisten
      *             if the entity manager factory has been closed.
      */
     public PersistenceUnitUtil getPersistenceUnitUtil() {
+        if (!delegate.isOpen()){
+            throw new IllegalStateException(ExceptionLocalization.buildMessage("getpersistenceunitutil_called_on_closed_emf"));
+        }
         return delegate;
     }
 

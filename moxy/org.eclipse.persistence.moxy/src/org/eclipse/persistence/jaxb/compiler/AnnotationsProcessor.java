@@ -230,6 +230,7 @@ public class AnnotationsProcessor {
     private boolean hasSwaRef;
     
     private List<String> referencedByTransformer;
+    private boolean hasXmlBindings = false;
 
     public AnnotationsProcessor(Helper helper) {
         this.helper = helper;
@@ -902,7 +903,7 @@ public class AnnotationsProcessor {
                 }
                 // an XmlElementWrapper can only appear on a Collection or Array
                 if (property.getXmlElementWrapper() != null) {
-                    if (!helper.isCollectionType(property.getType()) && !property.getType().isArray()) {
+                    if (!helper.isCollectionType(property.getType()) && !property.getType().isArray() && !helper.isMapType(property.getType())) {
                         throw JAXBException.invalidElementWrapper(property.getPropertyName());
                     }
                 }
@@ -1762,7 +1763,7 @@ public class AnnotationsProcessor {
             JavaField nextField = fieldIt.next();
             int modifiers = nextField.getModifiers();
 
-            if (!Modifier.isTransient(modifiers) && ((Modifier.isPublic(nextField.getModifiers()) && onlyPublic) || !onlyPublic)) {
+            if (!Modifier.isTransient(modifiers) && ((Modifier.isPublic(nextField.getModifiers()) && onlyPublic) || !onlyPublic ||hasJAXBAnnotations(nextField))) {
                 if (!Modifier.isStatic(modifiers)) {
                     if ((onlyExplicit && hasJAXBAnnotations(nextField)) || !onlyExplicit) {
                          property = buildNewProperty(info, cls, nextField, nextField.getName(), nextField.getResolvedType());
@@ -1937,7 +1938,7 @@ public class AnnotationsProcessor {
             }
             
         } else {
-            property.setSchemaName(getQNameForProperty(propertyName, javaHasAnnotations, getPackageInfoForPackage(cls).getNamespaceInfo(), info));
+            property.setSchemaName(getQNameForProperty(property, propertyName, javaHasAnnotations, getPackageInfoForPackage(cls).getNamespaceInfo(), info));
         }
 
         ptype = property.getActualType();
@@ -2697,12 +2698,12 @@ public class AnnotationsProcessor {
                 if (((next.getName().startsWith(GET_STR) && next.getName().length() > 3) || (next.getName().startsWith(IS_STR) && next.getName().length() > 2)) && next.getParameterTypes().length == 0 && next.getReturnType() != helper.getJavaClass(java.lang.Void.class)) {
                     int modifiers = next.getModifiers();
                     
-                    if (!Modifier.isStatic(modifiers) && !Modifier.isTransient(modifiers) && ((onlyPublic && Modifier.isPublic(next.getModifiers())) || !onlyPublic)) {
+                    if (!Modifier.isStatic(modifiers) && !Modifier.isTransient(modifiers) && ((onlyPublic && Modifier.isPublic(next.getModifiers())) || !onlyPublic || hasJAXBAnnotations(next))) {
                        propertyMethods.add(next);
                     } 
                 } else if (next.getName().startsWith(SET_STR) && next.getName().length() > 3 && next.getParameterTypes().length == 1) {
                     int modifiers = next.getModifiers();
-                    if (!Modifier.isStatic(modifiers) && !Modifier.isTransient(modifiers) && ((onlyPublic && Modifier.isPublic(next.getModifiers())) || !onlyPublic)) {
+                    if (!Modifier.isStatic(modifiers) && !Modifier.isTransient(modifiers) && ((onlyPublic && Modifier.isPublic(next.getModifiers())) || !onlyPublic || hasJAXBAnnotations(next))) {
                         propertyMethods.add(next);
                     }
                 }
@@ -2918,8 +2919,8 @@ public class AnnotationsProcessor {
     }
 
     public ArrayList getPublicMemberPropertiesForClass(JavaClass cls, TypeInfo info) {
-        ArrayList<Property> fieldProperties = getFieldPropertiesForClass(cls, info, false);
-        ArrayList<Property> methodProperties = getPropertyPropertiesForClass(cls, info, false);
+        ArrayList<Property> fieldProperties = getFieldPropertiesForClass(cls, info, !hasXmlBindings());
+        ArrayList<Property> methodProperties = getPropertyPropertiesForClass(cls, info, !hasXmlBindings());
 
         // filter out non-public properties that aren't annotated
         ArrayList<Property> publicFieldProperties = new ArrayList<Property>();
@@ -3055,14 +3056,13 @@ public class AnnotationsProcessor {
 
         info.setClassName(javaClass.getQualifiedName());
         Class restrictionClass = String.class;
+        QName restrictionBase = getSchemaTypeFor(helper.getJavaClass(restrictionClass));
 
         if (helper.isAnnotationPresent(javaClass, XmlEnum.class)) {
             XmlEnum xmlEnum = (XmlEnum) helper.getAnnotation(javaClass, XmlEnum.class);
             restrictionClass = xmlEnum.value();
       	    JavaClass restrictionJavaClass= helper.getJavaClass(restrictionClass);
 
-            
-      	    QName restrictionBase = null;
       	    boolean restrictionIsEnum = helper.isAnnotationPresent(restrictionJavaClass, XmlEnum.class);
       	    if(!restrictionIsEnum){
         	     restrictionBase = getSchemaTypeFor(helper.getJavaClass(restrictionClass));                  
@@ -3083,8 +3083,8 @@ public class AnnotationsProcessor {
 	                 restrictionIsEnum = helper.isAnnotationPresent(restrictionJavaClass, XmlEnum.class);
 	            }
             }
-            info.setRestrictionBase(restrictionBase);
-        }
+        } 
+        info.setRestrictionBase(restrictionBase);
      
         for (Iterator<JavaField> fieldIt = javaClass.getDeclaredFields().iterator(); fieldIt.hasNext();) {
             JavaField field = fieldIt.next();
@@ -3173,7 +3173,7 @@ public class AnnotationsProcessor {
         } else {
             info.setNamespace(defaultTargetNamespace);
         }
-        if (!info.isElementFormQualified() || info.isAttributeFormQualified()) {
+      if (!info.isElementFormQualified() ){
             isDefaultNamespaceAllowed = false;
         }
         return info;
@@ -3191,11 +3191,16 @@ public class AnnotationsProcessor {
         return userDefinedSchemaTypes;
     }
 
-    public QName getQNameForProperty(String defaultName, JavaHasAnnotations element, NamespaceInfo namespaceInfo, TypeInfo info) {
+    public QName getQNameForProperty(Property property, String defaultName, JavaHasAnnotations element, NamespaceInfo namespaceInfo, TypeInfo info) {
         String uri = info.getClassNamespace();
         String name = XMLProcessor.DEFAULT;
         String namespace = XMLProcessor.DEFAULT;
         QName qName = null;
+        
+        if(property.isMap()){
+        	isDefaultNamespaceAllowed = false;
+        }
+        
         if (helper.isAnnotationPresent(element, XmlAttribute.class)) {
             XmlAttribute xmlAttribute = (XmlAttribute) helper.getAnnotation(element, XmlAttribute.class);
             name = xmlAttribute.name();
@@ -3216,6 +3221,7 @@ public class AnnotationsProcessor {
             } else {
                 if (namespaceInfo.isAttributeFormQualified()) {
                     qName = new QName(uri, name);
+                    isDefaultNamespaceAllowed = false;    
                 } else {
                     qName = new QName(name);
                 }
@@ -3225,6 +3231,11 @@ public class AnnotationsProcessor {
                 XmlElement xmlElement = (XmlElement) helper.getAnnotation(element, XmlElement.class);
                 name = xmlElement.name();
                 namespace = xmlElement.namespace();
+            }
+            if (property.isMap() && helper.isAnnotationPresent(element, XmlElementWrapper.class)) {
+       		    XmlElementWrapper xmlElementWrapper = (XmlElementWrapper) helper.getAnnotation(element, XmlElementWrapper.class);
+                name = xmlElementWrapper.name();
+                namespace = xmlElementWrapper.namespace();
             }
 
             if (name.equals(XMLProcessor.DEFAULT)) {
@@ -4678,4 +4689,11 @@ public class AnnotationsProcessor {
         this.xmlAccessorFactorySupport = value;
     }
 
+    public void setHasXmlBindings(boolean b) {
+        this.hasXmlBindings = true;
+    }
+    
+    public boolean hasXmlBindings() {
+        return this.hasXmlBindings;
+    }
 }

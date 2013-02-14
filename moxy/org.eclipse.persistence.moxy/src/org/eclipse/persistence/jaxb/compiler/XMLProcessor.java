@@ -122,6 +122,7 @@ public class XMLProcessor {
     public void processXML(AnnotationsProcessor annotationsProcessor, JavaModelInput jModelInput, TypeMappingInfo[] typeMappingInfos, JavaClass[] originalJavaClasses) {
         this.jModelInput = jModelInput;
         this.aProcessor = annotationsProcessor;
+        this.aProcessor.setHasXmlBindings(true);
         Map<String, XmlEnum> xmlEnumMap = new HashMap<String, XmlEnum>();
         aProcessor.init(originalJavaClasses, typeMappingInfos);
 
@@ -1083,6 +1084,10 @@ public class XMLProcessor {
             namespace = xmlElement.getNamespace();
             if (xmlElement.getXmlElementWrapper() != null) {
                 oldProperty.setXmlElementWrapper(xmlElement.getXmlElementWrapper());
+                if(oldProperty.isMap()){
+                	name = xmlElement.getXmlElementWrapper().getName();
+                    namespace = xmlElement.getXmlElementWrapper().getNamespace();
+                }
             }
         }
 

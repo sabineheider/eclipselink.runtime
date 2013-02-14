@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 1998, 2012 Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1998, 2013 Oracle and/or its affiliates. All rights reserved.
  * This program and the accompanying materials are made available under the 
  * terms of the Eclipse Public License v1.0 and Eclipse Distribution License v. 1.0 
  * which accompanies this distribution. 
@@ -99,6 +99,10 @@
  *       - 395406: Fix nightly static weave test errors
  *     12/07/2012-2.5 Guy Pelletier 
  *       - 389090: JPA 2.1 DDL Generation Support (foreign key metadata support)
+ *     09 Jan 2013-2.5 Gordon Yorke
+ *       - 397772: JPA 2.1 Entity Graph Support
+ *     02/13/2013-2.5 Guy Pelletier 
+ *       - 397772: JPA 2.1 Entity Graph Support (XML support)       
  ******************************************************************************/  
 package org.eclipse.persistence.internal.jpa.metadata.accessors.classes;
 
@@ -128,6 +132,7 @@ import org.eclipse.persistence.internal.jpa.metadata.columns.PrimaryKeyForeignKe
 import org.eclipse.persistence.internal.jpa.metadata.columns.PrimaryKeyJoinColumnMetadata;
 import org.eclipse.persistence.internal.jpa.metadata.converters.ConvertMetadata;
 
+import org.eclipse.persistence.internal.jpa.metadata.graphs.NamedEntityGraphMetadata;
 import org.eclipse.persistence.internal.jpa.metadata.inheritance.InheritanceMetadata;
 import org.eclipse.persistence.internal.jpa.metadata.listeners.EntityClassListenerMetadata;
 import org.eclipse.persistence.internal.jpa.metadata.listeners.EntityListenerMetadata;
@@ -156,6 +161,8 @@ import static org.eclipse.persistence.internal.jpa.metadata.MetadataConstants.JP
 import static org.eclipse.persistence.internal.jpa.metadata.MetadataConstants.JPA_SECONDARY_TABLE;
 import static org.eclipse.persistence.internal.jpa.metadata.MetadataConstants.JPA_SECONDARY_TABLES;
 import static org.eclipse.persistence.internal.jpa.metadata.MetadataConstants.JPA_TABLE;
+import static org.eclipse.persistence.internal.jpa.metadata.MetadataConstants.JPA_ENTITY_GRAPH;
+import static org.eclipse.persistence.internal.jpa.metadata.MetadataConstants.JPA_ENTITY_GRAPHS;
 
 /**
  * An entity accessor.
@@ -183,6 +190,7 @@ public class EntityAccessor extends MappedSuperclassAccessor {
     private List<PrimaryKeyJoinColumnMetadata> m_primaryKeyJoinColumns = new ArrayList<PrimaryKeyJoinColumnMetadata>();
     private List<SecondaryTableMetadata> m_secondaryTables = new ArrayList<SecondaryTableMetadata>();
     private List<IndexMetadata> m_indexes = new ArrayList<IndexMetadata>();
+    private List<NamedEntityGraphMetadata> m_namedEntityGraphs = new ArrayList<NamedEntityGraphMetadata>();
     
     private MetadataClass m_classExtractor;
     
@@ -259,7 +267,7 @@ public class EntityAccessor extends MappedSuperclassAccessor {
         subclassEntityAccessors.add(currentEntityAccessor);
         
         if (! parentClass.isObject()) {
-            while (! parentClass.isObject()) {
+            while (parentClass != null && ! parentClass.isObject()) {
                 if (getProject().hasEntity(parentClass)) {
                     // Our parent is an entity.
                     EntityAccessor parentEntityAccessor = getProject().getEntityAccessor(parentClass);
@@ -393,6 +401,14 @@ public class EntityAccessor extends MappedSuperclassAccessor {
      * INTERNAL:
      * Used for OX mapping.
      */
+    public List<NamedEntityGraphMetadata> getNamedEntityGraphs() {
+        return m_namedEntityGraphs;
+    }
+    
+    /**
+     * INTERNAL:
+     * Used for OX mapping.
+     */
     public PrimaryKeyForeignKeyMetadata getPrimaryKeyForeignKey() {
         return m_primaryKeyForeignKey;
     }
@@ -491,6 +507,7 @@ public class EntityAccessor extends MappedSuperclassAccessor {
         initXMLObjects(m_primaryKeyJoinColumns, accessibleObject);
         initXMLObjects(m_indexes, accessibleObject);
         initXMLObjects(m_converts, accessibleObject);
+        initXMLObjects(m_namedEntityGraphs, accessibleObject);
     }
     
     /**
@@ -544,6 +561,7 @@ public class EntityAccessor extends MappedSuperclassAccessor {
         m_primaryKeyJoinColumns = mergeORObjectLists(m_primaryKeyJoinColumns, accessor.getPrimaryKeyJoinColumns());
         m_indexes = mergeORObjectLists(m_indexes, accessor.getIndexes());
         m_converts = mergeORObjectLists(m_converts, accessor.getConverts());
+        m_namedEntityGraphs = mergeORObjectLists(m_namedEntityGraphs, accessor.getNamedEntityGraphs());
     }
     
     /**
@@ -671,6 +689,9 @@ public class EntityAccessor extends MappedSuperclassAccessor {
         // Finally, process the mapping accessors on this entity (and all those 
         // from super classes that apply to us).
         processMappingAccessors();
+        
+        // Process the entity graph metadata.
+        processEntityGraphs();
     }
     
     /**
@@ -1039,6 +1060,39 @@ public class EntityAccessor extends MappedSuperclassAccessor {
     
     /**
      * INTERNAL:
+     * Process the entity graph metadata on this entity accessor.
+     */
+    protected void processEntityGraphs() {
+        if (m_namedEntityGraphs.isEmpty()) {
+            // Look for an NamedEntityGraphs annotation.
+            if (isAnnotationPresent(JPA_ENTITY_GRAPHS)) {
+                for (Object entityGraph : (Object[]) getAnnotation(JPA_ENTITY_GRAPHS).getAttributeArray("value")) {
+                    new NamedEntityGraphMetadata((MetadataAnnotation) entityGraph, this).process(this);
+                }
+            } else {
+                // Look for a NamedEntityGraph annotation
+                if (isAnnotationPresent(JPA_ENTITY_GRAPH)) {
+                    new NamedEntityGraphMetadata(getAnnotation(JPA_ENTITY_GRAPH), this).process(this);
+                }
+            }
+        } else {
+            // Process the named entity graphs from XML.
+            if (isAnnotationPresent(JPA_ENTITY_GRAPH)) {
+                getLogger().logConfigMessage(MetadataLogger.OVERRIDE_ANNOTATION_WITH_XML, getAnnotation(JPA_ENTITY_GRAPH), getJavaClassName(), getLocation());
+            }
+                
+            if (isAnnotationPresent(JPA_ENTITY_GRAPHS)) {
+                getLogger().logConfigMessage(MetadataLogger.OVERRIDE_ANNOTATION_WITH_XML, getAnnotation(JPA_ENTITY_GRAPHS), getJavaClassName(), getLocation());
+            }
+                
+            for (NamedEntityGraphMetadata entityGraph : m_namedEntityGraphs) {
+                entityGraph.process(this);
+            }
+        }
+    }
+
+    /**
+     * INTERNAL:
      * Process index information for the given metadata descriptor.
      */
     protected void processIndexes() {
@@ -1399,6 +1453,14 @@ public class EntityAccessor extends MappedSuperclassAccessor {
      */
     public void setInheritance(InheritanceMetadata inheritance) {
         m_inheritance = inheritance;
+    }
+    
+    /**
+     * INTERNAL:
+     * Used for OX mapping.
+     */
+    public void setNamedEntityGraphs(List<NamedEntityGraphMetadata> namedEntityGraphs) {
+        m_namedEntityGraphs = namedEntityGraphs;
     }
     
     /**

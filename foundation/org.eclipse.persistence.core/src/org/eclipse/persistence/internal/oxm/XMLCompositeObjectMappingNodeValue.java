@@ -256,7 +256,7 @@ public class XMLCompositeObjectMappingNodeValue extends XMLRelationshipMappingNo
                                 }
                             }
                             frag.setXPath(xpath);
-                            Context xmlContext = unmarshalRecord.getUnmarshaller().getXMLContext();
+                            Context xmlContext = unmarshalRecord.getUnmarshaller().getContext();
                             xmlDescriptor = xmlContext.getDescriptorByGlobalType(frag);
                         }
                     }
@@ -306,7 +306,7 @@ public class XMLCompositeObjectMappingNodeValue extends XMLRelationshipMappingNo
                     xmlReader.setLexicalHandler(aHandler);
                 }
             } else {
-                if (nullPolicy.isNullRepresentedByXsiNil() && unmarshalRecord.isNil()) {
+            	if(unmarshalRecord.getXMLReader().isNullRepresentedByXsiNil(nullPolicy) && unmarshalRecord.isNil()){
                     xmlCompositeObjectMapping.setAttributeValueInObject(unmarshalRecord.getCurrentObject(), null);
                 } else {
                 	Field xmlFld = (Field)this.xmlCompositeObjectMapping.getField();

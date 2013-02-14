@@ -27,10 +27,10 @@ import java.util.Map;
 import javax.xml.parsers.SAXParser;
 import javax.xml.parsers.SAXParserFactory;
 import javax.xml.transform.Source;
-import javax.xml.transform.dom.DOMSource;
 import javax.xml.transform.dom.DOMResult;
-import javax.xml.transform.sax.SAXSource;
+import javax.xml.transform.dom.DOMSource;
 import javax.xml.transform.sax.SAXResult;
+import javax.xml.transform.sax.SAXSource;
 import javax.xml.transform.stream.StreamSource;
 import javax.xml.validation.Schema;
 import javax.xml.validation.ValidatorHandler;
@@ -46,25 +46,20 @@ import org.eclipse.persistence.internal.oxm.Root;
 import org.eclipse.persistence.internal.oxm.Unmarshaller;
 import org.eclipse.persistence.internal.oxm.UnmarshallerHandler;
 import org.eclipse.persistence.internal.oxm.XMLConversionManager;
-import org.eclipse.persistence.internal.sessions.AbstractSession;
-import org.eclipse.persistence.oxm.XMLRoot;
-import org.eclipse.persistence.oxm.record.XMLRootRecord;
+import org.eclipse.persistence.internal.oxm.mappings.Descriptor;
+import org.eclipse.persistence.internal.oxm.mappings.UnmarshalKeepAsElementPolicy;
+import org.eclipse.persistence.internal.oxm.record.json.JSONReader;
 import org.eclipse.persistence.platform.xml.DefaultErrorHandler;
 import org.eclipse.persistence.platform.xml.SAXDocumentBuilder;
 import org.eclipse.persistence.platform.xml.XMLParser;
 import org.eclipse.persistence.platform.xml.XMLPlatformFactory;
 import org.eclipse.persistence.platform.xml.XMLTransformer;
-
 import org.w3c.dom.Node;
 import org.xml.sax.ContentHandler;
 import org.xml.sax.EntityResolver;
 import org.xml.sax.ErrorHandler;
 import org.xml.sax.InputSource;
 import org.xml.sax.SAXException;
-import org.eclipse.persistence.internal.oxm.mappings.Descriptor;
-import org.eclipse.persistence.internal.oxm.mappings.UnmarshalKeepAsElementPolicy;
-import org.eclipse.persistence.internal.oxm.record.XMLReader;
-import org.eclipse.persistence.internal.oxm.record.json.JSONReader;
 
 /**
  * INTERNAL:
@@ -316,7 +311,7 @@ public class SAXUnmarshaller implements PlatformUnmarshaller {
 
     public Object unmarshal(File file) {
         try {
-            if (xmlUnmarshaller.getXMLContext().hasDocumentPreservation()) {
+            if (xmlUnmarshaller.getContext().hasDocumentPreservation()) {
                 Node domElement = getXMLParser().parse(file).getDocumentElement();
                 return unmarshal(domElement);
             }
@@ -340,7 +335,7 @@ public class SAXUnmarshaller implements PlatformUnmarshaller {
 
     public Object unmarshal(File file, Class clazz) {
         try {
-            if (xmlUnmarshaller.getXMLContext().hasDocumentPreservation()) {
+            if (xmlUnmarshaller.getContext().hasDocumentPreservation()) {
                 Node domElement = getXMLParser().parse(file).getDocumentElement();
                 return unmarshal(domElement, clazz);
             }
@@ -363,7 +358,7 @@ public class SAXUnmarshaller implements PlatformUnmarshaller {
     }
 
     public Object unmarshal(InputStream inputStream) {
-        if (xmlUnmarshaller.getXMLContext().hasDocumentPreservation()) {
+        if (xmlUnmarshaller.getContext().hasDocumentPreservation()) {
             Node domElement = getXMLParser().parse(inputStream).getDocumentElement();
             return unmarshal(domElement);
         }
@@ -372,7 +367,7 @@ public class SAXUnmarshaller implements PlatformUnmarshaller {
     }
 
     public Object unmarshal(InputStream inputStream, Class clazz) {
-        if (xmlUnmarshaller.getXMLContext().hasDocumentPreservation()) {
+        if (xmlUnmarshaller.getContext().hasDocumentPreservation()) {
             Node domElement = getXMLParser().parse(inputStream).getDocumentElement();
             return unmarshal(domElement, clazz);
         }
@@ -399,7 +394,7 @@ public class SAXUnmarshaller implements PlatformUnmarshaller {
                 inputSource.setSystemId(this.systemId);
             }
 
-            SAXUnmarshallerHandler saxUnmarshallerHandler = new SAXUnmarshallerHandler(xmlUnmarshaller.getXMLContext());
+            SAXUnmarshallerHandler saxUnmarshallerHandler = new SAXUnmarshallerHandler(xmlUnmarshaller.getContext());
             saxUnmarshallerHandler.setXMLReader(xmlReader);
             saxUnmarshallerHandler.setUnmarshaller(xmlUnmarshaller);
             setContentHandler(xmlReader, saxUnmarshallerHandler);
@@ -449,7 +444,7 @@ public class SAXUnmarshaller implements PlatformUnmarshaller {
         boolean isPrimitiveWrapper = false;
         if(clazz == CoreClassConstants.OBJECT) {
     	    try{
-                SAXUnmarshallerHandler saxUnmarshallerHandler = new SAXUnmarshallerHandler(xmlUnmarshaller.getXMLContext());
+                SAXUnmarshallerHandler saxUnmarshallerHandler = new SAXUnmarshallerHandler(xmlUnmarshaller.getContext());
                 saxUnmarshallerHandler.setXMLReader(xmlReader);
                 saxUnmarshallerHandler.setUnmarshaller(xmlUnmarshaller);
                 saxUnmarshallerHandler.setKeepAsElementPolicy(KEEP_UNKNOWN_AS_ELEMENT);
@@ -468,18 +463,16 @@ public class SAXUnmarshaller implements PlatformUnmarshaller {
             // for XMLObjectReferenceMappings we need a non-shared cache, so
             // try and get a Unit Of Work from the XMLContext
         	try{
-            session = xmlUnmarshaller.getXMLContext().getReadSession(clazz);
+            session = xmlUnmarshaller.getContext().getSession(clazz);
             xmlDescriptor = (Descriptor)session.getDescriptor(clazz);
-            org.eclipse.persistence.oxm.record.UnmarshalRecord wrapper = (org.eclipse.persistence.oxm.record.UnmarshalRecord) xmlDescriptor.getObjectBuilder().createRecord((AbstractSession) session);
-            unmarshalRecord = wrapper.getUnmarshalRecord();
+            unmarshalRecord = xmlUnmarshaller.createUnmarshalRecord(xmlDescriptor, session);
 
             
         	}catch(XMLMarshalException xme){
         		if(xme.getErrorCode() == XMLMarshalException.DESCRIPTOR_NOT_FOUND_IN_PROJECT){            			 
  	                isPrimitiveWrapper = isPrimitiveWrapper(clazz);
  	                if (isPrimitiveWrapper) {
- 	                       unmarshalRecord = new XMLRootRecord(clazz);
- 	                       unmarshalRecord.setSession((AbstractSession) xmlUnmarshaller.getXMLContext().getSession(0));
+ 	                       unmarshalRecord = xmlUnmarshaller.createRootUnmarshalRecord(clazz);
  	                }else{
  	                	throw xme;
  	                }
@@ -521,7 +514,7 @@ public class SAXUnmarshaller implements PlatformUnmarshaller {
 
     public Object unmarshal(DOMReader reader, Node node) {
         try {
-            SAXUnmarshallerHandler handler = new SAXUnmarshallerHandler(xmlUnmarshaller.getXMLContext());
+            SAXUnmarshallerHandler handler = new SAXUnmarshallerHandler(xmlUnmarshaller.getContext());
             setContentHandler(reader, handler);
             handler.setXMLReader(reader);
             handler.setUnmarshaller(xmlUnmarshaller);
@@ -555,7 +548,7 @@ public class SAXUnmarshaller implements PlatformUnmarshaller {
         // via XMLRootRecord.
         boolean isPrimitiveWrapper = false;
 if(clazz == CoreClassConstants.OBJECT) {
-            SAXUnmarshallerHandler saxUnmarshallerHandler = new SAXUnmarshallerHandler(xmlUnmarshaller.getXMLContext());
+            SAXUnmarshallerHandler saxUnmarshallerHandler = new SAXUnmarshallerHandler(xmlUnmarshaller.getContext());
             saxUnmarshallerHandler.setXMLReader(domReader);
             saxUnmarshallerHandler.setUnmarshaller(xmlUnmarshaller);
             saxUnmarshallerHandler.setKeepAsElementPolicy(KEEP_UNKNOWN_AS_ELEMENT);
@@ -572,29 +565,26 @@ if(clazz == CoreClassConstants.OBJECT) {
         } else {
             // for XMLObjectReferenceMappings we need a non-shared cache, so
             // try and get a Unit Of Work from the XMLContext
-        	try{
-            session = xmlUnmarshaller.getXMLContext().getReadSession(clazz);
-            xmlDescriptor = (Descriptor) session.getDescriptor(clazz);
-            org.eclipse.persistence.oxm.record.UnmarshalRecord wrapper = (org.eclipse.persistence.oxm.record.UnmarshalRecord) xmlDescriptor.getObjectBuilder().createRecord((AbstractSession) session);
-            unmarshalRecord = wrapper.getUnmarshalRecord();
-        	}catch(XMLMarshalException xme){
-        		if(xme.getErrorCode() == XMLMarshalException.DESCRIPTOR_NOT_FOUND_IN_PROJECT){            			 
- 	                isPrimitiveWrapper = isPrimitiveWrapper(clazz);
- 	                if (isPrimitiveWrapper) {
- 	                      unmarshalRecord = new XMLRootRecord(clazz);
- 	                      unmarshalRecord.setSession((AbstractSession) xmlUnmarshaller.getXMLContext().getSession(0));
- 	                }else if (Node.class.isAssignableFrom(clazz)) {
+            try{
+                session = xmlUnmarshaller.getContext().getSession(clazz);
+                xmlDescriptor = (Descriptor) session.getDescriptor(clazz);
+                unmarshalRecord = xmlUnmarshaller.createUnmarshalRecord(xmlDescriptor, session);
+            }catch(XMLMarshalException xme){
+                if(xme.getErrorCode() == XMLMarshalException.DESCRIPTOR_NOT_FOUND_IN_PROJECT){            			 
+                    isPrimitiveWrapper = isPrimitiveWrapper(clazz);
+                    if (isPrimitiveWrapper) {
+                        unmarshalRecord = xmlUnmarshaller.createRootUnmarshalRecord(clazz);
+                    }else if (Node.class.isAssignableFrom(clazz)) {
                           return createXMLRootForNode(node);
- 	                }else{
- 	                	throw xme;
- 	                }
- 	                
-        		}else{
-        		   throw xme;
-        		}
+                    }else{
+                        throw xme;
+                    }
+                    
+                }else{
+                    throw xme;
+                }
                
-        	}    
-                      
+            }
         }
         try {
             unmarshalRecord.setXMLReader(domReader);
@@ -618,7 +608,7 @@ if(clazz == CoreClassConstants.OBJECT) {
     }
     
     private Object createXMLRootForNode(Node node) {
-        Root xmlRoot = new XMLRoot();
+        Root xmlRoot = xmlUnmarshaller.createRoot();
     	xmlRoot.setObject(node);
     	if (node != null) {
     	    xmlRoot.setLocalName(node.getLocalName());
@@ -628,7 +618,7 @@ if(clazz == CoreClassConstants.OBJECT) {
     }
 
     public Object unmarshal(Reader reader) {
-        if (xmlUnmarshaller.getXMLContext().hasDocumentPreservation()) {
+        if (xmlUnmarshaller.getContext().hasDocumentPreservation()) {
             Node domElement = getXMLParser().parse(reader).getDocumentElement();
             return unmarshal(domElement);
         }
@@ -637,7 +627,7 @@ if(clazz == CoreClassConstants.OBJECT) {
     }
 
     public Object unmarshal(Reader reader, Class clazz) {
-        if (xmlUnmarshaller.getXMLContext().hasDocumentPreservation()) {
+        if (xmlUnmarshaller.getContext().hasDocumentPreservation()) {
             Node domElement = getXMLParser().parse(reader).getDocumentElement();
             return unmarshal(domElement, clazz);
         }
@@ -781,7 +771,7 @@ if(clazz == CoreClassConstants.OBJECT) {
             }
         	
             XMLReader xmlReader = getXMLReader();
-            SAXUnmarshallerHandler saxUnmarshallerHandler = new SAXUnmarshallerHandler(xmlUnmarshaller.getXMLContext());
+            SAXUnmarshallerHandler saxUnmarshallerHandler = new SAXUnmarshallerHandler(xmlUnmarshaller.getContext());
             saxUnmarshallerHandler.setXMLReader(xmlReader);
             saxUnmarshallerHandler.setUnmarshaller(xmlUnmarshaller);
             setContentHandler(xmlReader, saxUnmarshallerHandler);
@@ -816,7 +806,7 @@ if(clazz == CoreClassConstants.OBJECT) {
         // via XMLRootRecord.
 if(clazz == CoreClassConstants.OBJECT) {
            
-            SAXUnmarshallerHandler saxUnmarshallerHandler = new SAXUnmarshallerHandler(xmlUnmarshaller.getXMLContext());
+            SAXUnmarshallerHandler saxUnmarshallerHandler = new SAXUnmarshallerHandler(xmlUnmarshaller.getContext());
             try {
                 XMLReader xmlReader = getXMLReader(clazz);
                 saxUnmarshallerHandler.setXMLReader(xmlReader);
@@ -838,16 +828,14 @@ if(clazz == CoreClassConstants.OBJECT) {
             // for XMLObjectReferenceMappings we need a non-shared cache, so
             // try and get a Unit Of Work from the XMLContext
         	try{
-            session = xmlUnmarshaller.getXMLContext().getReadSession(clazz);
+            session = xmlUnmarshaller.getContext().getSession(clazz);
             xmlDescriptor = (Descriptor) session.getDescriptor(clazz);
-            org.eclipse.persistence.oxm.record.UnmarshalRecord wrapper = (org.eclipse.persistence.oxm.record.UnmarshalRecord) xmlDescriptor.getObjectBuilder().createRecord((AbstractSession) session);
-            unmarshalRecord = wrapper.getUnmarshalRecord();
+            unmarshalRecord = xmlUnmarshaller.createUnmarshalRecord(xmlDescriptor, session);
         	}catch(XMLMarshalException xme){
         		if(xme.getErrorCode() == XMLMarshalException.DESCRIPTOR_NOT_FOUND_IN_PROJECT){            			 
  	                isPrimitiveWrapper = isPrimitiveWrapper(clazz);
  	                if (isPrimitiveWrapper) {
- 	                       unmarshalRecord = new XMLRootRecord(clazz);
- 	                       unmarshalRecord.setSession((AbstractSession) xmlUnmarshaller.getXMLContext().getSession(0));
+ 	                       unmarshalRecord = xmlUnmarshaller.createRootUnmarshalRecord(clazz);
  	                }else{
  	                	throw xme;
  	                }
@@ -887,7 +875,7 @@ if(clazz == CoreClassConstants.OBJECT) {
 
     public Object unmarshal(org.xml.sax.XMLReader xmlReader, InputSource inputSource) {
         try {
-            Context xmlContext = xmlUnmarshaller.getXMLContext();
+            Context xmlContext = xmlUnmarshaller.getContext();
             if (xmlContext.hasDocumentPreservation()) {
                 SAXDocumentBuilder saxDocumentBuilder = new SAXDocumentBuilder();
                 xmlReader.setContentHandler(saxDocumentBuilder);
@@ -920,7 +908,7 @@ if(clazz == CoreClassConstants.OBJECT) {
 
     public Object unmarshal(org.xml.sax.XMLReader xmlReader, InputSource inputSource, Class clazz) {
         try {
-            Context xmlContext = xmlUnmarshaller.getXMLContext();
+            Context xmlContext = xmlUnmarshaller.getContext();
 
             if (xmlContext.hasDocumentPreservation() || (Node.class.isAssignableFrom(clazz) && xmlUnmarshaller.getMediaType().isApplicationXML())) {
                 SAXDocumentBuilder saxDocumentBuilder = new SAXDocumentBuilder();
@@ -939,7 +927,7 @@ if(clazz == CoreClassConstants.OBJECT) {
             // wrapper class, then create, populate and return an XMLRoot.  This will be done
             // via XMLRootRecord.
 if(clazz == CoreClassConstants.OBJECT) {
-                SAXUnmarshallerHandler saxUnmarshallerHandler = new SAXUnmarshallerHandler(xmlUnmarshaller.getXMLContext());
+                SAXUnmarshallerHandler saxUnmarshallerHandler = new SAXUnmarshallerHandler(xmlUnmarshaller.getContext());
                 saxUnmarshallerHandler.setXMLReader((XMLReader)xmlReader);
                 saxUnmarshallerHandler.setUnmarshaller(xmlUnmarshaller);
                 saxUnmarshallerHandler.setKeepAsElementPolicy(KEEP_UNKNOWN_AS_ELEMENT);
@@ -953,16 +941,14 @@ if(clazz == CoreClassConstants.OBJECT) {
                 // for XMLObjectReferenceMappings we need a non-shared cache, so
                 // try and get a Unit Of Work from the XMLContext
             	try{
-                session = xmlContext.getReadSession(clazz);
+                session = xmlContext.getSession(clazz);
                 xmlDescriptor = (Descriptor) session.getDescriptor(clazz);
-                org.eclipse.persistence.oxm.record.UnmarshalRecord wrapper = (org.eclipse.persistence.oxm.record.UnmarshalRecord) xmlDescriptor.getObjectBuilder().createRecord((AbstractSession) session);
-                unmarshalRecord = wrapper.getUnmarshalRecord(); 
+                unmarshalRecord = xmlUnmarshaller.createUnmarshalRecord(xmlDescriptor, session); 
             	}catch(XMLMarshalException xme){            		
             		if(xme.getErrorCode() == XMLMarshalException.DESCRIPTOR_NOT_FOUND_IN_PROJECT){            			 
      	                isPrimitiveWrapper = isPrimitiveWrapper(clazz);
      	                if (isPrimitiveWrapper) {
-     	                       unmarshalRecord = new XMLRootRecord(clazz);
-     	                       unmarshalRecord.setSession((AbstractSession) xmlUnmarshaller.getXMLContext().getSession(0));
+     	                       unmarshalRecord = xmlUnmarshaller.createRootUnmarshalRecord(clazz);
      	                }else{
      	                	throw xme;
      	                }

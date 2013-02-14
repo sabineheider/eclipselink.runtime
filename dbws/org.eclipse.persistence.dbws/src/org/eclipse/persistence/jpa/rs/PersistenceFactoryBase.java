@@ -25,9 +25,12 @@ import javax.persistence.Persistence;
 import org.eclipse.persistence.config.PersistenceUnitProperties;
 import org.eclipse.persistence.dynamic.DynamicClassLoader;
 import org.eclipse.persistence.internal.jpa.EntityManagerFactoryImpl;
+import org.eclipse.persistence.internal.jpa.EntityManagerSetupImpl;
 import org.eclipse.persistence.internal.jpa.deployment.PersistenceUnitProcessor;
 import org.eclipse.persistence.internal.jpa.deployment.SEPersistenceUnitInfo;
 import org.eclipse.persistence.jpa.Archive;
+import org.eclipse.persistence.jpa.rs.exceptions.JPARSConfigurationException;
+import org.eclipse.persistence.jpa.rs.logging.LoggingLocalization;
 import org.eclipse.persistence.jpa.rs.util.JPARSLogger;
 
 /**
@@ -128,6 +131,11 @@ public class PersistenceFactoryBase implements PersistenceContextFactory {
                 JPARSLogger.exception("exception_creating_persistence_context", new Object[]{persistenceUnit, e.toString()}, e);
             }
         }
+        
+        if ((app != null) && (!app.isWeavingEnabled())) {
+            throw new JPARSConfigurationException(LoggingLocalization.buildMessage("weaving_required_for_relationships", new Object[] { persistenceUnit }));
+        }
+        
         return app;
     }
 
@@ -140,6 +148,9 @@ public class PersistenceFactoryBase implements PersistenceContextFactory {
                 List<SEPersistenceUnitInfo> infos = PersistenceUnitProcessor.processPersistenceArchive(archive, Thread.currentThread().getContextClassLoader());
                 for (SEPersistenceUnitInfo info: infos){
                     if (!info.getPersistenceUnitName().equals("jpa-rs")){
+                        if (EntityManagerSetupImpl.mustBeCompositeMember(info)) {
+                            continue;
+                        }
                         contextNames.add(info.getPersistenceUnitName());
                     }
                 }

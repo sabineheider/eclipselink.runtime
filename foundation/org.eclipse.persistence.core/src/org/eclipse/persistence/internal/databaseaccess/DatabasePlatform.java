@@ -16,6 +16,8 @@
  *     Vikram Bhatia - added method for releasing temporary LOBs after conversion
  *     09/09/2011-2.3.1 Guy Pelletier 
  *       - 356197: Add new VPD type to MultitenantType
+ *     02/04/2013-2.5 Guy Pelletier 
+ *       - 389090: JPA 2.1 DDL Generation Support
  ******************************************************************************/  
 package org.eclipse.persistence.internal.databaseaccess;
 
@@ -240,6 +242,9 @@ public class DatabasePlatform extends DatasourcePlatform {
      * Used to integrate with data partitioning in an external DataSource such as UCP.
      */
     protected DataPartitioningCallback partitioningCallback;
+
+    /** Allows auto-indexing for foreign keys to be set. */
+    protected boolean shouldCreateIndicesOnForeignKeys;
 
     public DatabasePlatform() {
         this.tableQualifier = "";
@@ -911,6 +916,7 @@ public class DatabasePlatform extends DatasourcePlatform {
         databasePlatform.setUsesJDBCBatchWriting(usesJDBCBatchWriting());
         databasePlatform.setUsesNativeBatchWriting(usesNativeBatchWriting());
         databasePlatform.setUsesStreamsForBinding(usesStreamsForBinding());
+        databasePlatform.shouldCreateIndicesOnForeignKeys = this.shouldCreateIndicesOnForeignKeys;
         databasePlatform.printOuterJoinInWhereClause = this.printOuterJoinInWhereClause;
         databasePlatform.printInnerJoinInWhereClause = this.printInnerJoinInWhereClause;
         //use the variable directly to avoid custom platform strings - only want to copy user set values.
@@ -991,6 +997,13 @@ public class DatabasePlatform extends DatasourcePlatform {
      */
     public String getCreateViewString() {
         return "CREATE VIEW ";
+    }
+    
+    /**
+     * Allows DROP TABLE to cascade dropping of any dependent constraints if the database supports this option.
+     */
+    public String getDropCascadeString() {
+        return "";
     }
     
     /**
@@ -1096,6 +1109,20 @@ public class DatabasePlatform extends DatasourcePlatform {
      */
     public String getDefaultSequenceTableName() {
         return "SEQUENCE";
+    }
+    
+    /**
+     * Return the create schema SQL syntax. Subclasses should override as needed.
+     */
+    public String getCreateDatabaseSchemaString(String schema) {
+        return "CREATE SCHEMA " + schema;
+    }
+    
+    /**
+     * Return the drop schema SQL syntax. Subclasses should override as needed.
+     */
+    public String getDropDatabaseSchemaString(String schema) {
+        return "DROP SCHEMA " + schema;
     }
     
     /**
@@ -1981,6 +2008,26 @@ public class DatabasePlatform extends DatasourcePlatform {
      */
     public boolean shouldCreateIndicesOnUniqueKeys() {
         return false;
+    }
+
+    /**
+     * Used for table creation. Most databases do not create an index automatically for
+     * foreign key columns.  Normally it is recommended to index foreign key columns.
+     * This allows for foreign key indexes to be configured, by default foreign keys are not indexed.
+     * 
+     * @return whether an index should be created explicitly for foreign key constraints
+     */
+    public boolean shouldCreateIndicesOnForeignKeys() {
+        return shouldCreateIndicesOnForeignKeys;
+    }
+
+    /**
+     * Used for table creation. Most databases do not create an index automatically for
+     * foreign key columns.  Normally it is recommended to index foreign key columns.
+     * This allows for foreign key indexes to be configured, by default foreign keys are not indexed.
+     */
+    public void setShouldCreateIndicesOnForeignKeys(boolean shouldCreateIndicesOnForeignKeys) {
+        this.shouldCreateIndicesOnForeignKeys = shouldCreateIndicesOnForeignKeys;
     }
     
     /**

@@ -22,6 +22,7 @@ import org.eclipse.persistence.testing.jaxb.namespaceuri.xml.XMLNamespaceTestCas
 import org.eclipse.persistence.testing.jaxb.namespaceuri.xml.XMLNamespaceXmlPathTestCases;
 import org.eclipse.persistence.testing.jaxb.nomappings.NoMappingsTestCases;
 import org.eclipse.persistence.testing.jaxb.xmlelementref.ns.XmlElementRefWithNamespaceTests;
+import org.eclipse.persistence.testing.jaxb.xmlelementref.prefix.XmlElementRefPrefixesTestCases;
 import org.eclipse.persistence.testing.jaxb.xmlvalue.XmlValueByteArrayTestCases;
 import org.eclipse.persistence.testing.jaxb.xmlvalue.XmlValueListTestCases;
 import org.eclipse.persistence.testing.jaxb.xmlvalue.XmlValueTestCases;
@@ -48,6 +49,7 @@ public class JAXBTestSuite extends TestCase {
         suite.addTestSuite(org.eclipse.persistence.testing.jaxb.xmlattribute.XmlAttributeNoNamespaceTestCases.class);
         suite.addTestSuite(org.eclipse.persistence.testing.jaxb.xmlattribute.XmlAttributeCollectionTestCases.class);
         suite.addTestSuite(org.eclipse.persistence.testing.jaxb.xmlattribute.emptynamespace.XmlAttributeEmptyNamespaceTestCases.class);
+        suite.addTestSuite(org.eclipse.persistence.testing.jaxb.xmlattribute.imports.XmlAttributeImportsTestCases.class);
         suite.addTestSuite(org.eclipse.persistence.testing.jaxb.xmlattribute.unqualified.AttributeFormUnqualifiedTestCases.class);
         suite.addTestSuite(org.eclipse.persistence.testing.jaxb.xmlattribute.ObjectTestCases.class);
         suite.addTestSuite(XmlValueTestCases.class);
@@ -63,6 +65,12 @@ public class JAXBTestSuite extends TestCase {
         suite.addTestSuite(org.eclipse.persistence.testing.jaxb.xmlschema.attributeformdefault.qualified.AttributeFormDefaultQualifiedTestCases.class);
         suite.addTestSuite(org.eclipse.persistence.testing.jaxb.xmlschema.attributeformdefault.unqualified.AttributeFormDefaultUnqualifiedTestCases.class);
         suite.addTestSuite(org.eclipse.persistence.testing.jaxb.xmlschema.attributeformdefault.unset.AttributeFormDefaultUnsetTestCases.class);
+        suite.addTestSuite(org.eclipse.persistence.testing.jaxb.xmlschema.attributeformdefault.qualified.AttributeNSQualifiedTestCases.class);
+        suite.addTestSuite(org.eclipse.persistence.testing.jaxb.xmlschema.attributeformdefault.qualified.AttributeQualifiedTestCases.class);
+        suite.addTestSuite(org.eclipse.persistence.testing.jaxb.xmlschema.attributeformdefault.qualified.NoAttributeQualifiedTestCases.class);
+        suite.addTestSuite(org.eclipse.persistence.testing.jaxb.xmlschema.attributeformdefault.unqualified.AttributeNSUnqualifiedTestCases.class);
+        suite.addTestSuite(org.eclipse.persistence.testing.jaxb.xmlschema.attributeformdefault.unqualified.AttributeUnqualifiedTestCases.class);
+        suite.addTestSuite(org.eclipse.persistence.testing.jaxb.xmlschema.attributeformdefault.unqualified.NoAttributeUnqualifiedTestCases.class);
         suite.addTestSuite(org.eclipse.persistence.testing.jaxb.xmlschema.defaultns.emptyprefix.DefaultNamespaceEmptyStringTestCases.class);
         suite.addTestSuite(org.eclipse.persistence.testing.jaxb.xmlelements.XmlElementsStringTestCases.class);
         suite.addTestSuite(org.eclipse.persistence.testing.jaxb.xmlelements.XmlElementsAdapterTestCases.class);
@@ -106,8 +114,10 @@ public class JAXBTestSuite extends TestCase {
         suite.addTestSuite(org.eclipse.persistence.testing.jaxb.multiplepackage.MultiplePackageTestCases.class);
         suite.addTestSuite(org.eclipse.persistence.testing.jaxb.multiplepackage.MultiplePackageInfoTestCases.class);
         suite.addTestSuite(IDResolverTestCases.class);
+        suite.addTestSuite(org.eclipse.persistence.testing.jaxb.idresolver.collection.IDResolverTestCases.class);
         suite.addTestSuite(org.eclipse.persistence.testing.jaxb.attachments.contenttype.ContentTypeTestCases.class);
         suite.addTestSuite(XmlElementRefWithNamespaceTests.class);
+        suite.addTestSuite(XmlElementRefPrefixesTestCases.class);
         return suite;
     }
 

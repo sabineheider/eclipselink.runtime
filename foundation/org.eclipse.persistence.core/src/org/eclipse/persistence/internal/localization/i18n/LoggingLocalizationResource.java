@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 1998, 2012 Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1998, 2013 Oracle and/or its affiliates. All rights reserved.
  * This program and the accompanying materials are made available under the 
  * terms of the Eclipse Public License v1.0 and Eclipse Distribution License v. 1.0 
  * which accompanies this distribution. 
@@ -33,6 +33,12 @@
  *       - 376603: Provide for table per tenant support for multitenant applications
  *     11/28/2012-2.5 Guy Pelletier 
  *       - 374688: JPA 2.1 Converter support
+ *     01/24/2013-2.5 Guy Pelletier 
+ *       - 389090: JPA 2.1 DDL Generation Support
+ *     02/04/2013-2.5 Guy Pelletier 
+ *       - 389090: JPA 2.1 DDL Generation Support
+ *     02/13/2013-2.5 Guy Pelletier 
+ *       - 397772: JPA 2.1 Entity Graph Support (XML support)
  ******************************************************************************/  
 package org.eclipse.persistence.internal.localization.i18n;
 
@@ -236,6 +242,7 @@ public class LoggingLocalizationResource extends ListResourceBundle {
         { "metadata_default_collection_catalog", "The collection table name for the basic collection/map mapping [{0}] is being defaulted to: {1}." },
         { "metadata_default_converter_data_type", "The data type for the converter named [{2}] used with the element [{1}] in the entity [{0}] is being defaulted to [{3}]." },
         { "metadata_default_converter_object_type", "The object type for the converter named [{2}] used with the element [{1}] in the entity [{0}] is being defaulted to [{3}]." },
+        { "metadata_default_entity_graph_name", "The name for the named entity graph specification on class [{1}] is being defaulted to: {0}" },
         { "metadata_default_column", "The column name for element [{0}] is being defaulted to: {1}." },
         { "metadata_default_order_column", "The order column name for element [{0}] is being defaulted to: {1}." },
         { "metadata_default_key_column", "The key column name for the basic map mapping element [{0}] is being defaulted to: {1}." },
@@ -457,8 +464,9 @@ public class LoggingLocalizationResource extends ListResourceBundle {
         { "jpars_could_not_find_persistence_context", "A JPA-RS call is requesting persistence context: [{0}].  That persistence context is not found."},
         { "jpars_could_not_find_class_in_persistence_unit", "Type: [{0}] cannot be found in persistence unit: [{1}]."},
         { "jpars_could_bootstrap_persistence_context", "Persistence Context: [{0}] could not be bootstrapped."},
-        { "entity_not_available_during_merge", "Max tries exceeded.  Unable to find value of locked cacheKey.  Class [{0}] ID:[{1}] This Thread: [{2}] Owning Thread:[{3}]"},
-
+        { "entity_not_available_during_merge", "Max tries exceeded.  Unable to find value of locked cacheKey.  Class [{0}] ID:[{1}] This Thread: [{2}] Owning Thread:[{3}]"},        
+        { "ddl_generation_unknown_property_value", "Unknown {0} value provided [{1}] for the persistence unit [{2}]. Valid options are: [{3}]" },
+        
         // MESSAGES end
         
         
@@ -746,7 +754,9 @@ public class LoggingLocalizationResource extends ListResourceBundle {
         { "metamodel_type_collection_empty.MSGID", "TOP-50250" },                                            
         { "metamodel_type_collection_empty_during_lookup.MSGID", "TOP-50251" },        
         { "entity_not_available_during_merge.MSGID", "TOP-50247"},
-
+        
+        { "unknown_ddl_generation_property.MSGID", "TOP-50252" }
+        
         /**
          * Note: Each MSGID and TOP-NNNNN key above must have a corresponding 
          * id and string message entry in the 1st section at the top of this file.

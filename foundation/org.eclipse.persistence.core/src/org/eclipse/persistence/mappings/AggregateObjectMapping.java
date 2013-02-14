@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 1998, 2012 Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1998, 2013 Oracle and/or its affiliates. All rights reserved.
  * This program and the accompanying materials are made available under the 
  * terms of the Eclipse Public License v1.0 and Eclipse Distribution License v. 1.0 
  * which accompanies this distribution. 
@@ -15,6 +15,10 @@
  *       - 371950: Metadata caching 
  *     10/25/2012-2.5 Guy Pelletier 
  *       - 374688: JPA 2.1 Converter support
+ *     09 Jan 2013-2.5 Gordon Yorke
+ *       - 397772: JPA 2.1 Entity Graph Support
+ *     02/11/2013-2.5 Guy Pelletier 
+ *       - 365931: @JoinColumn(name="FK_DEPT",insertable = false, updatable = true) causes INSERT statement to include this data value that it is associated with
  ******************************************************************************/  
 package org.eclipse.persistence.mappings;
 
@@ -649,7 +653,7 @@ public class AggregateObjectMapping extends AggregateMapping implements Relation
      * @return
      */
     public Object buildElementClone(Object attributeValue, Object parent, CacheKey parentCacheKey, Integer refreshCascade, AbstractSession cloningSession, boolean isExisting, boolean isFromSharedCache){
-        Object aggregateClone = buildClonePart(attributeValue, parentCacheKey, refreshCascade, cloningSession, isExisting);
+        Object aggregateClone = buildClonePart(attributeValue, parentCacheKey, refreshCascade, cloningSession, !isExisting);
         if (aggregateClone != null && cloningSession.isUnitOfWork()) {
             ClassDescriptor descriptor = getReferenceDescriptor(aggregateClone, cloningSession);
             descriptor.getObjectChangePolicy().setAggregateChangeListener(parent, aggregateClone, (UnitOfWorkImpl)cloningSession, descriptor, getAttributeName());
@@ -1789,6 +1793,10 @@ public class AggregateObjectMapping extends AggregateMapping implements Relation
             if (sourceField.hasTableName()) {
                 mappingField.setTable(clonedDescriptor.getTable(sourceField.getTable().getName()));
             }
+            
+            // Tag this field as translated. Some mapping care to know which
+            // have been translated in the rehashFieldDependancies call.
+            mappingField.setIsTranslated(true);
         }
     }
     

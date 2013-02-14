@@ -24,6 +24,8 @@
 <!--       - 322008: Improve usability of additional criteria applied to queries at the session/EM                                   -->
 <!--     03/23/2011-2.3 Guy Pelletier                                                                                                -->
 <!--       - 337323: Multi-tenant with shared schema support (part 1)                                                                -->
+<!--     02/13/2013-2.5 Guy Pelletier                                                                                                -->
+<!--       - 397772: JPA 2.1 Entity Graph Support (XML support)                                                                      -->     
 <!-- ******************************************************************************************************************************* -->
 
 <!-- Java Persistence API object-relational mapping file schema -->
@@ -735,6 +737,8 @@
             <xsd:element name="named-stored-function-query" type="orm:named-stored-function-query"/>
             <xsd:element name="named-plsql-stored-procedure-query" type="orm:named-plsql-stored-procedure-query"/>
             <xsd:element name="named-plsql-stored-function-query" type="orm:named-plsql-stored-function-query"/>
+            <xsd:element name="oracle-object" type="orm:oracle-object"/>
+            <xsd:element name="oracle-array" type="orm:oracle-array"/>
             <xsd:element name="plsql-record" type="orm:plsql-record"/>
             <xsd:element name="plsql-table" type="orm:plsql-table"/>
             <xsd:element name="sql-result-set-mapping" type="orm:sql-result-set-mapping"/>
@@ -941,47 +945,37 @@
       <xsd:element name="copy-policy" type="orm:copy-policy" minOccurs="0" maxOccurs="1"/>
       <xsd:element name="instantiation-copy-policy" type="orm:instantiation-copy-policy" minOccurs="0" maxOccurs="1"/>
       <xsd:element name="clone-copy-policy" type="orm:clone-copy-policy" minOccurs="0" maxOccurs="1"/>
-      <xsd:element name="sequence-generator" type="orm:sequence-generator" 
-                   minOccurs="0"/>
-      <xsd:element name="table-generator" type="orm:table-generator" 
-                   minOccurs="0"/>
-      <xsd:element name="uuid-generator" type="orm:uuid-generator" 
-                   minOccurs="0"/>
+      <xsd:element name="sequence-generator" type="orm:sequence-generator" minOccurs="0"/>
+      <xsd:element name="table-generator" type="orm:table-generator" minOccurs="0"/>
+      <xsd:element name="uuid-generator" type="orm:uuid-generator" minOccurs="0"/>
       <xsd:group ref="orm:partitioning-group"/>
-      <xsd:element name="named-query" type="orm:named-query" 
-                   minOccurs="0" maxOccurs="unbounded"/>
-      <xsd:element name="named-native-query" type="orm:named-native-query" 
-                   minOccurs="0" maxOccurs="unbounded"/>
+      <xsd:element name="named-query" type="orm:named-query" minOccurs="0" maxOccurs="unbounded"/>
+      <xsd:element name="named-native-query" type="orm:named-native-query" minOccurs="0" maxOccurs="unbounded"/>
       <xsd:element name="named-stored-procedure-query" type="orm:named-stored-procedure-query" minOccurs="0" maxOccurs="unbounded"/>
       <xsd:element name="named-stored-function-query" type="orm:named-stored-function-query" minOccurs="0" maxOccurs="unbounded"/>
       <xsd:element name="named-plsql-stored-procedure-query" type="orm:named-plsql-stored-procedure-query" minOccurs="0" maxOccurs="unbounded"/>
       <xsd:element name="named-plsql-stored-function-query" type="orm:named-plsql-stored-function-query" minOccurs="0" maxOccurs="unbounded"/>
+      <xsd:element name="oracle-object" type="orm:oracle-object" minOccurs="0" maxOccurs="unbounded"/>
+      <xsd:element name="oracle-array" type="orm:oracle-array" minOccurs="0" maxOccurs="unbounded"/>
       <xsd:element name="plsql-record" type="orm:plsql-record" minOccurs="0" maxOccurs="unbounded"/>
       <xsd:element name="plsql-table" type="orm:plsql-table" minOccurs="0" maxOccurs="unbounded"/>
-      <xsd:element name="sql-result-set-mapping" 
-                   type="orm:sql-result-set-mapping" 
-                   minOccurs="0" maxOccurs="unbounded"/>
+      <xsd:element name="sql-result-set-mapping" type="orm:sql-result-set-mapping" minOccurs="0" maxOccurs="unbounded"/>
       <xsd:element name="query-redirectors" type="orm:query-redirectors" minOccurs="0" maxOccurs="1"/>
-      <xsd:element name="exclude-default-listeners" type="orm:emptyType" 
-                   minOccurs="0"/>
-      <xsd:element name="exclude-superclass-listeners" type="orm:emptyType" 
-                   minOccurs="0"/>
-      <xsd:element name="entity-listeners" type="orm:entity-listeners" 
-                   minOccurs="0"/>
+      <xsd:element name="exclude-default-listeners" type="orm:emptyType" minOccurs="0"/>
+      <xsd:element name="exclude-superclass-listeners" type="orm:emptyType" minOccurs="0"/>
+      <xsd:element name="entity-listeners" type="orm:entity-listeners" minOccurs="0"/>
       <xsd:element name="pre-persist" type="orm:pre-persist" minOccurs="0"/>
-      <xsd:element name="post-persist" type="orm:post-persist" 
-                   minOccurs="0"/>
+      <xsd:element name="post-persist" type="orm:post-persist" minOccurs="0"/>
       <xsd:element name="pre-remove" type="orm:pre-remove" minOccurs="0"/>
       <xsd:element name="post-remove" type="orm:post-remove" minOccurs="0"/>
       <xsd:element name="pre-update" type="orm:pre-update" minOccurs="0"/>
       <xsd:element name="post-update" type="orm:post-update" minOccurs="0"/>
       <xsd:element name="post-load" type="orm:post-load" minOccurs="0"/>
       <xsd:element name="property" type="orm:property" minOccurs="0" maxOccurs="unbounded"/>
-      <xsd:element name="attribute-override" type="orm:attribute-override" 
-                   minOccurs="0" maxOccurs="unbounded"/>
-      <xsd:element name="association-override" 
-                   type="orm:association-override"
-                   minOccurs="0" maxOccurs="unbounded"/>
+      <xsd:element name="attribute-override" type="orm:attribute-override" minOccurs="0" maxOccurs="unbounded"/>
+      <xsd:element name="association-override" type="orm:association-override" minOccurs="0" maxOccurs="unbounded"/>
+      <xsd:element name="convert" type="orm:convert" minOccurs="0" maxOccurs="unbounded"/>
+      <xsd:element name="named-entity-graph" type="orm:named-entity-graph" minOccurs="0" maxOccurs="unbounded"/>
       <xsd:element name="attributes" type="orm:attributes" minOccurs="0"/>
     </xsd:sequence>
     <xsd:attribute name="name" type="xsd:string"/>
@@ -2109,7 +2103,7 @@
       </xsd:documentation>
     </xsd:annotation>
     <xsd:attribute name="name" type="xsd:string" use="required"/>
-    <xsd:attribute name="type" type="xsd:string"/>
+    <xsd:attribute name="class" type="xsd:string"/>
   </xsd:complexType>
 
   <!-- **************************************************** -->
@@ -2455,6 +2449,8 @@
       <xsd:element name="copy-policy" type="orm:copy-policy" minOccurs="0" maxOccurs="1"/>
       <xsd:element name="instantiation-copy-policy" type="orm:instantiation-copy-policy" minOccurs="0" maxOccurs="1"/>
       <xsd:element name="clone-copy-policy" type="orm:clone-copy-policy" minOccurs="0" maxOccurs="1"/>
+      <xsd:element name="oracle-object" type="orm:oracle-object" minOccurs="0" maxOccurs="unbounded"/>
+      <xsd:element name="oracle-array" type="orm:oracle-array" minOccurs="0" maxOccurs="unbounded"/>
       <xsd:element name="plsql-record" type="orm:plsql-record" minOccurs="0" maxOccurs="unbounded"/>
       <xsd:element name="plsql-table" type="orm:plsql-table" minOccurs="0" maxOccurs="unbounded"/>      
       <xsd:element name="property" type="orm:property" minOccurs="0" maxOccurs="unbounded"/>
@@ -3409,6 +3405,8 @@
       <xsd:element name="named-stored-function-query" type="orm:named-stored-function-query" minOccurs="0" maxOccurs="unbounded"/>            
       <xsd:element name="named-plsql-stored-procedure-query" type="orm:named-plsql-stored-procedure-query" minOccurs="0" maxOccurs="unbounded"/>
       <xsd:element name="named-plsql-stored-function-query" type="orm:named-plsql-stored-function-query" minOccurs="0" maxOccurs="unbounded"/>
+      <xsd:element name="oracle-object" type="orm:oracle-object" minOccurs="0" maxOccurs="unbounded"/>
+      <xsd:element name="oracle-array" type="orm:oracle-array" minOccurs="0" maxOccurs="unbounded"/>
       <xsd:element name="plsql-record" type="orm:plsql-record" minOccurs="0" maxOccurs="unbounded"/>
       <xsd:element name="plsql-table" type="orm:plsql-table" minOccurs="0" maxOccurs="unbounded"/>
       <xsd:element name="sql-result-set-mapping" 
@@ -3516,6 +3514,61 @@
     </xsd:restriction>
   </xsd:simpleType>
   
+  <!-- **************************************************** -->
+
+  <xsd:complexType name="named-attribute-node">
+    <xsd:annotation>
+      <xsd:documentation>
+
+        @Target({}) @Retention(RUNTIME)
+        public @interface NamedAttributeNode {
+          String value();
+          String subgraph() default "";
+          String keySubgraph() default "";
+        }
+ 
+      </xsd:documentation>
+    </xsd:annotation>
+    <xsd:attribute name="name" type="xsd:string" use="required"/>
+    <xsd:attribute name="subgraph" type="xsd:string"/>
+    <xsd:attribute name="key-subgraph" type="xsd:string"/>
+  </xsd:complexType>
+
+  <!-- **************************************************** -->
+
+  <xsd:complexType name="named-entity-graph">
+    <xsd:annotation>
+      <xsd:documentation>
+
+        @Target({TYPE}) @Retention(RUNTIME)
+        public @interface NamedEntityGraph {
+          String name() default "";
+          NamedAttributeNode[] attributeNodes() default {};
+          boolean includeAllAttributes() default false;
+          NamedSubgraph[] subgraphs() default {};
+          NamedSubGraph[] subclassSubgraphs() default {};
+        }
+
+      </xsd:documentation>
+    </xsd:annotation>
+    <xsd:sequence>
+      <xsd:element name="named-attribute-node" 
+                   type="orm:named-attribute-node" 
+                   minOccurs="0"
+                   maxOccurs="unbounded"/>
+      <xsd:element name="subgraph" 
+                   type="orm:named-subgraph" 
+                   minOccurs="0"
+                   maxOccurs="unbounded"/>
+      <xsd:element name="subclass-subgraph" 
+                   type="orm:named-subgraph" 
+                   minOccurs="0"
+                   maxOccurs="unbounded"/>
+    </xsd:sequence>
+    <xsd:attribute name="name" type="xsd:string"/>
+    <xsd:attribute name="include-all-attributes" type="xsd:boolean"/>
+  </xsd:complexType>
+
   <!-- **************************************************** -->
 
   <xsd:complexType name="named-native-query">
@@ -3655,10 +3708,13 @@
       </xsd:documentation>
     </xsd:annotation>
     <xsd:sequence>
-      <xsd:element name="result-class" type="xsd:string" minOccurs="0" maxOccurs="unbounded"/>
-      <xsd:element name="result-set-mapping" type="xsd:string" minOccurs="0" maxOccurs="unbounded"/>
-      <xsd:element name="hint" type="orm:query-hint" minOccurs="0" maxOccurs="unbounded"/>
-      <xsd:element name="parameter" type="orm:stored-procedure-parameter" minOccurs="0" maxOccurs="unbounded"/>
+      <xsd:element name="description" type="xsd:string" minOccurs="0"/>
+      <xsd:choice minOccurs="0" maxOccurs="unbounded">
+        <xsd:element name="result-class" type="xsd:string"/>
+        <xsd:element name="result-set-mapping" type="xsd:string"/>
+        <xsd:element name="hint" type="orm:query-hint"/>
+        <xsd:element name="parameter" type="orm:stored-procedure-parameter"/>
+      </xsd:choice>
     </xsd:sequence>
     <xsd:attribute name="name" type="xsd:string" use="required"/>
     <xsd:attribute name="result-class" type="xsd:string"/>
@@ -3667,6 +3723,31 @@
     <xsd:attribute name="returns-result-set" type="xsd:boolean"/>
     <xsd:attribute name="multiple-result-sets" type="xsd:boolean"/>
     <xsd:attribute name="call-by-index" type="xsd:boolean"/>
+  </xsd:complexType>
+  
+  <!-- **************************************************** -->
+
+  <xsd:complexType name="named-subgraph">
+    <xsd:annotation>
+      <xsd:documentation>
+
+        @Target({}) @Retention(RUNTIME)
+        public @interface NamedSubgraph {
+          String name();
+          Class type() default void.class;
+          NamedAttributeNode[] attributeNodes();
+        }
+
+      </xsd:documentation>
+    </xsd:annotation>
+    <xsd:sequence>
+      <xsd:element name="named-attribute-node" 
+                   type="orm:named-attribute-node" 
+                   minOccurs="0"
+                   maxOccurs="unbounded"/>
+    </xsd:sequence>
+    <xsd:attribute name="name" type="xsd:string" use="required"/>
+    <xsd:attribute name="class" type="xsd:string"/>
   </xsd:complexType>
   
   <!-- **************************************************** -->
@@ -3865,6 +3946,87 @@
   
   <!-- **************************************************** -->
   
+  <xsd:complexType name="oracle-object">
+    <xsd:annotation>
+      <xsd:documentation>
+		/** 
+		 * An OracleObject annotation is used to define an Oracle database OBJECT type.
+		 * This type can be used within PLSQL procedure calls.
+		 * 
+		 * @see NamedPLSQLStoredProcedureQuery
+		 * @author David McCann
+		 * @since EclipseLink 2.5
+		 */
+		@Target({TYPE})
+		@Retention(RUNTIME)
+		public @interface OracleObject {
+		
+		    /**
+		     * (Required) The name of the OBJECT type in the database.
+		     */
+		    String name();
+		    
+		    /**
+		     * (Optional) The Java class to map the OBJECT type to.
+		     * This class must be mapped using a @Struct annotation.
+		     */
+		    Class javaType() default void.class;
+		    
+		    /**
+		     * (Required) Defines the fields in the record type.
+		     */
+		    PLSQLParameter[] fields();
+		}
+
+      </xsd:documentation>
+    </xsd:annotation>
+    <xsd:sequence>
+      <xsd:element name="field" type="orm:plsql-parameter" minOccurs="0" maxOccurs="unbounded"/>
+    </xsd:sequence>
+    <xsd:attribute name="name" type="xsd:string" use="required"/>
+    <xsd:attribute name="java-type" type="xsd:string"/>
+  </xsd:complexType>
+  
+  <!-- **************************************************** -->
+  
+  <xsd:complexType name="oracle-array">
+    <xsd:annotation>
+      <xsd:documentation>
+       /** 
+        * An OracleArray annotation is used to define an Oracle database VARRAY type.
+        * This type can be used within PLSQL procedure calls.
+        * 
+        * @see NamedPLSQLStoredProcedureQuery
+        * @author David McCann
+        * @since EclipseLink 2.5
+        */ 
+        @Target({TYPE})
+		@Retention(RUNTIME)
+		public @interface OracleArray {
+		    /**
+		     * (Required) The name of the VARRAY type in the database.
+		     */
+		    String name();
+		
+		    /**
+		     * (Optional) The name of the database type this VARRAY holds onto.
+		     */
+		    String nestedType() default "VARCHAR_TYPE";
+		    
+		    /**
+		     * (Optional) The Java Collection class to map the VARRAY to.
+		     * This can be any valid Collection implementation.
+		     */
+		    Class javaType() default ArrayList.class;
+		}
+      </xsd:documentation>
+    </xsd:annotation>
+    <xsd:attribute name="name" type="xsd:string" use="required"/>
+    <xsd:attribute name="java-type" type="xsd:string"/>
+    <xsd:attribute name="nested-type" type="xsd:string"/>
+  </xsd:complexType>
+  
+  <!-- **************************************************** -->
   <xsd:complexType name="plsql-record">
     <xsd:annotation>
       <xsd:documentation>
@@ -3920,47 +4082,57 @@
     <xsd:annotation>
       <xsd:documentation>
 
-        /** 
-         * A PLSQLRecord annotation is used to define a database PLSQL RECORD type.
-         * This type can be used within PLSQL procedure calls.
-         * 
-         * @see NamedPLSQLStoredProcedureQuery
-         * @author James Sutherland
-         * @since EclipseLink 2.3
-         */
-        @Target({TYPE})
-        @Retention(RUNTIME)
-        public @interface PLSQLRecord {
-        
-            /**
-             * (Required) The name of the record type in the database.
-             */
-            String name();
-        
-            /**
-             * (Required) The name of the database OBJECT TYPE that mirrors the record's structure.
-             * The record will be converted to/from this type so it can be passed through JDBC.
-             */
-            String compatibleType();
-            
-            /**
-             * (Optional) The Java class to map the object-type to.
-             * This class must be mapped using a @Struct annotation.
-             */
-            Class javaType() default void.class;
-            
-            /**
-             * (Required) Defines the fields in the record type.
-             */
-            PLSQLParameter[] fields();
+		/** 
+		 * A PLSQLTable annotation is used to define a database PLSQL TABLE type.
+		 * This type can be used within PLSQL procedure calls.
+		 * 
+		 * @see NamedPLSQLStoredProcedureQuery
+		 * @author James Sutherland
+		 * @since EclipseLink 2.3
+		 */ 
+		@Target({TYPE})
+		@Retention(RUNTIME)
+		public @interface PLSQLTable {
+		
+		    /**
+		     * (Required) The name of the record type in the database.
+		     */
+		    String name();
+		
+		    /**
+		     * (Required) The name of the database VARRAY type that mirrors the table's structure.
+		     * The table will be converted to/from this type so it can be passed through JDBC.
+		     */
+		    String compatibleType();
+		
+		    /**
+		     * (Required) The name of the database OBJECT TYPE or VARRAY type that mirrors the record's structure.
+		     * The record will be converted to/from this type so it can be passed through JDBC.
+		     */
+		    String nestedType() default "VARCHAR_TYPE";
+		    
+		    /**
+		     * (Optional) The Java Collection class to map the varray to.
+		     * This can be any valid Collection implementation.
+		     */
+		    Class javaType() default ArrayList.class;
+		    
+		    /**
+		     * (Optional) Indicates a non-associative (nested) table.
+		     * This method would typically be used when generating a constructor for the 
+		     * collection in PL/SQL (as the constructors for associative arrays (Varray) 
+		     * and a non-associative (nested) tables differ).
+		     */
+		    boolean isNestedTable() default false;
         }
-
+        
       </xsd:documentation>
     </xsd:annotation>
     <xsd:attribute name="name" type="xsd:string" use="required"/>
     <xsd:attribute name="compatible-type" type="xsd:string"/>
     <xsd:attribute name="java-type" type="xsd:string"/>
     <xsd:attribute name="nested-type" type="xsd:string"/>
+    <xsd:attribute name="nested-table" type="xsd:boolean"/>
   </xsd:complexType>
   
   <!-- **************************************************** -->
@@ -4853,12 +5025,16 @@
 
       </xsd:documentation>
     </xsd:annotation>
+    <xsd:sequence>
+      <xsd:element name="description" type="xsd:string" minOccurs="0"/>
+    </xsd:sequence>
     <xsd:attribute name="direction" type="orm:direction-type"/>
     <xsd:attribute name="mode" type="orm:parameter-mode"/>
     <xsd:attribute name="name" type="xsd:string"/>
     <xsd:attribute name="query-parameter" type="xsd:string" use="required"/>
     <xsd:attribute name="optional" type="xsd:boolean"/>
     <xsd:attribute name="type" type="xsd:string"/>
+    <xsd:attribute name="class" type="xsd:string"/>
     <xsd:attribute name="jdbc-type" type="xsd:integer"/>
     <xsd:attribute name="jdbc-type-name" type="xsd:string"/>
   </xsd:complexType>

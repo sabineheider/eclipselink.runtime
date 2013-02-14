@@ -48,6 +48,7 @@ import org.eclipse.persistence.platform.database.events.DatabaseEventListener;
 import org.eclipse.persistence.platform.server.ServerPlatform;
 import org.eclipse.persistence.platform.server.NoServerPlatform;
 import org.eclipse.persistence.platform.server.ServerPlatformBase;
+import org.eclipse.persistence.queries.AttributeGroup;
 import org.eclipse.persistence.queries.DatabaseQuery;
 import org.eclipse.persistence.queries.QueryResultsCachePolicy;
 import org.eclipse.persistence.queries.ReadQuery;
@@ -486,7 +487,7 @@ public class DatabaseSessionImpl extends AbstractSession implements org.eclipse.
         if (defaultQueryCachePolicy != null) {
             for (List<DatabaseQuery> queries : getQueries().values()) {
                 for (DatabaseQuery query : queries) {
-                    if (query.isReadQuery()) {
+                    if (query.isReadQuery() && (query.getDescriptor() != null) && !query.getDescriptor().getCachePolicy().isIsolated()) {
                         ReadQuery readQuery = (ReadQuery)query;
                         if (!readQuery.shouldCacheQueryResults()) {
                             readQuery.setQueryResultsCachePolicy(defaultQueryCachePolicy.clone());
@@ -494,6 +495,10 @@ public class DatabaseSessionImpl extends AbstractSession implements org.eclipse.
                     }
                 }
             }
+        }
+        for (AttributeGroup group : getProject().getAttributeGroups().values()){
+            getAttributeGroups().put(group.getName(), group);
+            this.getDescriptor(group.getType()).addAttributeGroup(group);
         }
     }
 

@@ -362,10 +362,13 @@ public class MetadataProcessor {
                         m_project.addStaticMetamodelClass(PersistenceUnitProcessor.getStaticMetamodelAnnotation(candidateClass), candidateClass);
                     } else if (PersistenceUnitProcessor.isConverter(candidateClass) && ! m_project.hasConverterAccessor(candidateClass)) {
                         m_project.addConverterAccessor(new ConverterAccessor(PersistenceUnitProcessor.getConverterAnnotation(candidateClass), candidateClass, m_project));
+                    } else if (PersistenceUnitProcessor.isMappedSuperclass(candidateClass) && ! m_project.hasMappedSuperclass(candidateClass)) {
+                        // ensure mapped superclasses will be added to the metamodel even if they do not have entity subclasses
+                        MetadataDescriptor metadataDescriptor = new MetadataDescriptor(candidateClass);
+                        // add the mapped superclass to keep track of it in case it is not processed later (has no subclasses).  
+                        m_session.getProject().addMappedSuperclass(candidateClass.getName(), metadataDescriptor.getClassDescriptor(), false);
                     }
                 }
-                
-                // Mapped-superclasses will be discovered automatically.
             }
         }
     }

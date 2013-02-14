@@ -53,6 +53,8 @@ import javax.persistence.metamodel.Type.PersistenceType;
 import junit.framework.Test;
 import junit.framework.TestSuite;
 
+import org.eclipse.persistence.annotations.BatchFetchType;
+import org.eclipse.persistence.annotations.JoinFetch;
 import org.eclipse.persistence.config.QueryHints;
 import org.eclipse.persistence.descriptors.ClassDescriptor;
 import org.eclipse.persistence.descriptors.DescriptorEvent;
@@ -90,6 +92,7 @@ import org.eclipse.persistence.testing.models.jpa.advanced.Cost;
 import org.eclipse.persistence.testing.models.jpa.advanced.Customer;
 import org.eclipse.persistence.testing.models.jpa.advanced.Dealer;
 import org.eclipse.persistence.testing.models.jpa.advanced.Department;
+import org.eclipse.persistence.testing.models.jpa.advanced.Door;
 import org.eclipse.persistence.testing.models.jpa.advanced.Employee;
 import org.eclipse.persistence.testing.models.jpa.advanced.EmployeePopulator;
 import org.eclipse.persistence.testing.models.jpa.advanced.EmploymentPeriod;
@@ -194,6 +197,7 @@ public class AdvancedJPAJunitTest extends JUnitTestCase {
 
         suite.addTest(new AdvancedJPAJunitTest("testMethodBasedTransformationMapping"));
         suite.addTest(new AdvancedJPAJunitTest("testClassBasedTransformationMapping"));
+        suite.addTest(new AdvancedJPAJunitTest("testTransformationMappingWithColumnAnnotation"));
 
         suite.addTest(new AdvancedJPAJunitTest("testProperty"));
         
@@ -225,6 +229,10 @@ public class AdvancedJPAJunitTest extends JUnitTestCase {
             
             // Run this test only when the JPA 2.0 specification is enabled on the server, or we are in SE mode with JPA 2.0 capability
             suite.addTest(new AdvancedJPAJunitTest("testMetamodelMinimalSanityTest"));
+            
+            suite.addTest(new AdvancedJPAJunitTest("testProjectToEmployeeWithBatchFetchJoinFetch"));
+            suite.addTest(new AdvancedJPAJunitTest("testEmployeeToPhoneNumberWithBatchFetchJoinFetch"));
+            suite.addTest(new AdvancedJPAJunitTest("testEmployeeToAddressWithBatchFetchJoinFetch"));
         }
         
         return suite;
@@ -1981,6 +1989,61 @@ public class AdvancedJPAJunitTest extends JUnitTestCase {
         internalTestTransformationMapping("overtimeHours");
     }
     
+    //Bug#391251 : Test for @Column outside WriteTransformer annotation
+    public void testTransformationMappingWithColumnAnnotation() {
+        Door door = new Door();
+        door.setId(100);
+        door.setHeight(8);
+        door.setWidth(5);
+        door.setRoom(null);
+        int year = 2013;
+        int month = 1;            
+        int day = 30;
+        door.setSaleDate(Helper.dateFromYearMonthDate(year, month - 1, day));
+       
+        EntityManager em = createEntityManager();                
+        beginTransaction(em);
+        try {    
+            em.persist(door);
+            commitTransaction(em);
+        } finally {
+            if (isTransactionActive(em)){
+                rollbackTransaction(em);
+            }
+            closeEntityManager(em);
+        }
+        int id = door.getId();
+        String errorMsg = "";
+        try {
+            this.clearCache();
+            em = createEntityManager();
+            door = em.find(Door.class, 100);           
+            Calendar calendarSaleDate = Calendar.getInstance(); 
+            calendarSaleDate.setTime(door.getSaleDate());
+            if(calendarSaleDate.get(Calendar.YEAR) != year || calendarSaleDate.get(Calendar.MONTH) != (month - 1) || calendarSaleDate.get(Calendar.DAY_OF_MONTH) != day) {
+               errorMsg = "saleDate = " + door.getSaleDate().toString() + " is wrong";
+            }  
+        } catch (RuntimeException ex) {
+            fail("Failed to fetch data for testTransformationMappingWithColumnAnnotation" + ex.getMessage());
+        }
+        
+        // clean up
+        beginTransaction(em);
+        try {    
+            door = em.find(Door.class, door.getId());
+            em.remove(door);
+            commitTransaction(em);
+        } finally {
+            if (isTransactionActive(em)){
+                rollbackTransaction(em);
+            }
+            closeEntityManager(em);
+        }
+        if (errorMsg.length() != 0 ) {
+            fail(errorMsg);
+        }
+    }
+    
     protected void internalTestTransformationMapping(String attributeName) {
         // setup: create an Employee, insert into db
         int startHour = 8, startMin = 30, startSec = 15;
@@ -2534,6 +2597,125 @@ public class AdvancedJPAJunitTest extends JUnitTestCase {
         } catch (Exception e) {
             fail("An error occurred: " + e.getMessage());
         } finally {
+            closeEntityManager(em);
+        }
+    }
+    
+    /**
+     * Bug 400022
+     * Test batch fetch with join fetch with batching on a M:M
+     */
+    public void testProjectToEmployeeWithBatchFetchJoinFetch() {
+        EntityManager em = createEntityManager();        
+        try {
+            Query query = em.createQuery("SELECT p FROM Project p", Project.class);
+            query.setHint(QueryHints.BATCH, "p.teamMembers");
+            query.setHint(QueryHints.BATCH, "p.teamMembers.projects");
+            query.setHint(QueryHints.BATCH, "p.teamMembers.phoneNumbers.owner");
+            query.setHint(QueryHints.BATCH_TYPE, BatchFetchType.IN);
+            query.setHint(QueryHints.FETCH, "p.teamMembers.address");
+            query.setHint(QueryHints.FETCH, "p.teamMembers.phoneNumbers");
+
+            List<Project> results = query.getResultList();
+            for (Project project : results) {
+                assertNotNull("Project cannot be null", project);
+                Collection<Employee> employees = project.getTeamMembers();
+                for (Employee employee : employees) {
+                    assertNotNull("Employee cannot be null", employee);
+                }
+            }
+        } finally {
+            closeEntityManager(em);
+        }
+    }
+    
+    /**
+     * Bug 400022
+     * Test batch fetch with join fetch on a 1:M
+     */
+    public void testEmployeeToPhoneNumberWithBatchFetchJoinFetch() {
+        EntityManager em = createEntityManager();
+
+        try {
+            beginTransaction(em);
+            
+            Employee emp1 = new Employee();
+            emp1.setMale();
+            emp1.setFirstName("Mickey");
+            emp1.setLastName("O'Neil");
+            
+            Employee emp2 = new Employee();
+            emp2.setMale();
+            emp2.setFirstName("Tony");
+            emp2.setLastName("Bullet Tooth");
+            
+            em.persist(emp1);
+            em.persist(emp2);
+            
+            em.flush();
+            
+            Query query = em.createQuery("SELECT e FROM Employee e", Employee.class);
+            query.setHint(QueryHints.BATCH, "e.projects");
+            query.setHint(QueryHints.BATCH, "e.projects.teamMembers");
+            query.setHint(QueryHints.BATCH, "e.phoneNumbers.owner");
+            query.setHint(QueryHints.BATCH_TYPE, BatchFetchType.IN);
+            query.setHint(QueryHints.FETCH, "e.address");
+            query.setHint(QueryHints.FETCH, "e.phoneNumbers");
+
+            List<Employee> results = query.getResultList();
+            for (Employee employee : results) {
+                assertNotNull("Employee cannot be null", employee);
+                Collection<PhoneNumber> phoneNumbers = employee.getPhoneNumbers();
+                for (PhoneNumber phoneNumber : phoneNumbers) {
+                    assertNotNull("PhoneNumber cannot be null", phoneNumber);
+                }
+            }
+        } finally {
+            rollbackTransaction(em);
+            closeEntityManager(em);
+        }
+    }
+    
+    /**
+     * Bug 400022
+     * Test batch fetch with join fetch on a 1:1
+     */
+    public void testEmployeeToAddressWithBatchFetchJoinFetch() {
+        EntityManager em = createEntityManager();
+
+        try {
+            beginTransaction(em);
+            
+            Employee emp1 = new Employee();
+            emp1.setMale();
+            emp1.setFirstName("Mickey");
+            emp1.setLastName("O'Neil");
+            
+            Employee emp2 = new Employee();
+            emp2.setMale();
+            emp2.setFirstName("Tony");
+            emp2.setLastName("Bullet Tooth");
+            
+            em.persist(emp1);
+            em.persist(emp2);
+            
+            em.flush();
+            
+            Query query = em.createQuery("SELECT e FROM Employee e", Employee.class);
+            query.setHint(QueryHints.BATCH, "e.projects");
+            query.setHint(QueryHints.BATCH, "e.projects.teamMembers");
+            query.setHint(QueryHints.BATCH, "e.phoneNumbers.owner");
+            query.setHint(QueryHints.BATCH_TYPE, BatchFetchType.IN);
+            query.setHint(QueryHints.FETCH, "e.address");
+            query.setHint(QueryHints.FETCH, "e.phoneNumbers");
+
+            List<Employee> results = query.getResultList();
+            for (Employee employee : results) {
+                assertNotNull("Employee cannot be null", employee);
+                String addrString = String.valueOf(employee.getAddress());
+            }
+        } finally {
+            rollbackTransaction(em);
             closeEntityManager(em);
         }
     }

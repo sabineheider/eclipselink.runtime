@@ -12,6 +12,10 @@
  ******************************************************************************/
 package org.eclipse.persistence.core.sessions;
 
-public interface CoreLogin {
+import org.eclipse.persistence.internal.core.databaseaccess.CorePlatform;
+
+public interface CoreLogin<PLATFORM extends CorePlatform> {
+
+    public PLATFORM getDatasourcePlatform();
 
 }

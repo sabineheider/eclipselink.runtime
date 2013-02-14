@@ -49,6 +49,7 @@ import org.eclipse.persistence.internal.sessions.AbstractSession;
 import org.eclipse.persistence.internal.sessions.DatabaseSessionImpl;
 import org.eclipse.persistence.internal.helper.*;
 import org.eclipse.persistence.internal.identitymaps.AbstractIdentityMap;
+import org.eclipse.persistence.queries.AttributeGroup;
 import org.eclipse.persistence.queries.DatabaseQuery;
 import org.eclipse.persistence.queries.QueryResultsCachePolicy;
 import org.eclipse.persistence.queries.SQLResultSetMapping;
@@ -66,7 +67,7 @@ import org.eclipse.persistence.sessions.server.*;
  *
  * @see DatabaseLogin
  */
-public class Project extends CoreProject<ClassDescriptor> implements Serializable, Cloneable {
+public class Project extends CoreProject<ClassDescriptor, Login, DatabaseSession> implements Serializable, Cloneable {
     protected String name;
     protected Login datasourceLogin;
     protected Map<Class, ClassDescriptor> descriptors;
@@ -121,6 +122,9 @@ public class Project extends CoreProject<ClassDescriptor> implements Serializabl
     
     /** List of queries - once Project is initialized, these are copied to the Session. */
     protected List<DatabaseQuery> queries;
+
+    /** List of named AttributeGroups - once Project is initialized, these are copied to the Session. */
+    protected Map<String, AttributeGroup> attributeGroups = null;
 
     /** List of queries from JPA that need special processing before execution. */
     protected List<DatabaseQuery> jpaQueries;
@@ -182,6 +186,7 @@ public class Project extends CoreProject<ClassDescriptor> implements Serializabl
         this.queries = new ArrayList<DatabaseQuery>();
         this.mappedSuperclassDescriptors = new HashMap<String, ClassDescriptor>(2);
         this.metamodelIdClassMap = new HashMap<String, List<String>>();
+        this.attributeGroups = new HashMap<String, AttributeGroup>();
     }
 
     /**
@@ -320,6 +325,14 @@ public class Project extends CoreProject<ClassDescriptor> implements Serializabl
      */
     public void setQueries(List<DatabaseQuery> queries) {
         this.queries = queries;
+    }
+    
+    /**
+     * INTERNAL:
+     * List of named AttributesGroups that will be copied to the session at initialization time.
+     */
+    public Map<String, AttributeGroup> getAttributeGroups(){
+        return this.attributeGroups;
     }
     
     /**
@@ -499,6 +512,9 @@ public class Project extends CoreProject<ClassDescriptor> implements Serializabl
         while (ordered.hasNext()){
             ClassDescriptor descriptor = (ClassDescriptor)ordered.next();
             descriptor.convertClassNamesToClasses(classLoader);
+        }
+        for (AttributeGroup group : this.getAttributeGroups().values()){
+            group.convertClassNamesToClasses(classLoader);
         }
         // Clear old descriptors to allow rehash on new classes.
         this.descriptors = new HashMap();
@@ -767,6 +783,7 @@ public class Project extends CoreProject<ClassDescriptor> implements Serializabl
      * Return the login, the login holds any database connection information given.
      * This return the Login interface and may need to be cast to the datasource specific implementation.
      */
+    @Override
     public Login getDatasourceLogin() {
         return datasourceLogin;
     }
@@ -1370,13 +1387,13 @@ public class Project extends CoreProject<ClassDescriptor> implements Serializabl
      * @param value (RelationalDescriptor)
      * @since EclipseLink 1.2 for the JPA 2.0 Reference Implementation 
      */
-    public void addMappedSuperclass(String key, ClassDescriptor value) {
+    public void addMappedSuperclass(String key, ClassDescriptor value, boolean replace) {
         // Lazy initialization of the mappedSuperclassDescriptors field.
         if(null == this.mappedSuperclassDescriptors) {
             this.mappedSuperclassDescriptors = new HashMap<String, ClassDescriptor>(2);
         }
         // Avoid replacing the current RelationalDescriptor that may have mappings set
-        if(!this.mappedSuperclassDescriptors.containsKey(key)) {
+        if(replace || !this.mappedSuperclassDescriptors.containsKey(key)) {
             this.mappedSuperclassDescriptors.put(key, value);
         }
     }

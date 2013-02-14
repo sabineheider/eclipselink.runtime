@@ -13,7 +13,6 @@
 package org.eclipse.persistence.internal.jpa.metadata.queries;
 
 import org.eclipse.persistence.internal.helper.ComplexDatabaseType;
-import org.eclipse.persistence.internal.jpa.metadata.ORMetadata;
 import org.eclipse.persistence.internal.jpa.metadata.accessors.MetadataAccessor;
 import org.eclipse.persistence.internal.jpa.metadata.accessors.objects.MetadataAnnotation;
 
@@ -34,8 +33,7 @@ import org.eclipse.persistence.internal.jpa.metadata.accessors.objects.MetadataA
  * @author James Sutherland
  * @since EclipseLink 2.3
  */
-public abstract class PLSQLComplexTypeMetadata extends ORMetadata {
-    private String name;
+public abstract class PLSQLComplexTypeMetadata extends ComplexTypeMetadata {
     private String compatibleType;
     private String javaType;
     
@@ -54,7 +52,6 @@ public abstract class PLSQLComplexTypeMetadata extends ORMetadata {
     public PLSQLComplexTypeMetadata(MetadataAnnotation record, MetadataAccessor accessor) {
         super(record, accessor);
         
-        this.name = (String) record.getAttribute("name");
         this.compatibleType = (String) record.getAttribute("compatibleType");
         this.javaType = (String) record.getAttribute("javaType");        
     }
@@ -96,23 +93,11 @@ public abstract class PLSQLComplexTypeMetadata extends ORMetadata {
     public String getJavaType() {
         return javaType;
     }
-
-    /**
-     * INTERNAL:
-     * Used for OX mapping.
-     */
-    public String getName() {
-        return name;
-    }
-    
-    /**
-     * Build a runtime type from the meta-data.
-     */
-    public abstract ComplexDatabaseType process();
     
     /**
      * Build a runtime record type from the meta-data.
      */
+    @Override
     protected void process(ComplexDatabaseType type) {
         type.setTypeName(this.name);
         type.setCompatibleType(this.compatibleType);
@@ -139,10 +124,23 @@ public abstract class PLSQLComplexTypeMetadata extends ORMetadata {
     }
     
     /**
-     * INTERNAL:
-     * Used for OX mapping.
+     * Indicates an instance of PLSQLComplexTypeMetadata.
      */
-    public void setName(String name) {
-        this.name = name;
+    public boolean isPLSQLComplexTypeMetadata() {
+        return true;
+    }
+    
+    /**
+     * Indicates an instance of PLSQLRecordMetadata.
+     */
+    public boolean isPLSQLRecordMetadata() {
+        return false;
+    }
+
+    /**
+     * Indicates an instance of PLSQLTableMetadata.
+     */
+    public boolean isPLSQLTableMetadata() {
+        return false;
     }
 }

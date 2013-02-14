@@ -679,7 +679,7 @@ public class UnmarshalRecordImpl extends CoreAbstractRecord implements Unmarshal
                             Object value = pk.getPrimaryKey()[x];
                             if (null == value) {
                                 Field pkField = (Field) xmlDescriptor.getPrimaryKeyFields().get(x);
-                                pk.set(x, unmarshaller.getXMLContext().getValueByXPath(currentObject, pkField.getXPath(), pkField.getNamespaceResolver(), Object.class));
+                                pk.set(x, unmarshaller.getContext().getValueByXPath(currentObject, pkField.getXPath(), pkField.getNamespaceResolver(), Object.class));
                             }
                         }
                         referenceResolver.putValue(xmlDescriptor.getJavaClass(), pk, currentObject);
@@ -1364,7 +1364,14 @@ public class UnmarshalRecordImpl extends CoreAbstractRecord implements Unmarshal
     public void addAttributeValue(ContainerValue containerValue, Object value, Object collection) {
         this.unmarshalContext.addAttributeValue(this, containerValue, value, collection);
     }
-
+    
+    public void setAttributeValueNull(ContainerValue containerValue) {
+        this.unmarshalContext.setAttributeValue(this, null, containerValue.getMapping());
+        int containerIndex = containerValue.getIndex();
+        populatedContainerValues.remove(containerValue);
+        containerInstances[containerIndex] = null;
+    }
+    
     public void reference(Reference reference) {
         this.unmarshalContext.reference(reference);
     }

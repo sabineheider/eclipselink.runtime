@@ -35,6 +35,7 @@ import org.eclipse.persistence.platform.database.oracle.plsql.PLSQLCollection;
  */
 public class PLSQLTableMetadata extends PLSQLComplexTypeMetadata {
     private String nestedType;
+    private Boolean isNestedTable;
     
     /**
      * INTERNAL:
@@ -52,6 +53,7 @@ public class PLSQLTableMetadata extends PLSQLComplexTypeMetadata {
         super(record, accessor);
                 
         this.nestedType = (String) record.getAttribute("nestedType");
+        this.isNestedTable = (Boolean) record.getAttributeBooleanDefaultFalse("isNestedTable");
     }
     
     /**
@@ -62,12 +64,23 @@ public class PLSQLTableMetadata extends PLSQLComplexTypeMetadata {
         if (objectToCompare instanceof PLSQLTableMetadata) {
             PLSQLTableMetadata parameter = (PLSQLTableMetadata) objectToCompare;            
             
+            if (! valuesMatch(this.isNestedTable, parameter.getNestedTable())) {
+                return false;
+            }
             if (! valuesMatch(this.nestedType, parameter.getNestedType())) {
                 return false;
             }
         }
         
         return super.equals(objectToCompare);
+    }
+    
+    /**
+     * Indicates if the instance represents a Nested Table (as opposed to Varray).
+     * Defaults to false, i.e. Varray.
+     */
+    public Boolean getNestedTable() {
+        return isNestedTable;
     }
     
     /**
@@ -79,21 +92,45 @@ public class PLSQLTableMetadata extends PLSQLComplexTypeMetadata {
     }
     
     /**
+     * Indicates if the instance represents a Nested Table (as opposed to Varray).
+     * Defaults to false, i.e. Varray.
+     */
+    public boolean isNestedTable() {
+        return getNestedTable() != null && getNestedTable();
+    }
+    
+    /**
      * INTERNAL:
      * Build a runtime record type from the meta-data.
      */
     public PLSQLCollection process() {
         PLSQLCollection table = new PLSQLCollection();
         super.process(table);
+        table.setIsNestedTable(isNestedTable());
         table.setNestedType(getDatabaseTypeEnum(getNestedType()));
         return table;
     }
 
+    /**
+     * Set boolean that indicates if the instance represents a Nested Table 
+     * (as opposed to Varray)
+     */
+    public void setNestedTable(Boolean isNestedTable) {
+        this.isNestedTable = isNestedTable;
+    }
+    
     /**
      * INTERNAL:
      * Used for OX mapping.
      */
     public void setNestedType(String nestedType) {
         this.nestedType = nestedType;
+    }
+
+    /**
+     * Indicates an instance of PLSQLTableMetadata.
+     */
+    public boolean isPLSQLTableMetadata() {
+        return true;
     }
 }

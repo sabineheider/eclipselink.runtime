@@ -191,7 +191,7 @@ public class RestUtils {
      * @throws URISyntaxException the uRI syntax exception
      */
     @SuppressWarnings("unchecked")
-    public static <T> T restUpdate(PersistenceContext context, Object object, String type, Class<T> resultClass, String persistenceUnit, Map<String, String> tenantId, MediaType mediaType, boolean sendLinks) throws RestCallFailedException, URISyntaxException {
+    public static <T> T restUpdate(PersistenceContext context, Object object, String type, Class<T> resultClass, String persistenceUnit, Map<String, String> tenantId, MediaType mediaType, boolean sendLinks, String version) throws RestCallFailedException, URISyntaxException {
         ByteArrayOutputStream os = new ByteArrayOutputStream();
         try {
             if (sendLinks) {
@@ -204,7 +204,11 @@ public class RestUtils {
         }
 
         StringBuilder uri = new StringBuilder();
-        uri.append(RestUtils.getServerURI() + persistenceUnit);
+        if (version != null) {
+            uri.append(RestUtils.getServerURI() + version + "/" + persistenceUnit);
+        } else {
+            uri.append(RestUtils.getServerURI() + persistenceUnit);
+        }
         if (tenantId != null) {
             for (String key : tenantId.keySet()) {
                 uri.append(";" + key + "=" + tenantId.get(key));
@@ -267,7 +271,12 @@ public class RestUtils {
         }
         uri.append("/entity/" + type);
         WebResource webResource = client.resource(uri.toString());
-        ClientResponse response = webResource.type(mediaType).accept(mediaType).put(ClientResponse.class, os.toString());
+        ClientResponse response = null;
+        if (mediaType.equals(MediaType.APPLICATION_JSON_TYPE)) {
+            response = webResource.type(mediaType).accept("application/json;charset=UTF-8").put(ClientResponse.class, os.toString());
+        } else {
+            response = webResource.type(mediaType).accept(mediaType).put(ClientResponse.class, os.toString());
+        }
         Status status = response.getClientResponseStatus();
         if (status != Status.CREATED) {
             throw new RestCallFailedException(status);
@@ -282,6 +291,52 @@ public class RestUtils {
         return resultObject;
     }
 
+    
+    public static void restCreateWithSequence(String object, String type, String persistenceUnit, Map<String, String> tenantId, MediaType mediaType) throws URISyntaxException  {
+        StringBuilder uri = new StringBuilder();
+        uri.append(RestUtils.getServerURI() + persistenceUnit);
+        if (tenantId != null) {
+            for (String key : tenantId.keySet()) {
+                uri.append(";" + key + "=" + tenantId.get(key));
+            }
+        }
+        uri.append("/entity/" + type);
+        WebResource webResource = client.resource(uri.toString());
+        ClientResponse response = webResource.type(mediaType).accept(mediaType).put(ClientResponse.class, object.toString());
+        Status status = response.getClientResponseStatus();
+        if (status == Status.BAD_REQUEST) {
+            throw new RestCallFailedException(status);
+        } else {
+            throw new IllegalArgumentException();
+        }
+    }
+    
+    @SuppressWarnings("unchecked")
+    public static <T> T  restCreate(PersistenceContext context, String object, String type, Class<T> resultClass, String persistenceUnit, Map<String, String> tenantId, MediaType mediaType) throws URISyntaxException  {
+        StringBuilder uri = new StringBuilder();
+        uri.append(RestUtils.getServerURI() + persistenceUnit);
+        if (tenantId != null) {
+            for (String key : tenantId.keySet()) {
+                uri.append(";" + key + "=" + tenantId.get(key));
+            }
+        }
+        uri.append("/entity/" + type);
+        WebResource webResource = client.resource(uri.toString());
+        ClientResponse response = webResource.type(mediaType).accept(mediaType).put(ClientResponse.class, object.toString());
+        Status status = response.getClientResponseStatus();
+        if (status != Status.CREATED) {
+            throw new RestCallFailedException(status);
+        }
+        String result = response.getEntity(String.class);
+        T resultObject = null;
+        try {
+            resultObject = (T) context.unmarshalEntity(type, mediaType, new ByteArrayInputStream(result.getBytes()));
+        } catch (JAXBException e) {
+            fail("Exception thrown unmarshalling: " + e);
+        }
+        return resultObject;
+    }
+    
     /**
      * Rest delete.
      *
@@ -295,9 +350,13 @@ public class RestUtils {
      * @throws RestCallFailedException the rest call failed exception
      * @throws URISyntaxException the uRI syntax exception
      */
-    public static <T> void restDelete(Object id, String type, Class<T> resultClass, String persistenceUnit, String attribute, Map<String, String> tenantId, MediaType mediaType) throws RestCallFailedException, URISyntaxException {
+    public static <T> void restDelete(Object id, String type, Class<T> resultClass, String persistenceUnit, String attribute, Map<String, String> tenantId, MediaType mediaType, String version) throws RestCallFailedException, URISyntaxException {
         StringBuilder uri = new StringBuilder();
-        uri.append(RestUtils.getServerURI() + persistenceUnit);
+        if (version != null) {
+            uri.append(RestUtils.getServerURI() + version + "/" + persistenceUnit);
+        } else {
+            uri.append(RestUtils.getServerURI() + persistenceUnit);
+        }
         if (tenantId != null) {
             for (String key : tenantId.keySet()) {
                 uri.append(";" + key + "=" + tenantId.get(key));
@@ -354,10 +413,15 @@ public class RestUtils {
      * @return the string
      * @throws URISyntaxException the uRI syntax exception
      */
-    public static String restNamedMultiResultQuery(String queryName, String persistenceUnit, Map<String, Object> parameters, Map<String, String> hints, MediaType outputMediaType)
+    public static String restNamedMultiResultQuery(String queryName, String persistenceUnit, Map<String, Object> parameters, Map<String, String> hints, MediaType outputMediaType, String version)
             throws URISyntaxException {
         StringBuilder resourceURL = new StringBuilder();
-        resourceURL.append(RestUtils.getServerURI() + persistenceUnit + "/query/" + queryName);
+        if (version != null) {
+            resourceURL.append(RestUtils.getServerURI() + version + "/" + persistenceUnit + "/query/" + queryName);
+        } else {
+            resourceURL.append(RestUtils.getServerURI() + persistenceUnit + "/query/" + queryName);
+        }
+        
         appendParametersAndHints(resourceURL, parameters, hints);
         WebResource webResource = client.resource(resourceURL.toString());
         ClientResponse response = webResource.accept(outputMediaType).get(ClientResponse.class);
@@ -381,10 +445,14 @@ public class RestUtils {
      * @return the object
      * @throws URISyntaxException the uRI syntax exception
      */
-    public static String restNamedSingleResultQuery(String queryName, String persistenceUnit, Map<String, Object> parameters, Map<String, String> hints, MediaType outputMediaType)
+    public static String restNamedSingleResultQuery(String queryName, String persistenceUnit, Map<String, Object> parameters, Map<String, String> hints, MediaType outputMediaType, String version)
             throws URISyntaxException {
         StringBuilder resourceURL = new StringBuilder();
-        resourceURL.append(RestUtils.getServerURI() + persistenceUnit + "/singleResultQuery/" + queryName);
+        if (version != null) {
+            resourceURL.append(RestUtils.getServerURI() + version + "/" + persistenceUnit + "/singleResultQuery/" + queryName);
+        } else {
+            resourceURL.append(RestUtils.getServerURI() + persistenceUnit + "/singleResultQuery/" + queryName);
+        }
         RestUtils.appendParametersAndHints(resourceURL, parameters, hints);
         WebResource webResource = client.resource(resourceURL.toString());
         ClientResponse response = webResource.accept(outputMediaType).get(ClientResponse.class);
@@ -565,8 +633,8 @@ public class RestUtils {
      * @throws URISyntaxException the uRI syntax exception
      * @throws JAXBException the jAXB exception
      */
-    public static String restRemoveBidirectionalRelationship(PersistenceContext context, String objectId, String type, String relationshipName,
-            String persistenceUnit, MediaType mediaType, String partner, String listItemId, boolean sendLinks)
+    public static String restRemoveBidirectionalRelationship(String objectId, String type, String relationshipName,
+            String persistenceUnit, MediaType mediaType, String partner, String listItemId)
             throws RestCallFailedException, URISyntaxException, JAXBException {
 
         String url = RestUtils.getServerURI() + persistenceUnit + "/entity/" + type + "/"
@@ -649,7 +717,7 @@ public class RestUtils {
      * @throws RestCallFailedException the rest call failed exception
      * @throws URISyntaxException the uRI syntax exception
      */
-    public static String restFindAttribute(PersistenceContext context, Object id, String type, String attribute, String persistenceUnit, Map<String, String> tenantId, MediaType outputMediaType)
+    public static String restFindAttribute(Object id, String type, String attribute, String persistenceUnit, Map<String, String> tenantId, MediaType outputMediaType)
             throws RestCallFailedException, URISyntaxException {
         StringBuilder uri = new StringBuilder();
         uri.append(RestUtils.getServerURI() + persistenceUnit);
@@ -669,6 +737,50 @@ public class RestUtils {
         return result;
     }
 
+    
+    /**
+     * Test get contexts.
+     *
+     * @return the string
+     * @throws Exception the exception
+     */
+    public static String restGetContexts(MediaType mediaType, String version) throws Exception {
+        StringBuffer uri = new StringBuffer();
+        if (version != null) {
+            uri.append(RestUtils.getServerURI() + version);
+        } else {
+            uri.append(RestUtils.getServerURI());
+        }
+        WebResource webResource = client.resource(uri.toString());
+        ClientResponse response = webResource.accept(mediaType).get(ClientResponse.class);
+        Status status = response.getClientResponseStatus();
+        if (status != Status.OK){
+            throw new RestCallFailedException(status);
+        }
+
+        String result = response.getEntity(String.class);
+        return result;
+    }
+    
+    public static String restGetTypes(String persistenceUnit, MediaType mediaType, String version) throws Exception {
+        StringBuffer uri = new StringBuffer();
+        if (version != null) {
+            uri.append(RestUtils.getServerURI() + version + "/" + persistenceUnit + "/metadata");
+        } else {
+            uri.append(RestUtils.getServerURI() + persistenceUnit + "/metadata");
+        }
+        WebResource webResource = client.resource(uri.toString());
+        ClientResponse response = webResource.accept(mediaType).get(ClientResponse.class);
+        Status status = response.getClientResponseStatus();
+        if (status != Status.OK){
+            throw new RestCallFailedException(status);
+        }
+
+        String result = response.getEntity(String.class);
+        return result;
+    }
+
+    
     private static String getExtension(File f) {
         String ext = null;
         String s = f.getName();

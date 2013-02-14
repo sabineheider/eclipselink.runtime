@@ -19,11 +19,6 @@ import java.util.Set;
 import javax.ws.rs.ApplicationPath;
 import javax.ws.rs.core.Application;
 
-import org.eclipse.persistence.jpa.rs.EntityResource;
-import org.eclipse.persistence.jpa.rs.PersistenceResource;
-import org.eclipse.persistence.jpa.rs.PersistenceUnitResource;
-import org.eclipse.persistence.jpa.rs.QueryResource;
-import org.eclipse.persistence.jpa.rs.SingleResultQueryResource;
 import org.eclipse.persistence.jpa.rs.exceptions.ClassNotFoundExceptionMapper;
 import org.eclipse.persistence.jpa.rs.exceptions.ConversionExceptionMapper;
 import org.eclipse.persistence.jpa.rs.exceptions.EntityExistsExceptionMapper;
@@ -34,6 +29,7 @@ import org.eclipse.persistence.jpa.rs.exceptions.IllegalArgumentExceptionMapper;
 import org.eclipse.persistence.jpa.rs.exceptions.IllegalStateExceptionMapper;
 import org.eclipse.persistence.jpa.rs.exceptions.InvocationTargetExceptionMapper;
 import org.eclipse.persistence.jpa.rs.exceptions.JAXBExceptionMapper;
+import org.eclipse.persistence.jpa.rs.exceptions.JPARSConfigurationExceptionMapper;
 import org.eclipse.persistence.jpa.rs.exceptions.JPARSExceptionMapper;
 import org.eclipse.persistence.jpa.rs.exceptions.MalformedURLExceptionMapper;
 import org.eclipse.persistence.jpa.rs.exceptions.NamingExceptionMapper;
@@ -62,12 +58,19 @@ public class JPARSApplication extends Application {
     public JPARSApplication() {
         HashSet<Class<?>> c = new HashSet<Class<?>>();
 
-        // Resources
-        c.add(PersistenceResource.class);
-        c.add(PersistenceUnitResource.class);
-        c.add(EntityResource.class);
-        c.add(SingleResultQueryResource.class);
-        c.add(QueryResource.class);
+        // Unversioned Resources (resources that do not have version in the url)
+        c.add(org.eclipse.persistence.jpa.rs.resources.unversioned.PersistenceResource.class);
+        c.add(org.eclipse.persistence.jpa.rs.resources.unversioned.PersistenceUnitResource.class);
+        c.add(org.eclipse.persistence.jpa.rs.resources.unversioned.EntityResource.class);
+        c.add(org.eclipse.persistence.jpa.rs.resources.unversioned.SingleResultQueryResource.class);
+        c.add(org.eclipse.persistence.jpa.rs.resources.unversioned.QueryResource.class);
+        
+        // Versioned Resources (resources that do have version in the url)
+        c.add(org.eclipse.persistence.jpa.rs.resources.PersistenceResource.class);
+        c.add(org.eclipse.persistence.jpa.rs.resources.PersistenceUnitResource.class);
+        c.add(org.eclipse.persistence.jpa.rs.resources.EntityResource.class);
+        c.add(org.eclipse.persistence.jpa.rs.resources.SingleResultQueryResource.class);
+        c.add(org.eclipse.persistence.jpa.rs.resources.QueryResource.class);
 
         // Exception Mapping
         c.add(ClassNotFoundExceptionMapper.class);
@@ -91,6 +94,7 @@ public class JPARSApplication extends Application {
         c.add(QueryTimeoutExceptionMapper.class);
         c.add(RollbackExceptionMapper.class);
         c.add(TransactionRequiredExceptionMapper.class);
+        c.add(JPARSConfigurationExceptionMapper.class);
 
         classes = Collections.unmodifiableSet(c);
     }

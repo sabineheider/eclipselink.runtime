@@ -63,7 +63,6 @@ public interface UnmarshalRecord<
 
     public void endUnmappedElement(String uri, String localName, String name) throws SAXException;
 
-
     public NodeValue getAttributeChildNodeValue(String namespace, String localName);
 
     public Attributes getAttributes();
@@ -159,6 +158,8 @@ public interface UnmarshalRecord<
     public void setAttributes(Attributes atts);
 
     public void setAttributeValue(Object object, Mapping mapping);
+
+    public void setAttributeValueNull(ContainerValue containerValue);
 
     public void setChildRecord(UnmarshalRecord unmarshalRecord);
 

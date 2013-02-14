@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2012 Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, 2013 Oracle and/or its affiliates. All rights reserved.
  * This program and the accompanying materials are made available under the 
  * terms of the Eclipse Public License v1.0 and Eclipse Distribution License v. 1.0 
  * which accompanies this distribution. 
@@ -14,10 +14,13 @@
  *       - 350487: JPA 2.1 Specification defined support for Stored Procedure Calls
  *     10/09/2012-2.5 Guy Pelletier 
  *       - 374688: JPA 2.1 Converter support
+ *     02/13/2013-2.5 Guy Pelletier 
+ *       - 397772: JPA 2.1 Entity Graph Support (XML support)
  ******************************************************************************/   
 package org.eclipse.persistence.testing.models.jpa21.advanced;
 
 import java.io.Serializable;
+
 import java.util.Collection;
 import java.util.List;
 import java.util.Vector;
@@ -39,8 +42,14 @@ import javax.persistence.JoinColumn;
 import javax.persistence.JoinTable;
 import javax.persistence.ManyToMany;
 import javax.persistence.ManyToOne;
+import javax.persistence.NamedAttributeNode;
+import javax.persistence.NamedEntityGraph;
+import javax.persistence.NamedEntityGraphs;
+import javax.persistence.NamedQueries;
+import javax.persistence.NamedQuery;
 import javax.persistence.NamedStoredProcedureQueries;
 import javax.persistence.NamedStoredProcedureQuery;
+import javax.persistence.NamedSubgraph;
 import javax.persistence.OneToMany;
 import javax.persistence.PrimaryKeyJoinColumn;
 import javax.persistence.SecondaryTable;
@@ -67,12 +76,48 @@ import static javax.persistence.ParameterMode.INOUT;
 import static javax.persistence.ParameterMode.OUT;
 import static javax.persistence.ParameterMode.REF_CURSOR;
 
+@NamedEntityGraphs(
+        {@NamedEntityGraph(
+                attributeNodes={
+                        @NamedAttributeNode("address"),
+                        @NamedAttributeNode(value="projects", subgraph="projects")
+                },
+                subgraphs={
+                        @NamedSubgraph(
+                                name="projects",
+                                attributeNodes={
+                                        @NamedAttributeNode("properties")
+                                }
+                        ),
+                        @NamedSubgraph(
+                                name="projects",
+                                type=LargeProject.class,
+                                attributeNodes={
+                                    @NamedAttributeNode("executive")
+                                }
+                        )
+                }
+        )
+        }
+)
+
+
 @Entity
 @Table(name="JPA21_EMPLOYEE")
 @SecondaryTable(
     name="JPA21_SALARY",
     pkJoinColumns=@PrimaryKeyJoinColumn(name="EMP_ID", referencedColumnName="EMP_ID")
 )
+@NamedQueries({
+@NamedQuery(
+    name="jpa21Employee.findAllEmployeesByFirstNameAndLastNamePos",
+    query="SELECT employee FROM Employee employee WHERE employee.firstName = ?1 AND employee.lastName = ?2"
+),
+@NamedQuery(
+        name="jpa21Employee.findAllEmployeesByFirstNameAndLastNameName",
+        query="SELECT employee FROM Employee employee WHERE employee.firstName = :firstName AND employee.lastName = :lastName"
+    )
+})
 @NamedStoredProcedureQueries({
     @NamedStoredProcedureQuery(
         name="ReadUsingMultipleResultSetMappings",

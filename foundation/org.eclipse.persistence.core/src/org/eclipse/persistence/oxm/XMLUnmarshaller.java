@@ -21,21 +21,26 @@ import java.net.URL;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.Map;
-import java.util.Properties;
 import java.util.Map.Entry;
+import java.util.Properties;
+
 import javax.xml.transform.Source;
 import javax.xml.validation.Schema;
 
+import org.eclipse.persistence.core.sessions.CoreSession;
 import org.eclipse.persistence.exceptions.EclipseLinkException;
 import org.eclipse.persistence.exceptions.XMLMarshalException;
 import org.eclipse.persistence.internal.oxm.StrBuffer;
 import org.eclipse.persistence.internal.oxm.Unmarshaller;
 import org.eclipse.persistence.internal.oxm.record.PlatformUnmarshaller;
+import org.eclipse.persistence.internal.oxm.record.UnmarshalRecord;
 import org.eclipse.persistence.internal.security.PrivilegedAccessHelper;
+import org.eclipse.persistence.internal.sessions.AbstractSession;
+import org.eclipse.persistence.oxm.attachment.XMLAttachmentUnmarshaller;
 import org.eclipse.persistence.oxm.platform.XMLPlatform;
+import org.eclipse.persistence.oxm.record.XMLRootRecord;
 import org.eclipse.persistence.oxm.schema.XMLSchemaReference;
 import org.eclipse.persistence.platform.xml.XMLParser;
-import org.eclipse.persistence.sessions.DatabaseSession;
 import org.w3c.dom.Node;
 import org.xml.sax.EntityResolver;
 import org.xml.sax.ErrorHandler;
@@ -43,7 +48,6 @@ import org.xml.sax.InputSource;
 import org.xml.sax.SAXException;
 import org.xml.sax.SAXParseException;
 import org.xml.sax.XMLReader;
-import org.eclipse.persistence.oxm.attachment.*;
 
 /**
  * <p>Class used to unmarshal XML to objects.
@@ -71,7 +75,7 @@ import org.eclipse.persistence.oxm.attachment.*;
  *
  * @see org.eclipse.persistence.oxm.XMLContext
  */
-public class XMLUnmarshaller extends Unmarshaller<XMLContext, IDResolver, MediaType, XMLUnmarshallerHandler> implements Cloneable {
+public class XMLUnmarshaller extends Unmarshaller<AbstractSession, XMLContext, XMLDescriptor, IDResolver, MediaType, XMLRoot, XMLUnmarshallerHandler> implements Cloneable {
     public static final int NONVALIDATING = XMLParser.NONVALIDATING;
     public static final int SCHEMA_VALIDATION = XMLParser.SCHEMA_VALIDATION;
     public static final int DTD_VALIDATION = XMLParser.DTD_VALIDATION;
@@ -120,7 +124,6 @@ public class XMLUnmarshaller extends Unmarshaller<XMLContext, IDResolver, MediaT
 
     };
 
-    private XMLContext xmlContext;
     private XMLUnmarshallerHandler xmlUnmarshallerHandler;
     private PlatformUnmarshaller platformUnmarshaller;
     private boolean schemasAreInitialized;
@@ -168,14 +171,14 @@ public class XMLUnmarshaller extends Unmarshaller<XMLContext, IDResolver, MediaT
     }
 
     protected XMLUnmarshaller(XMLContext xmlContext, Map<String, Boolean> parserFeatures) {
-        setXMLContext(xmlContext);
+        super(xmlContext);
         stringBuffer = new StrBuffer();
         initialize(parserFeatures);
         setErrorHandler(DEFAULT_ERROR_HANDLER);
     }
 
     private void initialize(Map<String, Boolean> parserFeatures) {
-	    DatabaseSession session = xmlContext.getSession(0);
+	    CoreSession session = context.getSession();
 	    XMLPlatform xmlPlatform = (XMLPlatform)session.getDatasourceLogin().getDatasourcePlatform();
 	    platformUnmarshaller = xmlPlatform.newPlatformUnmarshaller(this, parserFeatures);
 	    platformUnmarshaller.setWhitespacePreserving(false);
@@ -191,9 +194,9 @@ public class XMLUnmarshaller extends Unmarshaller<XMLContext, IDResolver, MediaT
             Iterator xmlDescriptors;
             XMLDescriptor xmlDescriptor;
             XMLSchemaReference xmlSchemaReference;
-            int numberOfSessions = xmlContext.getSessions().size();
+            int numberOfSessions = context.getSessions().size();
             for (int x = 0; x < numberOfSessions; x++) {
-                xmlDescriptors = ((DatabaseSession)xmlContext.getSessions().get(x)).getDescriptors().values().iterator();
+                xmlDescriptors = ((CoreSession)context.getSessions().get(x)).getDescriptors().values().iterator();
                 URL schemaURL;
                 while (xmlDescriptors.hasNext()) {
                     xmlDescriptor = (XMLDescriptor)xmlDescriptors.next();
@@ -243,14 +246,14 @@ public class XMLUnmarshaller extends Unmarshaller<XMLContext, IDResolver, MediaT
      * of XMLUnmarshaller.
      */
     public XMLContext getXMLContext() {
-        return xmlContext;
+        return getContext();
     }
 
     /** 
      * Set the XMLContext used by this instance of XMLUnmarshaller.
      */
     public void setXMLContext(XMLContext value) {
-        xmlContext =  value;
+        context =  value;
     }
     
     /**
@@ -806,7 +809,7 @@ public class XMLUnmarshaller extends Unmarshaller<XMLContext, IDResolver, MediaT
     
     @Override
     public XMLUnmarshaller clone() {
-        XMLUnmarshaller clone = new XMLUnmarshaller(xmlContext);
+        XMLUnmarshaller clone = new XMLUnmarshaller(context);
         clone.setAttachmentUnmarshaller(attachmentUnmarshaller);
         clone.setEntityResolver(getEntityResolver());
         clone.setErrorHandler(getErrorHandler());
@@ -843,6 +846,35 @@ public class XMLUnmarshaller extends Unmarshaller<XMLContext, IDResolver, MediaT
      */
     public void setIDResolver(IDResolver idResolver) {
         this.idResolver = idResolver;
+    }
+
+    /**
+     * INTERNAL
+     * @since 2.5.0
+     */
+    public XMLRoot createRoot() {
+        return new XMLRoot();
+    }
+
+    /**
+     * INTERNAL
+     * @since 2.5.0
+     */
+    @Override
+    public UnmarshalRecord createRootUnmarshalRecord(Class clazz) {
+        XMLRootRecord rootUnmarshalRecord = new XMLRootRecord(clazz);
+        rootUnmarshalRecord.setSession((AbstractSession) context.getSession());
+        return rootUnmarshalRecord;
+    }
+
+    /**
+     * INTERNAL
+     * @since 2.5.0
+     */
+    @Override
+    public UnmarshalRecord createUnmarshalRecord(XMLDescriptor xmlDescriptor, AbstractSession session) {
+        org.eclipse.persistence.oxm.record.UnmarshalRecord wrapper = (org.eclipse.persistence.oxm.record.UnmarshalRecord) xmlDescriptor.getObjectBuilder().createRecord((AbstractSession) session);
+        return wrapper.getUnmarshalRecord();
     }
 
 }
