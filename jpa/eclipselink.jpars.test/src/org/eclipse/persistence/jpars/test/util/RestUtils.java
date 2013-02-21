@@ -200,7 +200,7 @@ public class RestUtils {
                 context.marshallEntity(object, mediaType, os, false);
             }
         } catch (JAXBException e) {
-            fail("Exception thrown unmarshalling: " + e);
+            fail("Exception thrown marshalling: " + e);
         }
 
         StringBuilder uri = new StringBuilder();
@@ -259,7 +259,7 @@ public class RestUtils {
                 context.marshallEntity(object, mediaType, os, false);
             }
         } catch (JAXBException e) {
-            fail("Exception thrown unmarshalling: " + e);
+            fail("Exception thrown marshalling: " + e);
         }
 
         StringBuilder uri = new StringBuilder();
@@ -560,7 +560,7 @@ public class RestUtils {
             context.marshallEntity(newValue, mediaType, os);
 
         } catch (JAXBException e) {
-            fail("Exception thrown unmarshalling: " + e);
+            fail("Exception thrown marshalling: " + e);
         }
         ClientResponse response = webResource.type(mediaType).accept(mediaType).post(ClientResponse.class, os.toString());
         Status status = response.getClientResponseStatus();
@@ -640,9 +640,9 @@ public class RestUtils {
         String url = RestUtils.getServerURI() + persistenceUnit + "/entity/" + type + "/"
                 + objectId + "/" + relationshipName;
         if (partner != null) {
-            url += ";" + MatrixParameters.JPARS_RELATIONSHIP_PARTNER + "=" + partner;
+            url += "?" + QueryParameters.JPARS_RELATIONSHIP_PARTNER + "=" + partner;
             if (listItemId != null) {
-                url += "?" + QueryParameters.JPARS_LIST_ITEM_ID + "=" + listItemId;
+                url += "&" + QueryParameters.JPARS_LIST_ITEM_ID + "=" + listItemId;
             }
         } else {
             if (listItemId != null) {

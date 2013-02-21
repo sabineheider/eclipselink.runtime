@@ -21,9 +21,9 @@ import javax.xml.bind.JAXBException;
 import org.eclipse.persistence.config.PersistenceUnitProperties;
 import org.eclipse.persistence.config.QueryHints;
 import org.eclipse.persistence.dynamic.DynamicClassLoader;
-import org.eclipse.persistence.jpa.rs.MatrixParameters;
 import org.eclipse.persistence.jpa.rs.PersistenceContext;
 import org.eclipse.persistence.jpa.rs.PersistenceFactoryBase;
+import org.eclipse.persistence.jpa.rs.QueryParameters;
 import org.eclipse.persistence.jpars.test.model.auction.StaticAddress;
 import org.eclipse.persistence.jpars.test.model.auction.StaticAuction;
 import org.eclipse.persistence.jpars.test.model.auction.StaticBid;
@@ -62,7 +62,7 @@ public class ServerCrudTest {
 
         PersistenceFactoryBase factory = new PersistenceFactoryBase();
         EntityManagerFactory emf = Persistence.createEntityManagerFactory(DEFAULT_PU, properties);
-        context = factory.bootstrapPersistenceContext("auction-static", emf, RestUtils.getServerURI(), false);
+        context = factory.bootstrapPersistenceContext("auction-static", emf, RestUtils.getServerURI(), null, false);
 
         StaticModelDatabasePopulator.populateDB(emf);
         client = Client.create();
@@ -1150,7 +1150,7 @@ public class ServerCrudTest {
         String url = RestUtils.getServerURI() + persistenceUnit + "/entity/" + type + "/"
                 + objectId + "/" + relationshipName;
         if (partner != null) {
-            url += ";" + MatrixParameters.JPARS_RELATIONSHIP_PARTNER + "=" + partner;
+            url += "?" + QueryParameters.JPARS_RELATIONSHIP_PARTNER + "=" + partner;
         }
 
         WebResource webResource = client.resource(url);
