@@ -21,8 +21,10 @@ import javax.xml.namespace.QName;
 
 import org.eclipse.persistence.exceptions.DescriptorException;
 import org.eclipse.persistence.exceptions.XMLMarshalException;
+import org.eclipse.persistence.internal.core.helper.CoreField;
 import org.eclipse.persistence.internal.core.sessions.CoreAbstractSession;
 import org.eclipse.persistence.internal.oxm.mappings.Descriptor;
+import org.eclipse.persistence.internal.oxm.mappings.Field;
 import org.eclipse.persistence.internal.oxm.mappings.Mapping;
 import org.eclipse.persistence.internal.oxm.mappings.UnmarshalKeepAsElementPolicy;
 import org.eclipse.persistence.internal.oxm.mappings.XMLConverterMapping;
@@ -226,13 +228,17 @@ public abstract class XMLRelationshipMappingNodeValue extends MappingNodeValue {
         Object value = unmarshalRecord.getCharacters().toString();
 
         unmarshalRecord.resetStringBuffer();
-        if (!Constants.EMPTY_STRING.equals(value)) {
+        if(!unmarshalRecord.isNil()) {
             QName qname = unmarshalRecord.getTypeQName();
-            if (qname != null) {
+            if (qname == null) {
+                if(Constants.EMPTY_STRING.equals(value)) {
+                    value = null;
+                }
+            } else {
                 if(qname.equals(Constants.QNAME_QNAME)) {
                     value = ((XMLConversionManager) unmarshalRecord.getSession().getDatasourcePlatform().getConversionManager()).buildQNameFromString((String)value, unmarshalRecord);
                 } else {
-                    Class theClass = (Class) XMLConversionManager.getDefaultXMLTypes().get(qname);
+                	Class theClass = getClassForQName(qname);
                     if (theClass != null) {
                         value = ((XMLConversionManager) unmarshalRecord.getSession().getDatasourcePlatform().getConversionManager()).convertObject(value, theClass, qname);
                     }
@@ -243,5 +249,14 @@ public abstract class XMLRelationshipMappingNodeValue extends MappingNodeValue {
         }
     }
 
+    protected Class getClassForQName(QName qname){
+    	CoreField field = getMapping().getField();
+    	if(field != null){
+    		return ((Field)field).getJavaClass(qname);
+    	}
+    	return (Class) XMLConversionManager.getDefaultXMLTypes().get(qname);
+    }
+
+    
     protected abstract void setOrAddAttributeValue(UnmarshalRecord unmarshalRecord, Object value, XPathFragment xPathFragment, Object collection);
 }

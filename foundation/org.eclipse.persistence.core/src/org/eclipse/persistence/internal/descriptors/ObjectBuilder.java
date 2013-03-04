@@ -797,7 +797,7 @@ public class ObjectBuilder extends CoreObjectBuilder<AbstractRecord, AbstractSes
                         //if the object is already registered in uow, but it's partially fetched (fetch group case)     
                         if (concreteDescriptor.getFetchGroupManager().shouldWriteInto(original, clone)) {
                             //there might be cases when reverting/refreshing clone is needed.
-                            concreteDescriptor.getFetchGroupManager().writePartialIntoClones(original, clone, unitOfWork);
+                            concreteDescriptor.getFetchGroupManager().writePartialIntoClones(original, clone, unitOfWork.getBackupClone(clone, concreteDescriptor), unitOfWork);
                         }
                     }
                 }
@@ -892,7 +892,7 @@ public class ObjectBuilder extends CoreObjectBuilder<AbstractRecord, AbstractSes
                     cacheHit = false;
                     // The fetched object is not sufficient for the fetch group of the query 
                     // refresh attributes of the query's fetch group.
-                    concreteDescriptor.getFetchGroupManager().unionEntityFetchGroupIntoObject(domainObject, concreteDescriptor.getFetchGroupManager().getEntityFetchGroup(fetchGroup), session);
+                    concreteDescriptor.getFetchGroupManager().unionEntityFetchGroupIntoObject(domainObject, concreteDescriptor.getFetchGroupManager().getEntityFetchGroup(fetchGroup), session, false);
                     concreteDescriptor.getObjectBuilder().buildAttributesIntoObject(domainObject, cacheKey, databaseRow, query, joinManager, fetchGroup, false, session);
                     if (cacheKey != null){
                         cacheForeignKeyValues(databaseRow, cacheKey, session);
@@ -1042,7 +1042,7 @@ public class ObjectBuilder extends CoreObjectBuilder<AbstractRecord, AbstractSes
                     cacheHit = false;
                     // The fetched object is not sufficient for the fetch group of the query 
                     // refresh attributes of the query's fetch group.
-                    fetchGroupManager.unionEntityFetchGroupIntoObject(protectedObject, fetchGroupManager.getEntityFetchGroup(fetchGroup), session);
+                    fetchGroupManager.unionEntityFetchGroupIntoObject(protectedObject, fetchGroupManager.getEntityFetchGroup(fetchGroup), session, false);
                     concreteDescriptor.getObjectBuilder().buildAttributesIntoObject(protectedObject, sharedCacheKey, databaseRow, query, joinManager, fetchGroup, false, session);
                 }
                 // 3655915: a query with join/batch'ing that gets a cache hit
@@ -2340,7 +2340,7 @@ public class ObjectBuilder extends CoreObjectBuilder<AbstractRecord, AbstractSes
                             if(!copyGroup.shouldResetPrimaryKey()) {
                                 if(!existingEntityFetchGroup.getAttributeNames().containsAll(attributesToCopy)) {
                                     // Entity fetch group that will be assigned to copy object
-                                    newEntityFetchGroup = fetchGroupManager.flatUnionFetchGroups(existingEntityFetchGroup, copyGroupEntityFetchGroup);
+                                    newEntityFetchGroup = fetchGroupManager.flatUnionFetchGroups(existingEntityFetchGroup, copyGroupEntityFetchGroup, false);
                                     shouldAssignNewEntityFetchGroup = true;
                                 }
                             }

@@ -14,10 +14,13 @@
 package org.eclipse.persistence.testing.tests.jpa21.advanced;
 
 import java.util.List;
+import java.util.Set;
 
 import javax.persistence.EntityManager;
+import javax.persistence.Parameter;
 import javax.persistence.ParameterMode;
 import javax.persistence.StoredProcedureQuery;
+import javax.persistence.TransactionRequiredException;
 
 import junit.framework.TestSuite;
 import junit.framework.Test;
@@ -50,6 +53,7 @@ public class StoredProcedureQueryTestSuite extends JUnitTestCase {
     
     public StoredProcedureQueryTestSuite(String name) {
         super(name);
+        setPuName("MulitPU-1");
     }
     
     public static Test suite() {
@@ -67,13 +71,11 @@ public class StoredProcedureQueryTestSuite extends JUnitTestCase {
         suite.addTest(new StoredProcedureQueryTestSuite("testQueryWithNamedFieldResult"));
         suite.addTest(new StoredProcedureQueryTestSuite("testQueryWithNumberedFieldResult"));
         suite.addTest(new StoredProcedureQueryTestSuite("testQueryWithResultClass"));
+        suite.addTest(new StoredProcedureQueryTestSuite("testStoredProcedureParameterAPI"));
         suite.addTest(new StoredProcedureQueryTestSuite("testStoredProcedureQuerySysCursor"));
-        
+
         // Add the named Annotation query tests.
         suite.addTest(NamedStoredProcedureQueryTestSuite.suite());
-        
-        // Add the named XML query tests.
-        suite.addTest(XMLNamedStoredProcedureQueryTestSuite.suite());
         
         // These are EM API validation tests. These tests delete and update so 
         // be careful where you introduce new tests.
@@ -221,7 +223,14 @@ public class StoredProcedureQueryTestSuite extends JUnitTestCase {
                 query.registerStoredProcedureParameter("new_p_code_v", String.class, ParameterMode.IN);
                 query.registerStoredProcedureParameter("old_p_code_v", String.class, ParameterMode.IN);
                 
-                Object results = query.setParameter("new_p_code_v", postalCodeCorrection).setParameter("old_p_code_v", postalCodeTypo).getSingleResult();
+                query.setParameter("new_p_code_v", postalCodeCorrection);
+                query.setParameter("old_p_code_v", postalCodeTypo);
+                
+                // Make these calls to test the getParameter call with a name.
+                Parameter paramNew = query.getParameter("new_p_code_v");
+                Parameter paramOld = query.getParameter("old_p_code_v");
+                
+                Object results = query.getSingleResult();
             } catch (IllegalStateException e) {
                 if (isTransactionActive(em)){
                     rollbackTransaction(em);
@@ -282,11 +291,23 @@ public class StoredProcedureQueryTestSuite extends JUnitTestCase {
                 
                 // Build the named stored procedure query, execute and test.
                 StoredProcedureQuery query = em.createStoredProcedureQuery("Result_Set_And_Update_Address", Address.class, Employee.class);
+                
+                assertTrue("Parameter list was not empty.", query.getParameters().size() == 0);
+                
                 query.registerStoredProcedureParameter("new_p_code_v", String.class, ParameterMode.IN);
                 query.registerStoredProcedureParameter("old_p_code_v", String.class, ParameterMode.IN);
                 query.registerStoredProcedureParameter("employee_count_v", Integer.class, ParameterMode.OUT);
                 
-                boolean result = query.setParameter("new_p_code_v", postalCodeCorrection).setParameter("old_p_code_v", postalCodeTypo).execute();
+                query.setParameter("new_p_code_v", postalCodeCorrection);
+                query.setParameter("old_p_code_v", postalCodeTypo);
+                
+                boolean result = query.execute();
+                
+                assertTrue("Parameter list was empty, expecting 2.", query.getParameters().size() == 2);
+                
+                Object parameterValue = query.getParameterValue("new_p_code_v");
+                assertTrue("The IN parameter value was not preserved, expected: " + postalCodeCorrection + ", actual: " + parameterValue, parameterValue.equals(postalCodeCorrection));
+                
                 assertTrue("Result did not return true for a result set.", result);
                 
                 List<Address> addressResults = query.getResultList();
@@ -582,6 +603,13 @@ public class StoredProcedureQueryTestSuite extends JUnitTestCase {
                 StoredProcedureQuery query = em.createStoredProcedureQuery("Update_Address_Postal_Code");
                 query.registerStoredProcedureParameter("new_p_code_v", String.class, ParameterMode.IN);
                 query.registerStoredProcedureParameter("old_p_code_v", String.class, ParameterMode.IN);
+                
+                try {
+                    query.setParameter("new_p_code_v", postalCodeCorrection).setParameter("old_p_code_v", postalCodeTypo).executeUpdate();
+                    fail("TransactionRequiredException not caught");
+                } catch (TransactionRequiredException e) {
+                   // ignore since expected exception.
+                }
                 
                 beginTransaction(em);
                 int results = query.setParameter("new_p_code_v", postalCodeCorrection).setParameter("old_p_code_v", postalCodeTypo).executeUpdate();
@@ -884,7 +912,39 @@ public class StoredProcedureQueryTestSuite extends JUnitTestCase {
         }
     }
     
-
+    /**
+     * Test stored procedure parameter API. 
+     */
+    public void testStoredProcedureParameterAPI() {
+        if (supportsStoredProcedures() && getPlatform().isMySQL()) {
+            EntityManager em = createEntityManager();
+            
+            try {
+                StoredProcedureQuery query = em.createStoredProcedureQuery("Parameter_Testing");
+                query.registerStoredProcedureParameter(1, String.class, ParameterMode.IN);
+                query.registerStoredProcedureParameter(2, Integer.class, ParameterMode.INOUT);
+                query.registerStoredProcedureParameter(3, Integer.class, ParameterMode.OUT);
+                
+                query.setParameter(1, "1");
+                query.setParameter(2, 2);
+                
+                // Make this call to test the getParameter call with a position.
+                Parameter param1 = query.getParameter(1);
+                Parameter param2 = query.getParameter(2);
+                Parameter param3 = query.getParameter(3);
+                
+            } catch (IllegalArgumentException e) {
+                if (isTransactionActive(em)){
+                    rollbackTransaction(em);
+                }
+                
+                fail("IllegalArgumentException was caught");
+            } finally {
+                closeEntityManager(em);
+            }
+        }
+    }
+    
     /**
      * Tests a StoredProcedureQuery using a system cursor. 
      */
@@ -912,5 +972,9 @@ public class StoredProcedureQueryTestSuite extends JUnitTestCase {
                 closeEntityManager(em);
             }
         }
+    }
+    @Override
+    public String getPersistenceUnitName() {
+       return "MulitPU-1";
     }
 }
