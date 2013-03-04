@@ -3,8 +3,8 @@
   xsi:schemaLocation="http://xmlns.jcp.org/xml/ns/persistence
     http://xmlns.jcp.org/xml/ns/persistence/persistence_2_1.xsd"
   version="2.1"> 
-  
-    <persistence-unit name="default" transaction-type="RESOURCE_LOCAL">
+    <!-- This is for default persistence unit -->
+    <persistence-unit name="MulitPU-1" transaction-type="RESOURCE_LOCAL">
         <provider>org.eclipse.persistence.jpa.PersistenceProvider</provider>
 
         <class>org.eclipse.persistence.testing.models.jpa21.advanced.Address</class>
@@ -47,14 +47,13 @@
             <property name="eclipselink.session-name" value="default-session"/>
             <property name="eclipselink.orm.validate.schema" value="true"/>
             <property name="eclipselink.jdbc.uppercase-columns" value="true"/>
-            <property name="javax.persistence.schema-generation-action" value="drop-and-create"/>
-            <property name="javax.persistence.schema-generation-target" value="scripts"/>
-            <property name="javax.persistence.ddl-drop-script-target" value="jpa21-model-drop.jdbc"/>
-            <property name="javax.persistence.ddl-create-script-target" value="jpa21-model-create.jdbc"/>
+            <property name="javax.persistence.schema-generation.scripts.action" value="drop-and-create"/>
+            <property name="javax.persistence.schema-generation.scripts.drop-target" value="jpa21-model-drop.jdbc"/>
+            <property name="javax.persistence.schema-generation.scripts.create-target" value="jpa21-model-create.jdbc"/>
         </properties>
     </persistence-unit>
-    
-    <persistence-unit name="ddl" transaction-type="RESOURCE_LOCAL">
+    <!-- This is for ddl persistence unit -->
+    <persistence-unit name="MulitPU-2" transaction-type="RESOURCE_LOCAL">
         <provider>org.eclipse.persistence.jpa.PersistenceProvider</provider>
 
         <class>org.eclipse.persistence.testing.models.jpa21.advanced.ddl.Fork</class>
@@ -89,29 +88,16 @@
             <property name="eclipselink.session-name" value="default-ddl-session"/>
             <property name="eclipselink.orm.validate.schema" value="true"/>
             <property name="eclipselink.jdbc.uppercase-columns" value="true"/>
-            <property name="javax.persistence.schema-generation-action" value="drop-and-create"/>
-            <property name="javax.persistence.schema-generation-target" value="database-and-scripts"/>
-            <property name="javax.persistence.ddl-drop-script-target" value="jpa21-ddl-model-drop.jdbc"/>
-            <property name="javax.persistence.ddl-create-script-target" value="jpa21-ddl-model-create.jdbc"/>
+            <property name="javax.persistence.schema-generation.database.action" value="drop-and-create"/>
+            <property name="javax.persistence.scheme-generation.create-source" value="metadata"/>
+            <property name="javax.persistence.scheme-generation.drop-source" value="metadata"/>
+            <property name="javax.persistence.schema-generation.scripts.action" value="drop-and-create"/>
+            <property name="javax.persistence.schema-generation.scripts.drop-target" value="jpa21-ddl-model-drop.jdbc"/>
+            <property name="javax.persistence.schema-generation.scripts.create-target" value="jpa21-ddl-model-create.jdbc"/>
         </properties>
     </persistence-unit>
-    
-    <persistence-unit name="xml-default" transaction-type="RESOURCE_LOCAL">
-        <provider>org.eclipse.persistence.jpa.PersistenceProvider</provider>
-        <mapping-file>META-INF/advanced-orm.xml</mapping-file>
-        <exclude-unlisted-classes>true</exclude-unlisted-classes>
-        
-        <properties>
-            <property name="eclipselink.session-name" value="default-xml-session"/>
-            <property name="eclipselink.orm.validate.schema" value="true"/>
-            <property name="eclipselink.jdbc.uppercase-columns" value="true"/>
-            <property name="javax.persistence.schema-generation-action" value="create"/>
-            <property name="javax.persistence.schema-generation-target" value="scripts"/>
-            <property name="javax.persistence.ddl-create-script-target" value="jpa21-xml-model-create.jdbc"/>
-        </properties>
-    </persistence-unit>
-    
-    <persistence-unit name="xml-ddl" transaction-type="RESOURCE_LOCAL">
+    <!-- This is xml-ddl persistence unit -->
+    <persistence-unit name="MulitPU-3" transaction-type="RESOURCE_LOCAL">
         <provider>org.eclipse.persistence.jpa.PersistenceProvider</provider>
         <mapping-file>META-INF/advanced-ddl-orm.xml</mapping-file>
         <exclude-unlisted-classes>true</exclude-unlisted-classes>
@@ -120,21 +106,36 @@
             <property name="eclipselink.session-name" value="default-xml-ddl-session"/>
             <property name="eclipselink.orm.validate.schema" value="true"/>
             <property name="eclipselink.jdbc.uppercase-columns" value="true"/>
-            <property name="javax.persistence.schema-generation-action" value="drop-and-create"/>
-            <property name="javax.persistence.schema-generation-source" value="scripts"/>
-            <property name="javax.persistence.ddl-drop-script-source" value="META-INF/jpa21-xml-ddl-model-source-drop.jdbc"/>
-            <property name="javax.persistence.ddl-create-script-source" value="META-INF/jpa21-xml-ddl-model-source-create.jdbc"/>
+            <property name="javax.persistence.schema-generation.database.action" value="drop-and-create"/>
+            <property name="javax.persistence.schema-generation.create-source" value="script"/>
+            <property name="javax.persistence.schema-generation.drop-source" value="script"/>
+            <property name="javax.persistence.schema-generation.drop-script-source" value="META-INF/jpa21-xml-ddl-model-source-drop.jdbc"/>
+            <property name="javax.persistence.schema-generation.create-script-source" value="META-INF/jpa21-xml-ddl-model-source-create.jdbc"/>
         </properties>
     </persistence-unit>
-    
-    <persistence-unit name="ddl-template" transaction-type="RESOURCE_LOCAL">
+    <!-- This is xml-default persistence unit -->
+    <persistence-unit name="MulitPU-4" transaction-type="RESOURCE_LOCAL">
+        <provider>org.eclipse.persistence.jpa.PersistenceProvider</provider>
+        <mapping-file>META-INF/advanced-orm.xml</mapping-file>
+        <exclude-unlisted-classes>true</exclude-unlisted-classes>
+        
+        <properties>
+            <property name="eclipselink.session-name" value="default-xml-session"/>
+            <property name="eclipselink.orm.validate.schema" value="true"/>
+            <property name="eclipselink.jdbc.uppercase-columns" value="true"/>
+            <property name="javax.persistence.schema-generation.scripts.action" value="create"/>
+            <property name="javax.persistence.schema-generation.scripts.create-target" value="jpa21-xml-model-create.jdbc"/>
+        </properties>
+    </persistence-unit>
+    <!-- This is ddl-template persistence unit -->
+    <persistence-unit name="MulitPU-5" transaction-type="RESOURCE_LOCAL">
         <!-- Users of this PU are expected to provide any relevant properties -->
         <!-- through code, e.g. eclipselink.session-name                      -->
         <provider>org.eclipse.persistence.jpa.PersistenceProvider</provider>
         <mapping-file>META-INF/advanced-ddl-orm.xml</mapping-file>
         <exclude-unlisted-classes>true</exclude-unlisted-classes>
     </persistence-unit>
-    
+
     <persistence-unit name="ddl-schema-template" transaction-type="RESOURCE_LOCAL">
         <provider>org.eclipse.persistence.jpa.PersistenceProvider</provider>
         <!-- Users of this PU are expected to provide any relevant properties -->

@@ -47,6 +47,8 @@ import org.eclipse.persistence.mappings.DatabaseMapping;
 import org.eclipse.persistence.mappings.ForeignReferenceMapping;
 import org.eclipse.persistence.queries.DatabaseQuery;
 import org.eclipse.persistence.queries.FetchGroupTracker;
+import org.eclipse.persistence.queries.ObjectLevelReadQuery;
+import org.eclipse.persistence.queries.ReadQuery;
 import org.eclipse.persistence.sessions.DatabaseSession;
 import org.eclipse.persistence.sessions.Session;
 import org.eclipse.persistence.sessions.broker.SessionBroker;
@@ -437,10 +439,7 @@ public class EntityManagerFactoryImpl implements EntityManagerFactory, Persisten
      *             if the entity manager factory has been closed.
      */
     public PersistenceUnitUtil getPersistenceUnitUtil() {
-        if (!delegate.isOpen()){
-            throw new IllegalStateException(ExceptionLocalization.buildMessage("getpersistenceunitutil_called_on_closed_emf"));
-        }
-        return delegate;
+        return delegate.getPersistenceUnitUtil();
     }
 
     /**
@@ -624,6 +623,12 @@ public class EntityManagerFactoryImpl implements EntityManagerFactory, Persisten
     
     public void addNamedQuery(String name, Query query) {
         DatabaseQuery unwrapped = (DatabaseQuery) query.unwrap(DatabaseQuery.class).clone();
+        if (((QueryImpl)query).lockMode != null){
+            ((ObjectLevelReadQuery)unwrapped).setLockModeType(((QueryImpl)query).lockMode.name(), getServerSession());
+        }
+        if (unwrapped.isReadQuery()){
+            ((ReadQuery)unwrapped).setInternalMax((((QueryImpl)query).getMaxResults()));
+        }
         this.getServerSession().addQuery(name, unwrapped, true);
     }
 

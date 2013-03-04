@@ -14,10 +14,12 @@
  ******************************************************************************/  
 package org.eclipse.persistence.testing.tests.jpa21.advanced;
 
+import java.util.ArrayList;
 import java.util.List;
 
 import javax.persistence.ColumnResult;
 import javax.persistence.EntityManager;
+import javax.persistence.EntityManagerFactory;
 import javax.persistence.LockModeType;
 import javax.persistence.Parameter;
 import javax.persistence.Query;
@@ -45,6 +47,7 @@ public class QueryTestSuite extends JUnitTestCase {
     
     public QueryTestSuite(String name) {
         super(name);
+        setPuName("MulitPU-1");
     }
     
     public static Test suite() {
@@ -71,7 +74,7 @@ public class QueryTestSuite extends JUnitTestCase {
      * The setup is done as a test, both to record its failure, and to allow execution in the server.
      */
     public void testSetup() {
-        new AdvancedTableCreator().replaceTables(JUnitTestCase.getServerSession());
+        new AdvancedTableCreator().replaceTables(getPersistenceUnitServerSession());
         clearCache();
     }
     
@@ -85,11 +88,22 @@ public class QueryTestSuite extends JUnitTestCase {
             i++;
             assertTrue("Parameter returned wrong type.", parameter.getParameterType().equals(String.class));
         }
+        
+        
+        TypedQuery<Employee> typedQuery = em.createQuery("SELECT employee FROM Employee employee WHERE employee.firstName = ?1 OR employee.lastName = ?2", Employee.class)/*.setParameter(1, "Bob").setParameter(2, "Way")*/;
+        i = 0;
+        ArrayList<Parameter> params = new ArrayList<Parameter>(typedQuery.getParameters());
+        for (Parameter parameter: params){
+            assertTrue("Parameter returned wrong position.", parameter.getPosition() != null );
+            assertTrue("Parameter returned name.", parameter.getName() == null );
+            i++;
+            assertTrue("Parameter returned wrong type.", parameter.getParameterType().equals(String.class));
+        }
         try{
             query.getParameter(1, Integer.class);
             fail("Exception not thrown for incorrect query type.");
-        } catch (IllegalStateException e){}
-        query = em.createNamedQuery("jpa21Employee.findAllEmployeesByFirstNameAndLastNamePos").setParameter(1, "Bob");
+        } catch (IllegalArgumentException e){}
+        query = em.createNamedQuery("jpa21Employee.findAllEmployeesByFirstNameAndLastNamePos", Employee.class).setParameter(1, "Bob");
         try{
             query.getParameterValue(2);
             fail("Exception not thrown for unbound parameter.");
@@ -238,4 +252,8 @@ public class QueryTestSuite extends JUnitTestCase {
         } catch (IllegalStateException e){}
     }
     
+    @Override
+    public String getPersistenceUnitName() {
+       return "MulitPU-1";
+    }
 }

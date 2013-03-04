@@ -38,6 +38,7 @@ import java.sql.ResultSetMetaData;
 import java.sql.SQLException;
 import java.util.Calendar;
 import java.util.Date;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Vector;
@@ -56,7 +57,8 @@ import org.eclipse.persistence.exceptions.DatabaseException;
 import org.eclipse.persistence.internal.databaseaccess.Accessor;
 import org.eclipse.persistence.internal.databaseaccess.DatabaseAccessor;
 import org.eclipse.persistence.internal.databaseaccess.DatabaseCall;
-import org.eclipse.persistence.internal.localization.EclipseLinkLocalization;
+import org.eclipse.persistence.internal.helper.DatabaseField;
+import org.eclipse.persistence.internal.jpa.querydef.ParameterExpressionImpl;
 import org.eclipse.persistence.internal.localization.ExceptionLocalization;
 import org.eclipse.persistence.internal.sessions.AbstractSession;
 import org.eclipse.persistence.logging.SessionLog;
@@ -343,6 +345,9 @@ public class StoredProcedureQueryImpl extends QueryImpl implements StoredProcedu
      */
     public int executeUpdate() {
         try {
+            // Need to throw TransactionRequiredException if there is no active transaction
+            entityManager.checkForTransaction(true);
+            
             // Legacy: we could have a data read query or a read all query, so 
             // clearly we shouldn't be executing an update on it. As of JPA 2.1 
             // API we always create a result set mapping query to interact with 
@@ -353,7 +358,7 @@ public class StoredProcedureQueryImpl extends QueryImpl implements StoredProcedu
             if (! getDatabaseQueryInternal().isResultSetMappingQuery() || getResultSetMappingQuery().hasResultSetMappings()) {
                 throw new IllegalStateException(ExceptionLocalization.buildMessage("incorrect_spq_query_for_execute_update"));
             }
-                
+            
             // If the return value is true indicating a result set then throw an exception.
             if (execute()) {
                 throw new IllegalStateException(ExceptionLocalization.buildMessage("incorrect_spq_query_for_execute_update"));
@@ -383,6 +388,44 @@ public class StoredProcedureQueryImpl extends QueryImpl implements StoredProcedu
      */
     protected StoredProcedureCall getCall() {
         return (StoredProcedureCall) getDatabaseQueryInternal().getCall();
+    }
+    
+    /**
+     * Return the internal map of parameters.
+     */
+    @Override
+    protected Map<String, Parameter<?>> getInternalParameters() {
+        if (parameters == null) {
+            parameters = new HashMap<String, Parameter<?>>();
+    
+            int index = 0;
+                
+            for (Object parameter : getCall().getParameters()) {
+                Integer parameterType = getCall().getParameterTypes().get(index);
+                String argumentName = getCall().getProcedureArgumentNames().get(index);
+                    
+                DatabaseField field;
+                    
+                if (parameterType == getCall().INOUT) {
+                    field = (DatabaseField) ((Object[]) parameter)[0];
+                } else if (parameterType == getCall().IN || parameterType == getCall().OUT || parameterType == getCall().OUT_CURSOR) {
+                    field = (DatabaseField) parameter;
+                } else {
+                    continue; // not a parameter we care about at this point.
+                }
+                        
+                // If the argument name is null then it is a positional parameter.
+                if (argumentName == null) {
+                    parameters.put(field.getName(), new ParameterExpressionImpl(null, field.getType(), Integer.parseInt(field.getName())));
+                } else {
+                    parameters.put(field.getName(), new ParameterExpressionImpl(null, field.getType(), field.getName()));
+                }
+                        
+                ++index;
+            }
+        }
+        
+        return parameters;
     }
     
     /**
@@ -682,6 +725,9 @@ public class StoredProcedureQueryImpl extends QueryImpl implements StoredProcedu
             }
         }
         
+        // Force a re-calculate of the parameters.
+        this.parameters = null;
+        
         return this;
     }
 
@@ -718,6 +764,9 @@ public class StoredProcedureQueryImpl extends QueryImpl implements StoredProcedu
             }
         }
 
+        // Force a re-calculate of the parameters.
+        this.parameters = null;
+        
         return this;
     }
     

@@ -623,7 +623,7 @@ public class MappingsGenerator {
         	if (property.isAnyAttribute()) {
         		return generateAnyAttributeMapping(property, descriptor, namespaceInfo);
         	}
-        	return generateMapMapping(property, descriptor, descriptorJavaClass, namespaceInfo);
+        	return generateCompositeCollectionMapping(property, descriptor, descriptorJavaClass, namespaceInfo, null);
         }
         if (helper.isCollectionType(property.getType())) {
             return generateCollectionMapping(property, descriptor, descriptorJavaClass, namespaceInfo);
@@ -866,7 +866,7 @@ public class MappingsGenerator {
 
     public ChoiceCollectionMapping generateChoiceCollectionMapping(Property property, Descriptor descriptor, NamespaceInfo namespace) {
         ChoiceCollectionMapping mapping = new XMLChoiceCollectionMapping();
-        initializeXMLContainerMapping(mapping);
+        initializeXMLContainerMapping(mapping, property.getType().isArray());
         mapping.setAttributeName(property.getPropertyName());
         // handle read-only set via metadata
         if (property.isSetReadOnly()) {
@@ -1003,7 +1003,7 @@ public class MappingsGenerator {
         Mapping mapping;
         if (isCollection) {
             mapping = new XMLChoiceCollectionMapping();
-            initializeXMLContainerMapping((ChoiceCollectionMapping) mapping);
+            initializeXMLContainerMapping((ChoiceCollectionMapping) mapping, property.getType().isArray());
             JavaClass collectionType = property.getType();
             collectionType = containerClassImpl(collectionType);
             ((ChoiceCollectionMapping) mapping).useCollectionClassName(collectionType.getRawName());
@@ -1102,8 +1102,7 @@ public class MappingsGenerator {
                 xmlField.setSchemaType(Constants.BASE_64_BINARY_QNAME);
             }
             if(areEquals(pType, Object.class)) {
-                xmlField.setIsTypedTextField(true);
-                xmlField.setSchemaType(Constants.ANY_TYPE_QNAME);
+            	setTypedTextField(xmlField);
             }
             Mapping nestedMapping;
             AbstractNullPolicy nullPolicy = null;
@@ -1180,10 +1179,19 @@ public class MappingsGenerator {
         return mapping;
     }
 
+    private void setTypedTextField(Field field){
+    	field.setIsTypedTextField(true);
+    	field.setSchemaType(Constants.ANY_TYPE_QNAME);
+     	((XMLField)field).addXMLConversion(Constants.DATE_TIME_QNAME, CoreClassConstants.XML_GREGORIAN_CALENDAR);
+    	((XMLField)field).addXMLConversion(Constants.DATE_QNAME, CoreClassConstants.XML_GREGORIAN_CALENDAR);
+    	((XMLField)field).addXMLConversion(Constants.TIME_QNAME, CoreClassConstants.XML_GREGORIAN_CALENDAR);
+       	
+    }
+    
     public AnyCollectionMapping generateAnyCollectionMapping(Property property, Descriptor descriptor, NamespaceInfo namespaceInfo, boolean isMixed) {
         AnyCollectionMapping  mapping = new XMLAnyCollectionMapping();
         mapping.setAttributeName(property.getPropertyName());
-        initializeXMLContainerMapping(mapping);
+        initializeXMLContainerMapping(mapping, property.getType().isArray());
         // handle read-only set via metadata
         if (property.isSetReadOnly()) {
             mapping.setIsReadOnly(property.isReadOnly());
@@ -1302,8 +1310,7 @@ public class MappingsGenerator {
         }
 
         if (referenceClassName == null){
-        	((Field)mapping.getField()).setIsTypedTextField(true);
-        	((Field)mapping.getField()).setSchemaType(Constants.ANY_TYPE_QNAME);
+        	setTypedTextField((Field)mapping.getField());
         	String defaultValue = property.getDefaultValue();
         	if (null != defaultValue) {
         	    mapping.setConverter(new DefaultElementConverter(defaultValue));
@@ -1508,7 +1515,7 @@ public class MappingsGenerator {
     public BinaryDataCollectionMapping generateBinaryDataCollectionMapping(Property property, Descriptor descriptor, NamespaceInfo namespaceInfo) {
         BinaryDataCollectionMapping mapping = new XMLBinaryDataCollectionMapping();
         mapping.setAttributeName(property.getPropertyName());
-        initializeXMLContainerMapping(mapping);
+        initializeXMLContainerMapping(mapping, property.getType().isArray());
         // handle read-only set via metadata
         if (property.isSetReadOnly()) {
             mapping.setIsReadOnly(property.isReadOnly());
@@ -1653,7 +1660,7 @@ public class MappingsGenerator {
     public AnyAttributeMapping generateAnyAttributeMapping(Property property, Descriptor descriptor, NamespaceInfo namespaceInfo) {
         AnyAttributeMapping mapping = new XMLAnyAttributeMapping();
         mapping.setAttributeName(property.getPropertyName());
-        initializeXMLContainerMapping(mapping);
+        initializeXMLContainerMapping(mapping, property.getType().isArray());
         // handle read-only set via metadata
         if (property.isSetReadOnly()) {
             mapping.setIsReadOnly(property.isReadOnly());
@@ -1768,27 +1775,6 @@ public class MappingsGenerator {
         return src.getRawName().equals(tgtCanonicalName);
     }
 
-    public CompositeCollectionMapping generateMapMapping(Property property, Descriptor descriptor, JavaClass descriptorClass, NamespaceInfo namespaceInfo) {
-    	CompositeCollectionMapping mapping = new XMLCompositeCollectionMapping();
-        mapping.setAttributeName(property.getPropertyName());
-        initializeXMLContainerMapping(mapping);
-        Field field = getXPathForField(property, namespaceInfo, false, false);
-
-        JavaClass mapValueClass = helper.getJavaClass(MapValue.class);
-        if(mapValueClass.isAssignableFrom(descriptorClass)){
-        	mapping.setXPath("entry");
-        }else{
-        	mapping.setXPath(field.getXPath() + "/entry");
-        }
-
-        Class generatedClass = generateMapEntryClassAndDescriptor(property, descriptor.getNonNullNamespaceResolver());
-        mapping.setReferenceClass(generatedClass);
-        String mapClassName = property.getType().getRawName();
-        mapping.useCollectionClass(ArrayList.class);
-
-        mapping.setAttributeAccessor(new MapValueAttributeAccessor(mapping.getAttributeAccessor(), mapping.getContainerPolicy(), generatedClass, mapClassName, helper.getClassLoader()));
-        return mapping;
-    }
 
     private Class generateMapEntryClassAndDescriptor(Property property, NamespaceResolver nr){
     	JavaClass keyType = property.getKeyType();
@@ -1924,8 +1910,7 @@ public class MappingsGenerator {
             ((CompositeObjectMapping)mapping).setXPath(attributeName);
             if(typeIsObject){
             	((CompositeObjectMapping)mapping).setKeepAsElementPolicy(UnmarshalKeepAsElementPolicy.KEEP_UNKNOWN_AS_ELEMENT);
-            	((Field)((CompositeObjectMapping)mapping).getField()).setIsTypedTextField(true);
-            	((Field)((CompositeObjectMapping)mapping).getField()).setSchemaType(Constants.ANY_TYPE_QNAME);
+            	setTypedTextField((Field)((CompositeObjectMapping)mapping).getField());
             }else{
             	((CompositeObjectMapping)mapping).setReferenceClassName(theType.getQualifiedName());
             }
@@ -1951,7 +1936,7 @@ public class MappingsGenerator {
     public CompositeCollectionMapping generateCompositeCollectionMapping(Property property, Descriptor descriptor, JavaClass javaClass, NamespaceInfo namespaceInfo, String referenceClassName) {
         CompositeCollectionMapping mapping = new XMLCompositeCollectionMapping();
         mapping.setAttributeName(property.getPropertyName());
-        initializeXMLContainerMapping(mapping);
+        initializeXMLContainerMapping(mapping, property.getType().isArray());
         
         JavaClass manyValueJavaClass = helper.getJavaClass(ManyValue.class);        
         if (manyValueJavaClass.isAssignableFrom(javaClass)){
@@ -2013,17 +1998,30 @@ public class MappingsGenerator {
                 accessor.setComponentClassName(componentType.getQualifiedName());
             }
             mapping.setAttributeAccessor(accessor);
+        }else if (helper.isMapType(property.getType())){
+            Class generatedClass = generateMapEntryClassAndDescriptor(property, descriptor.getNonNullNamespaceResolver());
+            referenceClassName = generatedClass.getName();
+            String mapClassName = property.getType().getRawName();
+            mapping.setAttributeAccessor(new MapValueAttributeAccessor(mapping.getAttributeAccessor(), mapping.getContainerPolicy(), generatedClass, mapClassName, helper.getClassLoader()));
         }
         collectionType = containerClassImpl(collectionType);
         mapping.useCollectionClassName(collectionType.getRawName());
 
         // if the XPath is set (via xml-path) use it; otherwise figure it out
         Field xmlField = getXPathForField(property, namespaceInfo, false, false);
-        mapping.setXPath(xmlField.getXPath());
+        if(helper.isMapType(property.getType())){
+    	    JavaClass mapValueClass = helper.getJavaClass(MapValue.class);
+	        if(mapValueClass.isAssignableFrom(javaClass)){
+	        	mapping.setXPath("entry");
+	        }else{
+	        	mapping.setXPath(xmlField.getXPath() + "/entry");
+	        }
+        }else{
+        	mapping.setXPath(xmlField.getXPath());
+        }
 
         if (referenceClassName == null){                   
-        	((Field)mapping.getField()).setIsTypedTextField(true);
-        	((Field)mapping.getField()).setSchemaType(Constants.ANY_TYPE_QNAME);
+        	setTypedTextField((Field)mapping.getField());
         } else {
         	mapping.setReferenceClassName(referenceClassName);
         }
@@ -2062,7 +2060,7 @@ public class MappingsGenerator {
     public DirectCollectionMapping generateDirectCollectionMapping(Property property, Descriptor descriptor, NamespaceInfo namespaceInfo) {
         DirectCollectionMapping mapping = new XMLCompositeDirectCollectionMapping();
         mapping.setAttributeName(property.getPropertyName());
-        initializeXMLContainerMapping(mapping);
+        initializeXMLContainerMapping(mapping, property.getType().isArray());
         // handle read-only set via metadata
         if (property.isSetReadOnly()) {
             mapping.setIsReadOnly(property.isReadOnly());
@@ -2454,7 +2452,7 @@ public class MappingsGenerator {
     public CollectionReferenceMapping generateXMLCollectionReferenceMapping(Property property, Descriptor descriptor, NamespaceInfo namespaceInfo, JavaClass referenceClass) {
         CollectionReferenceMapping mapping = new XMLCollectionReferenceMapping();
         mapping.setAttributeName(property.getPropertyName());
-        initializeXMLContainerMapping(mapping);
+        initializeXMLContainerMapping(mapping, property.getType().isArray());
         mapping.setUsesSingleNode(property.isXmlList() || (property.isAttribute() && (property.getXmlPath() == null || !property.getXmlPath().contains("/"))));
         // handle read-only set via metadata
         if (property.isSetReadOnly()) {
@@ -2773,6 +2771,7 @@ public class MappingsGenerator {
         if(schemaType !=null && !schemaType.equals (Constants.NORMALIZEDSTRING_QNAME)){
             xmlField.setSchemaType(schemaType);
         }
+        
         return xmlField;
     }
 
@@ -2993,8 +2992,8 @@ public class MappingsGenerator {
 	                  mapping.setGetMethodName("getValue");
 	                  mapping.setKeepAsElementPolicy(UnmarshalKeepAsElementPolicy.KEEP_UNKNOWN_AS_ELEMENT);
 	                  mapping.setXPath(".");
-	                  ((Field)mapping.getField()).setIsTypedTextField(true);
-	                  ((Field)mapping.getField()).setSchemaType(Constants.ANY_TYPE_QNAME);
+	              	  setTypedTextField((Field)mapping.getField());
+
 	                  desc.addMapping((CoreMapping)mapping);	                 
 	              }else if(isBinaryData(nextElement.getJavaType())){
 	              	  BinaryDataMapping mapping = new XMLBinaryDataMapping();
@@ -3334,13 +3333,13 @@ public class MappingsGenerator {
 
     }
 
-    private void initializeXMLContainerMapping(XMLContainerMapping xmlContainerMapping) {
-        xmlContainerMapping.setReuseContainer(true);
+    private void initializeXMLContainerMapping(XMLContainerMapping xmlContainerMapping, boolean isArray) {
+        xmlContainerMapping.setReuseContainer(!isArray);
         xmlContainerMapping.setDefaultEmptyContainer(false);
     }
 
     private JavaClass containerClassImpl(JavaClass collectionType) {
-        if (areEquals(collectionType, List.class) || areEquals(collectionType, Collection.class) || collectionType.isArray()) {
+        if (areEquals(collectionType, List.class) || areEquals(collectionType, Collection.class) || collectionType.isArray() || helper.isMapType(collectionType) ) {
             return jotArrayList;
         } else if (areEquals(collectionType, Set.class)) {
             return jotHashSet;
