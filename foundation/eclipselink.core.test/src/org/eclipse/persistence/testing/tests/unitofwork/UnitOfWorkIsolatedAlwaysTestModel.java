@@ -186,7 +186,7 @@ new UpdateDeepOwnershipTest((org.eclipse.persistence.testing.models.ownership.Ob
 
         addTest(new MergeDeadIndirectionTest());
         //bug 4071929
-        addTest(new UnitOfWorkConcurrentRevertTest());
+//        addTest(new UnitOfWorkConcurrentRevertTest());
 
         //Add new tests here, if any.
         addTest(new CommitAfterExecuteModifyQueryDuringTransTest());
