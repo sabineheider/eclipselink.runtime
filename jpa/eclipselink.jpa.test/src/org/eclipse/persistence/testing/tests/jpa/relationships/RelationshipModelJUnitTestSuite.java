@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 1998, 2012 Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1998, 2013 Oracle and/or its affiliates. All rights reserved.
  * This program and the accompanying materials are made available under the 
  * terms of the Eclipse Public License v1.0 and Eclipse Distribution License v. 1.0 
  * which accompanies this distribution. 
@@ -25,6 +25,7 @@ import java.util.Vector;
 import javax.persistence.EntityManager;
 import javax.persistence.NoResultException;
 import javax.persistence.NonUniqueResultException;
+import javax.persistence.PersistenceException;
 import javax.persistence.Query;
 
 import junit.framework.Test;
@@ -483,8 +484,8 @@ public class RelationshipModelJUnitTestSuite extends JUnitTestCase {
             query3.setDatabaseQuery(readAllQuery);
             try {
                 query3.getResultCollection();
-            } catch (QueryException exceptionExpected1) {// QueryException.INVALID_CONTAINER_CLASS
-                expectedException1 = exceptionExpected1;
+            } catch (PersistenceException exc) {// QueryException.INVALID_CONTAINER_CLASS
+                expectedException1 = (QueryException)exc.getCause();
                 rollbackTransaction(em);
                 beginTransaction(em);
             }
@@ -565,8 +566,8 @@ public class RelationshipModelJUnitTestSuite extends JUnitTestCase {
             query3.setDatabaseQuery(readAllQuery);
             try {
                 query3.getResultList();
-            } catch (QueryException exceptionExpected1) {// QueryException.INVALID_CONTAINER_CLASS
-                expectedException1 = exceptionExpected1;
+            } catch (PersistenceException exc) {// QueryException.INVALID_CONTAINER_CLASS
+                expectedException1 = (QueryException)exc.getCause();
                 rollbackTransaction(em);
                 beginTransaction(em);
             }

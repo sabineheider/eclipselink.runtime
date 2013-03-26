@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2012, 2013 Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, 2013, 2013 Oracle and/or its affiliates. All rights reserved.
  * This program and the accompanying materials are made available under the
  * terms of the Eclipse Public License v1.0 and Eclipse Distribution License v. 1.0
  * which accompanies this distribution.
@@ -127,6 +127,27 @@ public final class HierarchicalQueryClause extends AbstractExpression {
 		if (orderSiblingsByClause != null) {
 			children.add(orderSiblingsByClause);
 		}
+	}
+
+	/**
+	 * {@inheritDoc}
+	 */
+	@Override
+	public JPQLQueryBNF findQueryBNF(Expression expression) {
+
+		if ((startWithClause != null) && startWithClause.isAncestor(expression)) {
+			return getQueryBNF(StartWithClauseBNF.ID);
+		}
+
+		if ((connectByClause != null) && connectByClause.isAncestor(expression)) {
+			return getQueryBNF(ConnectByClauseBNF.ID);
+		}
+
+		if ((orderSiblingsByClause != null) && orderSiblingsByClause.isAncestor(expression)) {
+			return getQueryBNF(OrderSiblingsByClauseBNF.ID);
+		}
+
+		return super.findQueryBNF(expression);
 	}
 
 	/**

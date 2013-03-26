@@ -13,9 +13,12 @@ package org.eclipse.persistence.jpa.rs.resources.common;
 
 import java.net.URI;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.Iterator;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import javax.ws.rs.core.HttpHeaders;
 import javax.ws.rs.core.MediaType;
@@ -25,6 +28,7 @@ import javax.ws.rs.core.Response.Status;
 import javax.xml.bind.JAXBException;
 
 import org.eclipse.persistence.descriptors.ClassDescriptor;
+import org.eclipse.persistence.eis.mappings.EISCompositeCollectionMapping;
 import org.eclipse.persistence.internal.expressions.ConstantExpression;
 import org.eclipse.persistence.internal.expressions.MapEntryExpression;
 import org.eclipse.persistence.internal.helper.ClassConstants;
@@ -57,12 +61,12 @@ public class AbstractPersistenceUnitResource extends AbstractResource {
         PersistenceContext app = getPersistenceContext(persistenceUnit, baseURI, version, null);
         if (app == null) {
             JPARSLogger.fine("jpars_could_not_find_persistence_context", new Object[] { persistenceUnit });
-            return Response.status(Status.NOT_FOUND).build();
+            return Response.status(Status.NOT_FOUND).type(StreamingOutputMarshaller.getResponseMediaType(hh)).build();
         } else {
             ClassDescriptor descriptor = app.getJpaSession().getDescriptorForAlias(descriptorAlias);
             if (descriptor == null) {
                 JPARSLogger.fine("jpars_could_not_find_entity_type", new Object[] { descriptorAlias, persistenceUnit });
-                return Response.status(Status.NOT_FOUND).build();
+                return Response.status(Status.NOT_FOUND).type(StreamingOutputMarshaller.getResponseMediaType(hh)).build();
             } else {
                 String mediaType = StreamingOutputMarshaller.mediaType(hh.getAcceptableMediaTypes()).toString();
                 Descriptor returnDescriptor = buildDescriptor(app, persistenceUnit, descriptor, baseURI.toString());
@@ -71,7 +75,7 @@ public class AbstractPersistenceUnitResource extends AbstractResource {
                     result = marshallMetadata(returnDescriptor, mediaType);
                 } catch (JAXBException e) {
                     JPARSLogger.fine("exception_marshalling_entity_metadata", new Object[] { descriptorAlias, persistenceUnit, e.toString() });
-                    return Response.status(Status.INTERNAL_SERVER_ERROR).build();
+                    return Response.status(Status.INTERNAL_SERVER_ERROR).type(StreamingOutputMarshaller.getResponseMediaType(hh)).build();
                 }
                 return Response.ok(new StreamingOutputMarshaller(null, result, hh.getAcceptableMediaTypes())).build();
             }
@@ -82,7 +86,7 @@ public class AbstractPersistenceUnitResource extends AbstractResource {
         PersistenceContext app = getPersistenceContext(persistenceUnit, baseURI, version, null);
         if (app == null) {
             JPARSLogger.fine("jpars_could_not_find_persistence_context", new Object[] { persistenceUnit });
-            return Response.status(Status.NOT_FOUND).build();
+            return Response.status(Status.NOT_FOUND).type(StreamingOutputMarshaller.getResponseMediaType(hh)).build();
         } else {
             List<Query> queries = new ArrayList<Query>();
             addQueries(queries, app, null);
@@ -98,7 +102,7 @@ public class AbstractPersistenceUnitResource extends AbstractResource {
                 }
             } catch (JAXBException e) {
                 JPARSLogger.fine("exception_marshalling_query_metadata", new Object[] { persistenceUnit, e.toString() });
-                return Response.status(Status.INTERNAL_SERVER_ERROR).build();
+                return Response.status(Status.INTERNAL_SERVER_ERROR).type(StreamingOutputMarshaller.getResponseMediaType(hh)).build();
             }
             return Response.ok(new StreamingOutputMarshaller(null, result, hh.getAcceptableMediaTypes())).build();
         }
@@ -108,7 +112,7 @@ public class AbstractPersistenceUnitResource extends AbstractResource {
         PersistenceContext app = getPersistenceContext(persistenceUnit, baseURI, version, null);
         if (app == null) {
             JPARSLogger.fine("jpars_could_not_find_persistence_context", new Object[] { persistenceUnit });
-            return Response.status(Status.NOT_FOUND).build();
+            return Response.status(Status.NOT_FOUND).type(StreamingOutputMarshaller.getResponseMediaType(hh)).build();
         } else {
             List<Query> returnQueries = new ArrayList<Query>();
             Map<String, List<DatabaseQuery>> queries = app.getJpaSession().getQueries();
@@ -129,7 +133,7 @@ public class AbstractPersistenceUnitResource extends AbstractResource {
                 }
             } catch (JAXBException e) {
                 JPARSLogger.fine("exception_marshalling_individual_query_metadata", new Object[] { queryName, persistenceUnit, e.toString() });
-                return Response.status(Status.INTERNAL_SERVER_ERROR).build();
+                return Response.status(Status.INTERNAL_SERVER_ERROR).type(StreamingOutputMarshaller.getResponseMediaType(hh)).build();
             }
             return Response.ok(new StreamingOutputMarshaller(null, result, hh.getAcceptableMediaTypes())).build();
         }
@@ -140,7 +144,7 @@ public class AbstractPersistenceUnitResource extends AbstractResource {
         PersistenceContext app = getPersistenceContext(persistenceUnit, baseURI, version, null);
         if (app == null) {
             JPARSLogger.fine("jpars_could_not_find_persistence_context", new Object[] { persistenceUnit });
-            return Response.status(Status.NOT_FOUND).build();
+            return Response.status(Status.NOT_FOUND).type(StreamingOutputMarshaller.getResponseMediaType(hh)).build();
         } else {
             PersistenceUnit pu = new PersistenceUnit();
             pu.setPersistenceUnitName(persistenceUnit);
@@ -165,7 +169,7 @@ public class AbstractPersistenceUnitResource extends AbstractResource {
                 result = marshallMetadata(pu, mediaType);
             } catch (JAXBException e) {
                 JPARSLogger.fine("exception_marshalling_persitence_unit", new Object[] { persistenceUnit, e.toString() });
-                return Response.status(Status.INTERNAL_SERVER_ERROR).build();
+                return Response.status(Status.INTERNAL_SERVER_ERROR).type(StreamingOutputMarshaller.getResponseMediaType(hh)).build();
             }
             ResponseBuilder rb = Response.ok(new StreamingOutputMarshaller(null, result, hh.getAcceptableMediaTypes()));
             rb.header("Content-Type", MediaType.APPLICATION_JSON);
@@ -173,25 +177,61 @@ public class AbstractPersistenceUnitResource extends AbstractResource {
         }
     }
 
+    @SuppressWarnings("rawtypes")
     protected void addMapping(Descriptor descriptor, DatabaseMapping mapping) {
         String target = null;
+        String collectionName = null;
         if (mapping.isCollectionMapping()) {
-            CollectionMapping collectionMapping = (CollectionMapping) mapping;
-            String collectionType = collectionMapping.getContainerPolicy().getContainerClassName();
-            if (collectionMapping.getContainerPolicy().isMapPolicy()) {
-                String mapKeyType = ((MapContainerPolicy) collectionMapping.getContainerPolicy()).getKeyType().toString();
-                target = collectionType + "<" + mapKeyType + ", " + collectionMapping.getReferenceClassName() + ">";
+            if (mapping.isEISMapping()) {
+                EISCompositeCollectionMapping collectionMapping = (EISCompositeCollectionMapping) mapping;
+                Class collectionClass = collectionMapping.getContainerPolicy().getContainerClass();
+                String collectionType = getSimplePublicCollectionTypeName(collectionClass);
+                if (collectionType == null) {
+                    collectionType = collectionClass.getSimpleName();
+                }
+                if (collectionMapping.getReferenceClass() != null) {
+                    collectionName = collectionMapping.getReferenceClass().getSimpleName();
+                } 
+                if ((collectionName == null) && (collectionMapping.getAttributeClassification() != null)) {
+                    collectionName = collectionMapping.getAttributeClassification().getSimpleName();
+                }
+                if (collectionMapping.getContainerPolicy().isMapPolicy()) {
+                    String mapKeyType = ((MapContainerPolicy) collectionMapping.getContainerPolicy()).getKeyType().getClass().getSimpleName();
+                    target = collectionType + "<" + mapKeyType + ", " + collectionName + ">";
+                } else {
+                    target = collectionType + "<" + collectionName + ">";
+                }
             } else {
-                target = collectionType + "<" + collectionMapping.getReferenceClassName() + ">";
+                CollectionMapping collectionMapping = (CollectionMapping) mapping;
+                Class collectionClass = collectionMapping.getContainerPolicy().getContainerClass();
+
+                String collectionType = getSimplePublicCollectionTypeName(collectionClass);
+                if (collectionType == null) {
+                    collectionType = collectionClass.getSimpleName();
+                }
+
+               if (collectionMapping.getReferenceClass() != null) {
+                    collectionName = collectionMapping.getReferenceClass().getSimpleName();
+                }
+                if ((collectionName == null) && (collectionMapping.getAttributeClassification() != null)) {
+                    collectionName = collectionMapping.getAttributeClassification().getSimpleName();
+                }
+                if (collectionMapping.getContainerPolicy().isMapPolicy()) {
+                    String mapKeyType = ((MapContainerPolicy) collectionMapping.getContainerPolicy()).getKeyType().getClass().getSimpleName();
+                    target = collectionType + "<" + mapKeyType + ", " + collectionName + ">";
+                } else {
+                    target = collectionType + "<" + collectionName + ">";
+                }
             }
         } else if (mapping.isForeignReferenceMapping()) {
-            target = ((ForeignReferenceMapping) mapping).getReferenceClass().getName();
+            target = ((ForeignReferenceMapping) mapping).getReferenceClass().getSimpleName();
         } else {
-            target = mapping.getAttributeClassification().getName();
+            target = mapping.getAttributeClassification().getSimpleName();
         }
+        
         descriptor.getAttributes().add(new Attribute(mapping.getAttributeName(), target));
     }
-
+    
     protected void addQueries(List<Query> queryList, PersistenceContext app, String javaClassName) {
         Map<String, List<DatabaseQuery>> queries = app.getJpaSession().getQueries();
         List<DatabaseQuery> returnQueries = new ArrayList<DatabaseQuery>();
@@ -213,13 +253,22 @@ public class AbstractPersistenceUnitResource extends AbstractResource {
 
     protected Descriptor buildDescriptor(PersistenceContext app, String persistenceUnit, ClassDescriptor descriptor, String baseUri) {
         Descriptor returnDescriptor = new Descriptor();
-        returnDescriptor.setName(descriptor.getAlias());
-        returnDescriptor.setType(descriptor.getJavaClassName());
-        returnDescriptor.getLinkTemplates().add(new LinkTemplate("find", "get", baseUri + persistenceUnit + "/entity/" + descriptor.getAlias() + "/{primaryKey}"));
-        returnDescriptor.getLinkTemplates().add(new LinkTemplate("persist", "put", baseUri + persistenceUnit + "/entity/" + descriptor.getAlias()));
-        returnDescriptor.getLinkTemplates().add(new LinkTemplate("update", "post", baseUri + persistenceUnit + "/entity/" + descriptor.getAlias()));
-        returnDescriptor.getLinkTemplates().add(new LinkTemplate("delete", "delete", baseUri + persistenceUnit + "/entity/" + descriptor.getAlias() + "/{primaryKey}"));
+        String name = descriptor.getAlias();
+        returnDescriptor.setName(name);
 
+        String version = app.getVersion();
+        if (version != null) {
+            version = version + "/";
+            returnDescriptor.getLinkTemplates().add(new LinkTemplate("find", "get", baseUri + version + persistenceUnit + "/entity/" + descriptor.getAlias() + "/{primaryKey}"));
+            returnDescriptor.getLinkTemplates().add(new LinkTemplate("persist", "put", baseUri + version + persistenceUnit + "/entity/" + descriptor.getAlias()));
+            returnDescriptor.getLinkTemplates().add(new LinkTemplate("update", "post", baseUri + version + persistenceUnit + "/entity/" + descriptor.getAlias()));
+            returnDescriptor.getLinkTemplates().add(new LinkTemplate("delete", "delete", baseUri + version + persistenceUnit + "/entity/" + descriptor.getAlias() + "/{primaryKey}"));
+        } else {
+            returnDescriptor.getLinkTemplates().add(new LinkTemplate("find", "get", baseUri + persistenceUnit + "/entity/" + descriptor.getAlias() + "/{primaryKey}"));
+            returnDescriptor.getLinkTemplates().add(new LinkTemplate("persist", "put", baseUri + persistenceUnit + "/entity/" + descriptor.getAlias()));
+            returnDescriptor.getLinkTemplates().add(new LinkTemplate("update", "post", baseUri + persistenceUnit + "/entity/" + descriptor.getAlias()));
+            returnDescriptor.getLinkTemplates().add(new LinkTemplate("delete", "delete", baseUri + persistenceUnit + "/entity/" + descriptor.getAlias() + "/{primaryKey}"));
+        }
         if (!descriptor.getMappings().isEmpty()) {
             Iterator<DatabaseMapping> mappingIterator = descriptor.getMappings().iterator();
             while (mappingIterator.hasNext()) {
@@ -241,34 +290,78 @@ public class AbstractPersistenceUnitResource extends AbstractResource {
             parameterString.append(";");
             parameterString.append(argument + "={" + argument + "}");
         }
-        Query returnQuery = new Query(query.getName(), jpql, new LinkTemplate("execute", method, app.getBaseURI() + app.getName() + "/query/" + query.getName() + parameterString));
-        if (query.isReportQuery()) {
+        
+        String version = app.getVersion();
+        Query returnQuery = null;
+        if (version != null) {
+            returnQuery = new Query(query.getName(), jpql, new LinkTemplate("execute", method, app.getBaseURI() + version + "/" + app.getName() + "/query/" + query.getName() + parameterString));
+        } else {
+            returnQuery = new Query(query.getName(), jpql, new LinkTemplate("execute", method, app.getBaseURI() + app.getName() + "/query/" + query.getName() + parameterString));
+        }
+        if (query.isReportQuery()) { 
             query.checkPrepare((AbstractSession) app.getJpaSession(), new DatabaseRecord());
             for (ReportItem item : ((ReportQuery) query).getItems()) {
                 if (item.getMapping() != null) {
                     if (item.getAttributeExpression() != null && item.getAttributeExpression().isMapEntryExpression()) {
                         if (((MapEntryExpression) item.getAttributeExpression()).shouldReturnMapEntry()) {
-                            returnQuery.getReturnTypes().add(Map.Entry.class.getName());
+                            returnQuery.getReturnTypes().add(Map.Entry.class.getSimpleName());
                         } else {
-                            returnQuery.getReturnTypes().add(((Class<?>) ((CollectionMapping) item.getMapping()).getContainerPolicy().getKeyType()).getName());
+                            returnQuery.getReturnTypes().add(((Class<?>) ((CollectionMapping) item.getMapping()).getContainerPolicy().getKeyType()).getSimpleName());
                         }
                     } else {
-                        returnQuery.getReturnTypes().add(item.getMapping().getAttributeClassification().getName());
+                        returnQuery.getReturnTypes().add(item.getMapping().getAttributeClassification().getSimpleName());
                     }
                 } else if (item.getResultType() != null) {
-                    returnQuery.getReturnTypes().add(item.getResultType().getName());
+                    returnQuery.getReturnTypes().add(item.getResultType().getSimpleName());
                 } else if (item.getDescriptor() != null) {
-                    returnQuery.getReturnTypes().add(item.getDescriptor().getJavaClass().getName());
+                    returnQuery.getReturnTypes().add(item.getDescriptor().getJavaClass().getSimpleName());
                 } else if (item.getAttributeExpression() != null && item.getAttributeExpression().isConstantExpression()) {
-                    returnQuery.getReturnTypes().add(((ConstantExpression) item.getAttributeExpression()).getValue().getClass().getName());
+                    returnQuery.getReturnTypes().add(((ConstantExpression) item.getAttributeExpression()).getValue().getClass().getSimpleName());
                 } else {
                     // Use Object.class by default.
-                    returnQuery.getReturnTypes().add(ClassConstants.OBJECT.getName());
+                    returnQuery.getReturnTypes().add(ClassConstants.OBJECT.getSimpleName());
                 }
             }
         } else {
-            returnQuery.getReturnTypes().add(query.getReferenceClassName() == null ? "" : query.getReferenceClassName());
+            returnQuery.getReturnTypes().add(query.getReferenceClassName() == null ? "" : query.getReferenceClass().getSimpleName());
         }
         return returnQuery;
+    }
+    
+    private String getSimplePublicCollectionTypeName(Class<?> clazz) {
+        if (clazz == null) {
+            return null;
+        }
+        LinkedHashSet<Class<?>> all = new LinkedHashSet<Class<?>>();
+        getInterfaces(clazz, all);
+        ArrayList<Class<?>> list =  new ArrayList<Class<?>>(all);
+        for (int i=0; i<all.size(); i++) {
+            Class<?> clas =  list.get(i);
+            if (clas.getName().equals(List.class.getName())) {
+                return List.class.getSimpleName();
+            }
+            if (clas.getName().equals(Map.class.getName())) {
+                return Map.class.getSimpleName();
+            }
+            if (clas.getName().equals(Set.class.getName())) {
+                return Set.class.getSimpleName();
+            }
+        }
+        return null;
+    }
+
+    private void getInterfaces(Class<?> clazz, HashSet<Class<?>> interfaceList) {
+        // java.lang.Class.getInterfaces returns all directly implemented interfaces 
+        // and it doesn't walk the hierarchy to get all interfaces of all parent types. 
+        // we walk through the hierarchy here
+        while (clazz != null) {
+            Class<?>[] interfaces = clazz.getInterfaces();
+            for (Class<?> i : interfaces) {
+                if (interfaceList.add(i)) {
+                    getInterfaces(i, interfaceList);
+                }
+            }
+            clazz = clazz.getSuperclass();
+        }
     }
 }

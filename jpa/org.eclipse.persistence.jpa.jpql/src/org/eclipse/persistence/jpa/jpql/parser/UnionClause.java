@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2012, 2013 Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, 2013, 2013 Oracle and/or its affiliates. All rights reserved.
  * This program and the accompanying materials are made available under the
  * terms of the Eclipse Public License v1.0 and Eclipse Distribution License v. 1.0
  * which accompanies this distribution.
@@ -113,6 +113,19 @@ public final class UnionClause extends AbstractExpression {
 		if (query != null) {
 			children.add(query);
 		}
+	}
+
+	/**
+	 * {@inheritDoc}
+	 */
+	@Override
+	public JPQLQueryBNF findQueryBNF(Expression expression) {
+
+		if ((query != null) && query.isAncestor(expression)) {
+			return getQueryBNF(SubqueryBNF.ID);
+		}
+
+		return super.findQueryBNF(expression);
 	}
 
 	/**
@@ -268,7 +281,13 @@ public final class UnionClause extends AbstractExpression {
 		}
 	}
 
-	private String parseIdentifier() {
+	/**
+	 * Parses the JPQL identifier identifier the type of union.
+	 *
+	 * @return Either {@link Expression#UNION UNION}, {@link Expression#INTERSECT INTERSECT} or
+	 * {@link Expression#EXCEPT EXCEPT}
+	 */
+	protected String parseIdentifier() {
 		switch (getText().charAt(0)) {
 			case 'U': case 'u': return UNION;
 			case 'I': case 'i': return INTERSECT;

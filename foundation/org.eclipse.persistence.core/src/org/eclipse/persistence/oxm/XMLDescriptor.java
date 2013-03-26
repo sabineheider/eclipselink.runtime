@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 1998, 2012 Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1998, 2013 Oracle and/or its affiliates. All rights reserved.
  * This program and the accompanying materials are made available under the 
  * terms of the Eclipse Public License v1.0 and Eclipse Distribution License v. 1.0 
  * which accompanies this distribution. 
@@ -58,6 +58,7 @@ import org.eclipse.persistence.oxm.mappings.XMLDirectMapping;
 import org.eclipse.persistence.oxm.mappings.XMLMapping;
 import org.eclipse.persistence.oxm.record.XMLRecord;
 import org.eclipse.persistence.oxm.schema.XMLSchemaReference;
+import org.eclipse.persistence.queries.AttributeGroup;
 import org.eclipse.persistence.queries.DoesExistQuery;
 
 /**
@@ -83,6 +84,7 @@ public class XMLDescriptor extends ClassDescriptor implements Descriptor<Attribu
     private boolean lazilyInitialized = false;
     private AttributeAccessor locationAccessor = null;
     private boolean hasReferenceMappings = false;
+    
 
     /**
      * PUBLIC:
@@ -1091,5 +1093,22 @@ public class XMLDescriptor extends ClassDescriptor implements Descriptor<Attribu
     public void setLocationAccessor(AttributeAccessor value) {
         this.locationAccessor = value;
     }
-
+    
+    
+    /**
+     * INTERNAL:
+     * Convert all the class-name-based settings in this Descriptor to actual class-based
+     * settings. This method is used when converting a project that has been built
+     * with class names to a project with classes.
+     * @param classLoader 
+     */
+    @Override
+    public void convertClassNamesToClasses(ClassLoader classLoader){
+        super.convertClassNamesToClasses(classLoader);
+        if(this.attributeGroups != null) {
+            for(AttributeGroup next:attributeGroups.values()) {
+                next.convertClassNamesToClasses(classLoader);
+            }
+        }
+    }
 }

@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 1998, 2012 Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1998, 2013 Oracle and/or its affiliates. All rights reserved.
  * This program and the accompanying materials are made available under the 
  * terms of the Eclipse Public License v1.0 and Eclipse Distribution License v. 1.0 
  * which accompanies this distribution. 
@@ -545,7 +545,7 @@ public class OneToManyMapping extends CollectionMapping implements RelationalMap
         }
         
         // all fields in modifyRow must have the same table
-        DatabaseTable table = ((DatabaseField)modifyRow.getFields().get(0)).getTable();
+        DatabaseTable table = (modifyRow.getFields().get(0)).getTable();
         
         // Build where clause expression.
         Expression whereClause = null;
@@ -754,6 +754,11 @@ public class OneToManyMapping extends CollectionMapping implements RelationalMap
             setSourceKeyFields(org.eclipse.persistence.internal.helper.NonSynchronizedVector.newInstance(getDescriptor().getPrimaryKeyFields()));
         }
         initializeTargetForeignKeysToSourceKeys();
+        if (usesIndirection()) {
+            for (DatabaseField field : getSourceKeyFields()) {
+                field.setKeepInRow(true);
+            }
+        }
         if(requiresDataModificationEvents() || getContainerPolicy().requiresDataModificationEvents()) {
             initializeTargetPrimaryKeyFields();
         }

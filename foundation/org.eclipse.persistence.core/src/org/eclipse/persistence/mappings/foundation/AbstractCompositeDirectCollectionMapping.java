@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 1998, 2012 Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1998, 2013 Oracle and/or its affiliates. All rights reserved.
  * This program and the accompanying materials are made available under the 
  * terms of the Eclipse Public License v1.0 and Eclipse Distribution License v. 1.0 
  * which accompanies this distribution. 
@@ -415,6 +415,25 @@ public abstract class AbstractCompositeDirectCollectionMapping extends DatabaseM
         converter.setObjectClass(attributeElementClass);
     }
 
+    /**
+     * PUBLIC:
+     * Set the class each element in the object's
+     * collection should be converted to, before the collection
+     * is inserted into the object.
+     * This is optional - if left null, the elements will be added
+     * to the object's collection unconverted.
+     */
+    public void setAttributeElementClassName(String attributeElementClass) {
+        TypeConversionConverter converter;
+        if (getValueConverter() instanceof TypeConversionConverter) {
+            converter = (TypeConversionConverter)getValueConverter();
+        } else {
+            converter = new TypeConversionConverter();
+            setValueConverter(converter);
+        }
+        converter.setObjectClassName(attributeElementClass);
+    }
+    
     /**
      * ADVANCED:
      * Set the mapping's containerPolicy.

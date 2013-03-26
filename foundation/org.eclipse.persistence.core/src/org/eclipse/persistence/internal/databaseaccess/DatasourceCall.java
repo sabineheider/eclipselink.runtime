@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 1998, 2012 Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1998, 2013 Oracle and/or its affiliates. All rights reserved.
  * This program and the accompanying materials are made available under the 
  * terms of the Eclipse Public License v1.0 and Eclipse Distribution License v. 1.0 
  * which accompanies this distribution. 
@@ -56,6 +56,7 @@ public abstract class DatasourceCall implements Call {
     public static final Integer INOUT = Integer.valueOf(6);
     public static final Integer IN = Integer.valueOf(7);
     public static final Integer OUT_CURSOR = Integer.valueOf(8);
+    public static final Integer INLINE = Integer.valueOf(9);
 
     // Store if the call has been prepared.
     protected boolean isPrepared;
@@ -242,6 +243,14 @@ public abstract class DatasourceCall implements Call {
         return false;
     }
 
+    public boolean isStoredPLSQLFunctionCall() {
+        return false;
+    }
+    
+    public boolean isStoredPLSQLProcedureCall() {
+        return false;
+    }
+    
     public boolean isStoredFunctionCall() {
         return false;
     }
@@ -711,12 +720,13 @@ public abstract class DatasourceCall implements Call {
                 if (tokenIndex != -1) {
                     // Process next parameter.
                     Integer parameterType = parameterTypes.get(parameterIndex);
+                    Object parameter = parameterFields.get(parameterIndex);
                     if (parameterType == MODIFY) {
-                        DatabaseField field = (DatabaseField)parameterFields.get(parameterIndex);
+                        DatabaseField field = (DatabaseField)parameter;
                         Object value = modifyRow.get(field);
                         appendParameter(writer, value, session);
                     } else if (parameterType == CUSTOM_MODIFY) {
-                        DatabaseField field = (DatabaseField)parameterFields.get(parameterIndex);
+                        DatabaseField field = (DatabaseField)parameter;
                         Object value = modifyRow.get(field);
                         if (value != null) {
                             value = session.getDatasourcePlatform().getCustomModifyValueForCall(this, value, field, false);
@@ -727,9 +737,7 @@ public abstract class DatasourceCall implements Call {
                         }
                         appendParameter(writer, value, session);
                     } else if (parameterType == TRANSLATION) {
-                        Object parameter = parameterFields.get(parameterIndex);
                         Object value = null;
-
                         // Parameter expressions are used for nesting and correct mapping conversion of the value.
                         if (parameter instanceof ParameterExpression) {
                             value = ((ParameterExpression)parameter).getValue(translationRow, getQuery(), session);
@@ -743,19 +751,18 @@ public abstract class DatasourceCall implements Call {
                         }
                         appendParameter(writer, value, session);
                     } else if (parameterType == LITERAL) {
-                        Object value = parameterFields.get(parameterIndex);
-                        if(value instanceof DatabaseField) {
-                            value = null;
+                        if (parameter instanceof DatabaseField) {
+                            parameter = null;
                         }
-                        appendParameter(writer, value, session);
+                        appendParameter(writer, parameter, session);
                     } else if (parameterType == IN) {
-                        Object parameter = parameterFields.get(parameterIndex);
                         Object value = getValueForInParameter(parameter, translationRow, modifyRow, session, false);
                         appendParameter(writer, value, session);
                     } else if (parameterType == INOUT) {
-                        Object parameter = parameterFields.get(parameterIndex);
                         Object value = getValueForInOutParameter(parameter, translationRow, modifyRow, session);
                         appendParameter(writer, value, session);
+                    } else if (parameterType == INLINE) {
+                        writer.write((String)parameter);
                     }
                     lastIndex = tokenIndex + 1;
                     parameterIndex++;

@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 1998, 2012 Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1998, 2013 Oracle and/or its affiliates. All rights reserved.
  * This program and the accompanying materials are made available under the 
  * terms of the Eclipse Public License v1.0 and Eclipse Distribution License v. 1.0 
  * which accompanies this distribution. 
@@ -141,6 +141,8 @@ public class XMLUnmarshaller extends Unmarshaller<AbstractSession, XMLContext, X
     private boolean includeRoot = true;
     private NamespaceResolver namespaceResolver;    
     private boolean autoDetectMediaType = false;
+    private Object unmarshalAttributeGroup;
+    private boolean wrapperAsCollectionName = false;
 
     static {
         try {
@@ -807,6 +809,21 @@ public class XMLUnmarshaller extends Unmarshaller<AbstractSession, XMLContext, X
         this.namespaceResolver = namespaceResolver;
     }
     
+    /**
+     * @since 2.4.2
+     */
+    @Override
+    public boolean isWrapperAsCollectionName() {
+        return wrapperAsCollectionName;
+    }
+
+    /**
+     * @since 2.4.2
+     */
+    public void setWrapperAsCollectionName(boolean wrapperAsCollectionName) {
+        this.wrapperAsCollectionName = wrapperAsCollectionName;
+    }
+
     @Override
     public XMLUnmarshaller clone() {
         XMLUnmarshaller clone = new XMLUnmarshaller(context);
@@ -875,6 +892,19 @@ public class XMLUnmarshaller extends Unmarshaller<AbstractSession, XMLContext, X
     public UnmarshalRecord createUnmarshalRecord(XMLDescriptor xmlDescriptor, AbstractSession session) {
         org.eclipse.persistence.oxm.record.UnmarshalRecord wrapper = (org.eclipse.persistence.oxm.record.UnmarshalRecord) xmlDescriptor.getObjectBuilder().createRecord((AbstractSession) session);
         return wrapper.getUnmarshalRecord();
+    }
+
+    /**
+     * INTERNAL:
+     * Returns the AttributeGroup or the name of the AttributeGroup to be used to 
+     * unmarshal. 
+     */
+    public Object getUnmarshalAttributeGroup() {
+        return this.unmarshalAttributeGroup;
+    }
+    
+    public void setUnmarshalAttributeGroup(Object attributeGroup) {
+        this.unmarshalAttributeGroup = attributeGroup;
     }
 
 }

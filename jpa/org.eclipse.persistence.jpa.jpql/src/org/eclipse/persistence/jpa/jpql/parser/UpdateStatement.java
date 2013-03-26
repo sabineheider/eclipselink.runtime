@@ -28,7 +28,7 @@ import org.eclipse.persistence.jpa.jpql.WordParser;
  * @see UpdateClause
  * @see WhereClause
  *
- * @version 2.4.1
+ * @version 2.5
  * @since 2.3
  * @author Pascal Filion
  */
@@ -99,6 +99,23 @@ public final class UpdateStatement extends AbstractExpression {
 		if (whereClause != null) {
 			children.add(whereClause);
 		}
+	}
+
+	/**
+	 * {@inheritDoc}
+	 */
+	@Override
+	public JPQLQueryBNF findQueryBNF(Expression expression) {
+
+		if (updateClause.isAncestor(expression)) {
+			return getQueryBNF(UpdateClauseBNF.ID);
+		}
+
+		if ((whereClause != null) && whereClause.isAncestor(expression)) {
+			return getQueryBNF(WhereClauseBNF.ID);
+		}
+
+		return super.findQueryBNF(expression);
 	}
 
 	/**

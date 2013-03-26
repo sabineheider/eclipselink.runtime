@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 1998, 2012 Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1998, 2013 Oracle and/or its affiliates. All rights reserved.
  * This program and the accompanying materials are made available under the 
  * terms of the Eclipse Public License v1.0 and Eclipse Distribution License v. 1.0 
  * which accompanies this distribution. 
@@ -1027,6 +1027,15 @@ public abstract class ForeignReferenceMapping extends DatabaseMapping {
 
     /**
      * INTERNAL:
+     * Return whether the specified object is instantiated.
+     */
+    @Override
+    public boolean isAttributeValueFromObjectInstantiated(Object object) {
+        return this.indirectionPolicy.objectIsInstantiated(getAttributeValueFromObject(object));
+    }
+    
+    /**
+     * INTERNAL:
      * Returns the join criteria stored in the mapping selection query. This criteria
      * is used to read reference objects across the tables from the database.
      */
@@ -1447,7 +1456,7 @@ public abstract class ForeignReferenceMapping extends DatabaseMapping {
         if (wasCacheUsed[0]){
             //must clone here as certain mappings require the clone object to clone the attribute.
             Integer refreshCascade = null;
-            if (sourceQuery != null && sourceQuery.isObjectBuildingQuery() && ((ObjectBuildingQuery)sourceQuery).shouldRefreshIdentityMapResult()){
+            if (sourceQuery != null && sourceQuery.isObjectBuildingQuery() && sourceQuery.shouldRefreshIdentityMapResult()) {
                 refreshCascade = sourceQuery.getCascadePolicy();
             }
             attributeValue = this.indirectionPolicy.cloneAttribute(attributeValue, parentCacheKey.getObject(), parentCacheKey, targetObject, refreshCascade, executionSession, false);
@@ -2168,6 +2177,7 @@ public abstract class ForeignReferenceMapping extends DatabaseMapping {
                 targetQuery.setIsExecutionClone(true);
             }
             targetQuery.setQueryId(sourceQuery.getQueryId());
+            targetQuery.setAccessors(sourceQuery.getAccessors());
             ((ObjectLevelReadQuery)targetQuery).setRequiresDeferredLocks(sourceQuery.requiresDeferredLocks());
         }
 

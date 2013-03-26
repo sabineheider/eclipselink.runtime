@@ -93,6 +93,7 @@
                         </xs:sequence>
                     </xs:complexType>
                 </xs:element>
+                <xs:element ref="xml-named-object-graphs" minOccurs="0"/>
             </xs:all>
             <xs:attribute name="name" type="xs:string" />
             <xs:attribute name="super-type" type="xs:string" default="##default" />
@@ -372,6 +373,11 @@
                         <xs:element ref="xml-abstract-null-policy" minOccurs="0" />                        
                         <xs:element ref="xml-access-methods" minOccurs="0" />
                         <xs:element ref="xml-element-wrapper" minOccurs="0"/>
+                        <xs:element name="xml-inverse-reference" minOccurs="0">
+                            <xs:complexType>
+                                <xs:attribute name="mapped-by" type="xs:string"/>
+                            </xs:complexType>
+                        </xs:element>
                         <xs:element ref="xml-java-type-adapter" minOccurs="0"/>
                         <xs:element ref="xml-map" minOccurs="0"/>
                         <xs:element ref="xml-properties" minOccurs="0" />
@@ -438,6 +444,7 @@
                     <xs:attribute name="xml-mixed" type="xs:boolean" default="false" />
                     <xs:attribute name="read-only" type="xs:boolean" default="false" />
                     <xs:attribute name="write-only" type="xs:boolean" default="false" />
+                    <xs:attribute name="required" type="xs:boolean" default="true" />
                 </xs:extension>
             </xs:complexContent>
         </xs:complexType>
@@ -594,4 +601,36 @@
             </xs:complexContent>
         </xs:complexType>
     </xs:element>
+
+    <xs:element name="xml-named-object-graphs">
+        <xs:complexType>
+            <xs:sequence>
+                <xs:element ref="xml-named-object-graph" maxOccurs="unbounded"/>
+            </xs:sequence>
+        </xs:complexType>
+    </xs:element>
+
+    <xs:element name="xml-named-object-graph">
+        <xs:complexType>
+            <xs:sequence>
+                <xs:element name="xml-named-attribute-node" type="xml-named-attribute-node" minOccurs="0" maxOccurs="unbounded"/>
+                <xs:element name="xml-named-subgraph" type="xml-named-subgraph" minOccurs="0" maxOccurs="unbounded"/>
+                <xs:element name="xml-named-subclass-graph" type="xml-named-subgraph" minOccurs="0" maxOccurs="unbounded"/>
+            </xs:sequence>
+            <xs:attribute name="name" type="xs:string"/>
+        </xs:complexType>
+    </xs:element>
+
+    <xs:complexType name="xml-named-attribute-node">
+        <xs:attribute name="name" type="xs:string"/>
+        <xs:attribute name="subgraph" type="xs:string"/>
+    </xs:complexType>
+
+    <xs:complexType name="xml-named-subgraph">
+        <xs:sequence>
+            <xs:element name="xml-named-attribute-node" type="xml-named-attribute-node" minOccurs="0" maxOccurs="unbounded"/>
+        </xs:sequence>
+        <xs:attribute name="name" type="xs:string"/>
+        <xs:attribute name="type" type="xs:string"/>
+    </xs:complexType>
 </xs:schema>

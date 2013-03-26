@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2011, 2012 Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2011, 2013 Oracle and/or its affiliates. All rights reserved.
  * This program and the accompanying materials are made available under the
  * terms of the Eclipse Public License v1.0 and Eclipse Distribution License v. 1.0
  * which accompanies this distribution.
@@ -198,7 +198,7 @@ public abstract class CommonAbstractCriteriaImpl<T> implements CommonAbstractCri
     public DatabaseQuery translate() {
     	DatabaseQuery query = getDatabaseQuery();
     	for (ParameterExpression<?> parameter : getParameters()) {
-            query.addArgument(parameter.getName(), parameter.getJavaType());
+            query.addArgument(((ParameterExpressionImpl)parameter).getInternalName(), parameter.getJavaType());
         }
         if (this.where != null) {
             if (((InternalExpression) this.where).isPredicate() && ((InternalSelection) this.where).getCurrentNode() == null) {

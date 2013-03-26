@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 1998, 2012 Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1998, 2013 Oracle and/or its affiliates. All rights reserved.
  * This program and the accompanying materials are made available under the 
  * terms of the Eclipse Public License v1.0 and Eclipse Distribution License v. 1.0 
  * which accompanies this distribution. 
@@ -46,6 +46,10 @@ public class SecurableObjectHolder {
         m_securableClassName = securableClassName;
     }
 
+    public String getEncryptionClassName() {
+        return m_securableClassName;
+    }
+    
     public void setEncryptionClassName(String securableClassName) {
         m_securableClassName = securableClassName;
     }
@@ -63,10 +67,10 @@ public class SecurableObjectHolder {
     }
 
     /**
-       * Convert a String into a Securable object
-       * Class name must be fully qualified, eg. org.eclipse.persistence.internal.security.JCEEncryptor
+     * Convert a String into a Securable object
+     * Class name must be fully qualified, eg. org.eclipse.persistence.internal.security.JCEEncryptor
      * Default is the JCEEncryptor
-       */
+     */
     private void initSecurableObject() {
         boolean initPassThroughEncryptor = false;
 

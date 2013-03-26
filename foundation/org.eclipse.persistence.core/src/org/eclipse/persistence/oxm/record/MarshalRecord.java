@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 1998, 2012 Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1998, 2013 Oracle and/or its affiliates. All rights reserved.
  * This program and the accompanying materials are made available under the 
  * terms of the Eclipse Public License v1.0 and Eclipse Distribution License v. 1.0 
  * which accompanies this distribution. 
@@ -17,9 +17,11 @@ import java.util.AbstractList;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Map.Entry;
+import java.util.Stack;
 
 import javax.xml.namespace.QName;
 
+import org.eclipse.persistence.exceptions.EclipseLinkException;
 import org.eclipse.persistence.exceptions.XMLMarshalException;
 import org.eclipse.persistence.internal.core.helper.CoreField;
 import org.eclipse.persistence.internal.core.sessions.CoreAbstractSession;
@@ -41,8 +43,12 @@ import org.eclipse.persistence.internal.oxm.mappings.Field;
 import org.eclipse.persistence.internal.oxm.record.AbstractMarshalRecordImpl;
 import org.eclipse.persistence.oxm.XMLLogin;
 import org.eclipse.persistence.oxm.XMLMarshalListener;
+import org.eclipse.persistence.oxm.record.ValidatingMarshalRecord.MarshalSAXParseException;
+import org.eclipse.persistence.core.queries.CoreAttributeGroup;
 import org.w3c.dom.Document;
 import org.w3c.dom.Node;
+import org.xml.sax.ErrorHandler;
+import org.xml.sax.SAXException;
 
 /**
  * <p>A MarshalRecord encapsulates the marshal target.</p>
@@ -65,6 +71,8 @@ public abstract class MarshalRecord<MARSHALLER extends Marshaller> extends Abstr
 
     private CycleDetectionStack<Object> cycleDetectionStack = new CycleDetectionStack<Object>();
 
+    private Stack<CoreAttributeGroup> attributeGroupStack;
+    
     protected static final String COLON_W_SCHEMA_NIL_ATTRIBUTE = Constants.COLON + Constants.SCHEMA_NIL_ATTRIBUTE;
     protected static final String TRUE = "true";
     
@@ -499,7 +507,21 @@ public abstract class MarshalRecord<MARSHALLER extends Marshaller> extends Abstr
         if(null != marshaller) {
             XMLMarshalListener marshalListener = marshaller.getMarshalListener();
             if(null != marshalListener) {
-                marshalListener.beforeMarshal(child);
+                try {
+                    marshalListener.beforeMarshal(child);
+                } catch(EclipseLinkException e) {
+                    ErrorHandler errorHandler = marshaller.getErrorHandler();
+                    if(null == errorHandler) {
+                        throw e;
+                    } else {
+                        try {
+                            MarshalSAXParseException saxParseException = new MarshalSAXParseException(null, null, null, -1, -1, e, child);
+                            errorHandler.error(saxParseException);
+                        } catch(SAXException saxParseException) {
+                            throw e;
+                        }
+                    }
+                }
             }
         }
         setOwningObject(child);
@@ -509,7 +531,21 @@ public abstract class MarshalRecord<MARSHALLER extends Marshaller> extends Abstr
         if(null != marshaller) {
             XMLMarshalListener marshalListener = marshaller.getMarshalListener();
             if(null != marshalListener) {
-                marshalListener.afterMarshal(child);
+                try {
+                    marshalListener.afterMarshal(child);
+                } catch(EclipseLinkException e) {
+                    ErrorHandler errorHandler = marshaller.getErrorHandler();
+                    if(null == errorHandler) {
+                        throw e;
+                    } else {
+                        try {
+                            MarshalSAXParseException saxParseException = new MarshalSAXParseException(null, null, null, -1, -1, e, child);
+                            errorHandler.error(saxParseException);
+                        } catch(SAXException saxParseException) {
+                            throw e;
+                        }
+                    }
+                }
             }
         }
         setOwningObject(parent);
@@ -809,9 +845,36 @@ public abstract class MarshalRecord<MARSHALLER extends Marshaller> extends Abstr
 
         @Override
         public int size() {
-            return data.length;
+        	return currentIndex;
         }
 
     }
+
+    @Override
+    public boolean isWrapperAsCollectionName() {
+        return false;
+    }
     
+    public CoreAttributeGroup getCurrentAttributeGroup() {
+        if(this.attributeGroupStack == null || this.attributeGroupStack.isEmpty()) {
+            return DEFAULT_ATTRIBUTE_GROUP;
+        }
+        return attributeGroupStack.peek();
+    }
+    
+    public void pushAttributeGroup(CoreAttributeGroup group) {
+        if(group == DEFAULT_ATTRIBUTE_GROUP && this.attributeGroupStack == null) {
+            return;
+        }
+        if(this.attributeGroupStack == null) {
+            this.attributeGroupStack = new Stack<CoreAttributeGroup>();
+        }
+        this.attributeGroupStack.push(group);
+    }
+    
+    public void popAttributeGroup() {
+        if(attributeGroupStack != null) {
+            attributeGroupStack.pop();
+        }
+    }
 }

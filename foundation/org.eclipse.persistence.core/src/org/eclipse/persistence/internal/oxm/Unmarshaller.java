@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2012 Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, 2013 Oracle and/or its affiliates. All rights reserved.
  * This program and the accompanying materials are made available under the
  * terms of the Eclipse Public License v1.0 and Eclipse Distribution License v. 1.0
  * which accompanies this distribution.
@@ -124,7 +124,16 @@ public abstract class Unmarshaller<
      */
     public abstract Class getUnmappedContentHandlerClass();
 
+    /**
+     * INTERNAL:
+     * Returns the AttributeGroup or the name of the AttributeGroup to be used to 
+     * unmarshal. 
+     */
+    public abstract Object getUnmarshalAttributeGroup();
+
     public abstract UNMARSHALLER_HANDLER getUnmarshallerHandler();
+
+    public abstract XMLUnmarshalListener getUnmarshalListener();
 
     /**
      * Name of the property to marshal/unmarshal as a wrapper on the text() mappings   
@@ -147,9 +156,9 @@ public abstract class Unmarshaller<
     public abstract boolean isIncludeRoot();
 
     public abstract boolean isResultAlwaysXMLRoot();
-    
-    public abstract void setIDResolver(ID_RESOLVER idResolver);
 
-    public abstract XMLUnmarshalListener getUnmarshalListener();
+    public abstract boolean isWrapperAsCollectionName();
+
+    public abstract void setIDResolver(ID_RESOLVER idResolver); 
 
 }

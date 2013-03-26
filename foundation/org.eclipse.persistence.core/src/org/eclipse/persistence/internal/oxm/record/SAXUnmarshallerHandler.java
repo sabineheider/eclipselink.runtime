@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 1998, 2012 Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1998, 2013 Oracle and/or its affiliates. All rights reserved.
  * This program and the accompanying materials are made available under the 
  * terms of the Eclipse Public License v1.0 and Eclipse Distribution License v. 1.0 
  * which accompanies this distribution. 
@@ -15,10 +15,13 @@ package org.eclipse.persistence.internal.oxm.record;
 import java.lang.reflect.Modifier;
 
 import javax.xml.namespace.QName;
+
+import org.eclipse.persistence.core.queries.CoreAttributeGroup;
 import org.eclipse.persistence.exceptions.DescriptorException;
 import org.eclipse.persistence.exceptions.EclipseLinkException;
 import org.eclipse.persistence.exceptions.XMLMarshalException;
 import org.eclipse.persistence.internal.core.sessions.CoreAbstractSession;
+import org.eclipse.persistence.internal.helper.ClassConstants;
 import org.eclipse.persistence.internal.oxm.Constants;
 import org.eclipse.persistence.internal.oxm.Context;
 import org.eclipse.persistence.internal.oxm.Root;
@@ -333,6 +336,23 @@ public class SAXUnmarshallerHandler implements ExtendedContentHandler {
             unmarshalRecord.initializeRecord((Mapping) null);
             xmlReader.setContentHandler(unmarshalRecord);
             xmlReader.setLexicalHandler(unmarshalRecord);
+            
+            Object attributeGroup = this.unmarshaller.getUnmarshalAttributeGroup();
+            if(attributeGroup != null) {
+                if(attributeGroup.getClass() == ClassConstants.STRING) {
+                    CoreAttributeGroup group = descriptor.getAttributeGroup((String)attributeGroup);
+                    if(group != null) {
+                        unmarshalRecord.setUnmarshalAttributeGroup(group);
+                    } else {
+                        //Error
+                    }
+                } else if(attributeGroup instanceof CoreAttributeGroup) {
+                    unmarshalRecord.setUnmarshalAttributeGroup((CoreAttributeGroup)attributeGroup);
+                } else {
+                    //Error case
+                }
+            }
+
             unmarshalRecord.startElement(namespaceURI, localName, qName, atts);
 
             // if we located the descriptor via xsi:type attribute, create and 

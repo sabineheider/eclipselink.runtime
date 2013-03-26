@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 1998, 2012 Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1998, 2013 Oracle and/or its affiliates. All rights reserved.
  * This program and the accompanying materials are made available under the
  * terms of the Eclipse Public License v1.0 and Eclipse Distribution License v. 1.0
  * which accompanies this distribution.
@@ -48,6 +48,7 @@ import org.eclipse.persistence.core.mappings.CoreAttributeAccessor;
 import org.eclipse.persistence.core.mappings.CoreMapping;
 import org.eclipse.persistence.core.mappings.converters.CoreConverter;
 import org.eclipse.persistence.core.sessions.CoreProject;
+import org.eclipse.persistence.core.queries.CoreAttributeGroup;
 import org.eclipse.persistence.dynamic.DynamicClassLoader;
 import org.eclipse.persistence.exceptions.DescriptorException;
 import org.eclipse.persistence.exceptions.JAXBException;
@@ -106,6 +107,9 @@ import org.eclipse.persistence.jaxb.javamodel.Helper;
 import org.eclipse.persistence.jaxb.javamodel.JavaClass;
 import org.eclipse.persistence.jaxb.javamodel.JavaField;
 import org.eclipse.persistence.jaxb.javamodel.JavaMethod;
+import org.eclipse.persistence.jaxb.xmlmodel.XmlNamedAttributeNode;
+import org.eclipse.persistence.jaxb.xmlmodel.XmlNamedObjectGraph;
+import org.eclipse.persistence.jaxb.xmlmodel.XmlNamedSubgraph;
 import org.eclipse.persistence.jaxb.xmlmodel.XmlAbstractNullPolicy;
 import org.eclipse.persistence.jaxb.xmlmodel.XmlElementWrapper;
 import org.eclipse.persistence.jaxb.xmlmodel.XmlIsSetNullPolicy;
@@ -144,6 +148,7 @@ import org.eclipse.persistence.oxm.mappings.nullpolicy.NullPolicy;
 import org.eclipse.persistence.oxm.mappings.nullpolicy.XMLNullRepresentationType;
 import org.eclipse.persistence.oxm.schema.XMLSchemaClassPathReference;
 import org.eclipse.persistence.oxm.schema.XMLSchemaReference;
+import org.eclipse.persistence.queries.AttributeGroup;
 import org.eclipse.persistence.sessions.Project;
 
 /**
@@ -232,8 +237,14 @@ public class MappingsGenerator {
                 setupInheritance(next);
             }
         }
+        
         // Now create mappings
         generateMappings();
+        
+        // Setup AttributeGroups
+        for(JavaClass next : typeInfoClasses) {
+            setupAttributeGroups(next);
+        }
         
         // apply customizers if necessary
         Set<Entry<String, TypeInfo>> entrySet = this.typeInfo.entrySet();
@@ -259,6 +270,122 @@ public class MappingsGenerator {
 
         processGlobalElements(project);
         return project;
+    }
+
+    private void setupAttributeGroups(JavaClass javaClass) {
+        TypeInfo info = this.typeInfo.get(javaClass.getQualifiedName());
+        XMLDescriptor descriptor = (XMLDescriptor)info.getDescriptor();
+        
+        if(!info.getObjectGraphs().isEmpty()) {
+            for(XmlNamedObjectGraph next:info.getObjectGraphs()) {
+                AttributeGroup group = descriptor.getAttributeGroup(next.getName());
+                Map<String, List<CoreAttributeGroup>> subgraphs = processSubgraphs(next.getXmlNamedSubgraph());
+                for(XmlNamedAttributeNode nextAttributeNode:next.getXmlNamedAttributeNode()) {
+                    if(nextAttributeNode.getSubgraph() == null || nextAttributeNode.getSubgraph().length() == 0) {
+                        group.addAttribute(nextAttributeNode.getName());
+                    } else {
+                        List<CoreAttributeGroup> nestedGroups = subgraphs.get(nextAttributeNode.getSubgraph());
+                        if(nestedGroups == null || nestedGroups.isEmpty()) {
+                            Property property = info.getProperties().get(nextAttributeNode.getName());
+                            JavaClass cls = property.getActualType();
+                            TypeInfo referenceType = typeInfo.get(cls.getQualifiedName());
+                            if(referenceType != null) {
+                                AttributeGroup targetGroup = (AttributeGroup)referenceType.getDescriptor().getAttributeGroup(nextAttributeNode.getSubgraph());
+                                group.addAttribute(nextAttributeNode.getName(), targetGroup);
+                            } else {
+                                //TODO: Exception
+                            }
+                        } else {
+                            if(nestedGroups.size() == 1) {
+                                group.addAttribute(nextAttributeNode.getName(), nestedGroups.get(0));
+                            } else {
+                                group.addAttribute(nextAttributeNode.getName(), nestedGroups);
+                            }
+                        }
+                    }
+                }
+
+
+                for(XmlNamedSubgraph nextSubclass:next.getXmlNamedSubclassGraph()) {
+                    AttributeGroup subclassGroup = new AttributeGroup(next.getName(), nextSubclass.getType(), true);
+                    group.getSubClassGroups().put(nextSubclass.getType(), subclassGroup);
+                    for(XmlNamedAttributeNode nextAttributeNode:nextSubclass.getXmlNamedAttributeNode()) {
+                        if(nextAttributeNode.getSubgraph() == null || nextAttributeNode.getSubgraph().length() == 0) {
+                            subclassGroup.addAttribute(nextAttributeNode.getName());
+                        } else {
+                            List<CoreAttributeGroup> nestedGroups = subgraphs.get(nextAttributeNode.getSubgraph());
+                            if(nestedGroups == null || nestedGroups.isEmpty()) {
+                                Property property = info.getProperties().get(nextAttributeNode.getName());
+                                JavaClass cls = property.getActualType();
+                                TypeInfo referenceType = typeInfo.get(cls.getQualifiedName());
+                                if(referenceType != null) {
+                                    AttributeGroup targetGroup = (AttributeGroup)referenceType.getDescriptor().getAttributeGroup(nextAttributeNode.getSubgraph());
+                                    subclassGroup.addAttribute(nextAttributeNode.getName(), targetGroup);
+                                } else {
+                                    //TODO: Exception
+                                }
+                            } else {
+                                if(nestedGroups.size() == 1) {
+                                    subclassGroup.addAttribute(nextAttributeNode.getName(), nestedGroups.get(0));
+                                } else {
+                                    subclassGroup.addAttribute(nextAttributeNode.getName(), nestedGroups);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+    
+    private Map<String, List<CoreAttributeGroup>> processSubgraphs(List<XmlNamedSubgraph> subgraphs) {
+        Map<String, List<CoreAttributeGroup>> subgroups = new HashMap<String, List<CoreAttributeGroup>>();
+        //Iterate through once and create all the AttributeGroups
+        for(XmlNamedSubgraph next: subgraphs) {
+            String type = next.getType();
+            if(type == null) {
+                type = "java.lang.Object";
+            }
+            AttributeGroup group = new AttributeGroup(next.getName(), type, false);
+            if(subgroups.containsKey(group.getName())) {
+                List<CoreAttributeGroup> groups = subgroups.get(group.getName());
+                groups.add(group);
+            } else {
+                List<CoreAttributeGroup> groups = new ArrayList<CoreAttributeGroup>(1);
+                groups.add(group);
+                subgroups.put(group.getName(), groups);
+            }
+        }
+        
+        //Iterate through a second time to populate the groups and set up links.
+        for(XmlNamedSubgraph next:subgraphs) {
+            List<XmlNamedAttributeNode> attributeNodes = next.getXmlNamedAttributeNode();
+            List<CoreAttributeGroup> attributeGroups = subgroups.get(next.getName());
+            if(attributeGroups != null) {
+                for(CoreAttributeGroup group:attributeGroups) {
+                    String typeName = next.getType();
+                    if(typeName == null) {
+                        typeName = "java.lang.Object";
+                    }
+                    if(group.getTypeName().equals(typeName)) {
+                        for(XmlNamedAttributeNode attributeNode:attributeNodes) {
+                            if(attributeNode.getSubgraph() == null || attributeNode.getSubgraph().length() == 0) {
+                                group.addAttribute(attributeNode.getName());
+                            } else {
+                                List<CoreAttributeGroup> nestedGroups = subgroups.get(attributeNode.getSubgraph());
+                                if(nestedGroups == null || nestedGroups.size() == 0) {
+                                    //TODO: Exception or check for root level ones on target class
+                                } else {
+                                    group.addAttribute(attributeNode.getName(), nestedGroups.get(0));
+                                }
+
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        return subgroups;
     }
 
     public void generateDescriptor(JavaClass javaClass, CoreProject project) {
@@ -368,6 +495,20 @@ public class MappingsGenerator {
                     aa.setAttributeName(locProp.getPropertyName());
                     descriptor.setLocationAccessor(aa);
                 }
+            }
+        }
+        
+        if(!info.getObjectGraphs().isEmpty()) {
+            //create attribute groups for each object graph. 
+            //these will be populated later to allow for linking
+            for(XmlNamedObjectGraph next:info.getObjectGraphs()) {
+                AttributeGroup attributeGroup = new AttributeGroup(next.getName(), info.getJavaClassName(), false);
+                ((XMLDescriptor)descriptor).addAttributeGroup(attributeGroup);
+                
+                //process subclass graphs for inheritance
+                //for(NamedSubgraph nextSubclass:next.getNamedSubclassGraph()) {
+                    //attributeGroup.insertSubClass(new AttributeGroup(next.getName(), nextSubclass.getType()));
+                //}
             }
         }
 
@@ -712,6 +853,16 @@ public class MappingsGenerator {
             collectionType = containerClassImpl(collectionType);
             invMapping.useCollectionClass(helper.getClassForJavaClass(collectionType));
         }
+        
+        if(property.isWriteableInverseReference()){
+   	        if(isCollection){           	
+   	            JavaClass descriptorClass = helper.getJavaClass(descriptor.getJavaClassName());
+   	        	invMapping.setInlineMapping((XMLCompositeCollectionMapping)generateCompositeCollectionMapping(property, descriptor, descriptorClass, namespace, invMapping.getReferenceClassName()));
+   	        }else{
+   	        	invMapping.setInlineMapping((XMLCompositeObjectMapping)generateCompositeObjectMapping(property, descriptor, namespace, invMapping.getReferenceClassName()));   	        	
+   	        }
+        }                  
+
         return invMapping;
     }
 
@@ -1238,14 +1389,20 @@ public class MappingsGenerator {
         if (property.isLax() || property.isReference()) {
             mapping.setKeepAsElementPolicy(UnmarshalKeepAsElementPolicy.KEEP_UNKNOWN_AS_ELEMENT);
         } else {
-            mapping.setKeepAsElementPolicy(UnmarshalKeepAsElementPolicy.KEEP_ALL_AS_ELEMENT);
+            if (property.isAny()) {
+                mapping.setKeepAsElementPolicy(UnmarshalKeepAsElementPolicy.KEEP_ALL_AS_ELEMENT);
+            } else {
+                mapping.setKeepAsElementPolicy(UnmarshalKeepAsElementPolicy.KEEP_NONE_AS_ELEMENT);
+            }
         }
 
         mapping.setMixedContent(isMixed);
         if (isMixed) {
             mapping.setPreserveWhitespaceForMixedContent(true);
         }
-        mapping.setUseXMLRoot(true);
+        if (property.isAny()) {
+            mapping.setUseXMLRoot(true);
+        }
 
         JavaClass collectionType = property.getType();
         if (collectionType.isArray()){
@@ -1304,9 +1461,13 @@ public class MappingsGenerator {
         // handle null policy set via xml metadata
         if (property.isSetNullPolicy()) {
             mapping.setNullPolicy(getNullPolicyFromProperty(property, namespaceInfo.getNamespaceResolverForDescriptor()));
-        } else if (property.isNillable()){
-            mapping.getNullPolicy().setNullRepresentedByXsiNil(true);
-            mapping.getNullPolicy().setMarshalNullRepresentation(XMLNullRepresentationType.XSI_NIL);
+        } else {
+            NullPolicy nullPolicy = (NullPolicy) mapping.getNullPolicy();
+            nullPolicy.setSetPerformedForAbsentNode(false);
+            if(property.isNillable()) {
+                nullPolicy.setNullRepresentedByXsiNil(true);
+                nullPolicy.setMarshalNullRepresentation(XMLNullRepresentationType.XSI_NIL);
+            }
         }
 
         if (referenceClassName == null){
@@ -1321,29 +1482,7 @@ public class MappingsGenerator {
             if(property.isTransientType()){
                 mapping.setReferenceClassName(Constants.UNKNOWN_OR_TRANSIENT_CLASS);
             }
-
-        if (property.getInverseReferencePropertyName() != null) {
-            mapping.getInverseReferenceMapping().setAttributeName(property.getInverseReferencePropertyName());
-            JavaClass backPointerPropertyType = null;
-            JavaClass referenceClass = property.getActualType();
-            if (property.getInverseReferencePropertyGetMethodName() != null && property.getInverseReferencePropertySetMethodName() != null && !property.getInverseReferencePropertyGetMethodName().equals("") && !property.getInverseReferencePropertySetMethodName().equals("")) {
-                mapping.getInverseReferenceMapping().setGetMethodName(property.getInverseReferencePropertySetMethodName());
-                mapping.getInverseReferenceMapping().setSetMethodName(property.getInverseReferencePropertySetMethodName());
-                JavaMethod getMethod = referenceClass.getDeclaredMethod(mapping.getInverseReferenceMapping().getGetMethodName(), new JavaClass[]{});
-                if (getMethod != null) {
-                    backPointerPropertyType = getMethod.getReturnType();
-                }
-            } else {
-                JavaField backpointerField = referenceClass.getDeclaredField(property.getInverseReferencePropertyName());
-                if(backpointerField != null) {
-                    backPointerPropertyType = backpointerField.getResolvedType();
-                }
-            }
-            if (helper.isCollectionType(backPointerPropertyType)) {
-                mapping.getInverseReferenceMapping().setContainerPolicy(ContainerPolicy.buildDefaultPolicy());
-            }
-        }
-
+        
         if (property.isRequired()) {
             ((Field) mapping.getField()).setRequired(true);
         }
@@ -2032,28 +2171,7 @@ public class MappingsGenerator {
         if (property.isRequired()) {
             ((Field) mapping.getField()).setRequired(true);
         }
-
-        if (property.getInverseReferencePropertyName() != null) {
-            mapping.getInverseReferenceMapping().setAttributeName(property.getInverseReferencePropertyName());
-            JavaClass backPointerPropertyType = null;
-            JavaClass referenceClass = property.getActualType();
-            if(property.getInverseReferencePropertyGetMethodName() != null && property.getInverseReferencePropertySetMethodName() != null && !property.getInverseReferencePropertyGetMethodName().equals("") && !property.getInverseReferencePropertySetMethodName().equals("")) {
-                mapping.getInverseReferenceMapping().setGetMethodName(property.getInverseReferencePropertySetMethodName());
-                mapping.getInverseReferenceMapping().setSetMethodName(property.getInverseReferencePropertySetMethodName());
-                JavaMethod getMethod = referenceClass.getDeclaredMethod(mapping.getInverseReferenceMapping().getGetMethodName(), new JavaClass[]{});
-                if(getMethod != null) {
-                    backPointerPropertyType = getMethod.getReturnType();
-                }
-            } else {
-                JavaField backpointerField = referenceClass.getDeclaredField(property.getInverseReferencePropertyName());
-                if (backpointerField != null) {
-                    backPointerPropertyType = backpointerField.getResolvedType();
-                }
-            }
-            if (helper.isCollectionType(backPointerPropertyType)) {
-                mapping.getInverseReferenceMapping().setContainerPolicy(ContainerPolicy.buildDefaultPolicy());
-            }
-        }
+           
         return mapping;
     }
 
@@ -2293,6 +2411,18 @@ public class MappingsGenerator {
                 }
             }
             rootDescriptor.getInheritancePolicy().setShouldReadSubclasses(true);
+            //Check for attributeGroups
+            Map<String, AttributeGroup> childGroups = ((XMLDescriptor)descriptor).getAttributeGroups();
+            Map<String, AttributeGroup> parentGroups = ((XMLDescriptor)rootDescriptor).getAttributeGroups();
+            if(childGroups != null && !(childGroups.isEmpty()) && parentGroups != null && !(parentGroups.isEmpty())) {
+                for(String nextKey:childGroups.keySet()) {
+                    AttributeGroup parentGroup = parentGroups.get(nextKey);
+                    if(parentGroup != null) {
+                        AttributeGroup childGroup = childGroups.get(nextKey);
+                        parentGroup.getSubClassGroups().put(descriptor.getJavaClassName(), childGroup);
+                    }
+                }
+            }
         }
     }
 
@@ -3009,10 +3139,10 @@ public class MappingsGenerator {
 	                  mapping.setAttributeClassification(attributeClassification);
 
 	              	  mapping.setShouldInlineBinaryData(false);
-	              	  if(nextElement.getTypeMappingInfo() != null) {
+	              	  //if(nextElement.getTypeMappingInfo() != null) {
 	              	      mapping.setSwaRef(nextElement.isXmlAttachmentRef());
 	              	      mapping.setMimeType(nextElement.getXmlMimeType());
-	              	  }
+	              	  //}
 	                  desc.addMapping((CoreMapping)mapping);
 
 	              }else{

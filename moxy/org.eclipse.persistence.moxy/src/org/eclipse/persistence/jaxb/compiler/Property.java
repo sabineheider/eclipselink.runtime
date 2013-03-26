@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 1998, 2012 Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1998, 2013 Oracle and/or its affiliates. All rights reserved.
  * This program and the accompanying materials are made available under the 
  * terms of the Eclipse Public License v1.0 and Eclipse Distribution License v. 1.0 
  * which accompanies this distribution. 
@@ -113,6 +113,7 @@ public class Property implements Cloneable {
     private String inverseReferencePropertySetMethodName;
     private JavaClass inverseReferencePropertyContainerClass;
     private boolean isInverseReference;
+    private boolean isWriteableInverseReference;
     
     // XmlAnyElement specific attributes
     private boolean lax;
@@ -864,8 +865,13 @@ public class Property implements Cloneable {
         return isInverseReference;
     }
 
-    public void setInverseReference(boolean isInverseReference) {
+    public void setInverseReference(boolean isInverseReference, boolean isWriteable) {
         this.isInverseReference = isInverseReference;
+        this.isWriteableInverseReference = isWriteable;
+    }
+    
+    public boolean isWriteableInverseReference(){
+    	return isWriteableInverseReference;
     }
     
     /**
@@ -1248,8 +1254,8 @@ public class Property implements Cloneable {
     public boolean isSetXmlJoinNodes() {
         return this.xmlJoinNodes != null;
     }
-    
-    /**
+
+	/**
      * Return a shallow copy of this Property.  
      * Simply calls super.clone(). 
      */

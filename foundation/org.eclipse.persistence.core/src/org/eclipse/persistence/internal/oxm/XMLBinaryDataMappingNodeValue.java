@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 1998, 2012 Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1998, 2013 Oracle and/or its affiliates. All rights reserved.
  * This program and the accompanying materials are made available under the 
  * terms of the Eclipse Public License v1.0 and Eclipse Distribution License v. 1.0 
  * which accompanies this distribution. 
@@ -124,8 +124,10 @@ public class XMLBinaryDataMappingNodeValue extends NodeValue implements NullCapa
         String c_id = null;
         byte[] bytes = null;
         String mimeType = this.xmlBinaryDataMapping.getMimeType(object);
+        String attachmentType = mimeType;
         if(mimeType == null) {
             mimeType = "";
+            attachmentType = "application/octet-stream";
         }
         if (xmlBinaryDataMapping.isSwaRef() && (marshaller.getAttachmentMarshaller() != null)) {
             //object value should be a DataHandler
@@ -154,7 +156,7 @@ public class XMLBinaryDataMappingNodeValue extends NodeValue implements NullCapa
             }
             if (objectValue.getClass() == CoreClassConstants.APBYTE) {
                 bytes = (byte[]) objectValue;
-                c_id = marshaller.getAttachmentMarshaller().addMtomAttachment(bytes, 0, bytes.length, this.xmlBinaryDataMapping.getMimeType(object), localName, namespaceUri);
+                c_id = marshaller.getAttachmentMarshaller().addMtomAttachment(bytes, 0, bytes.length, attachmentType, localName, namespaceUri);
             } else if (xmlBinaryDataMapping.getAttributeClassification() == XMLBinaryDataHelper.getXMLBinaryDataHelper().DATA_HANDLER) {
                 c_id = marshaller.getAttachmentMarshaller().addMtomAttachment((DataHandler) objectValue, localName, namespaceUri);
             } else {

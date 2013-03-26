@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 1998, 2012 Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1998, 2013 Oracle and/or its affiliates. All rights reserved.
  * This program and the accompanying materials are made available under the 
  * terms of the Eclipse Public License v1.0 and Eclipse Distribution License v. 1.0 
  * which accompanies this distribution. 
@@ -13,11 +13,8 @@
  ******************************************************************************/
 package org.eclipse.persistence.internal.jpa;
 
-import java.io.Serializable;
 import java.util.ArrayList;
-import java.util.Collection;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 
@@ -25,19 +22,10 @@ import javax.persistence.AttributeNode;
 import javax.persistence.EntityGraph;
 import javax.persistence.Subgraph;
 import javax.persistence.metamodel.Attribute;
-import javax.persistence.metamodel.EntityType;
-import javax.persistence.metamodel.Metamodel;
 import javax.persistence.metamodel.PluralAttribute;
-import javax.persistence.metamodel.SingularAttribute;
-import javax.persistence.metamodel.Type;
 
 import org.eclipse.persistence.descriptors.ClassDescriptor;
 import org.eclipse.persistence.internal.helper.ClassConstants;
-import org.eclipse.persistence.internal.jpa.metamodel.EmbeddableTypeImpl;
-import org.eclipse.persistence.internal.jpa.metamodel.EntityTypeImpl;
-import org.eclipse.persistence.internal.jpa.metamodel.ManagedTypeImpl;
-import org.eclipse.persistence.internal.jpa.metamodel.MetamodelImpl;
-import org.eclipse.persistence.internal.jpa.metamodel.TypeImpl;
 import org.eclipse.persistence.internal.localization.ExceptionLocalization;
 import org.eclipse.persistence.internal.queries.AttributeItem;
 import org.eclipse.persistence.internal.queries.MappedKeyMapContainerPolicy;
@@ -58,7 +46,7 @@ public class EntityGraphImpl<X> extends AttributeNodeImpl<X> implements EntityGr
 
     protected Class<X> classType;
 
-    protected Map<String, Map<Class, AttributeNodeImpl>> attributeNodes;
+    protected Map<String, AttributeNodeImpl> attributeNodes;
 
     protected EntityGraphImpl(AttributeGroup group, ClassDescriptor descriptor) {
         super();
@@ -72,6 +60,9 @@ public class EntityGraphImpl<X> extends AttributeNodeImpl<X> implements EntityGr
         super();
         this.attributeGroup = group;
         this.classType = group.getType();
+        if (this.classType == null){
+            this.classType = ClassConstants.Object_Class;
+        }
     }
 
     protected EntityGraphImpl(AttributeGroup group, ClassDescriptor descriptor, String attribute) {
@@ -88,6 +79,9 @@ public class EntityGraphImpl<X> extends AttributeNodeImpl<X> implements EntityGr
             throw new IllegalStateException("immutable_entitygraph");
         }
         for (String attrName : attributeNames) {
+            if (this.descriptor.getMappingForAttributeName(attrName) == null){
+                throw new IllegalArgumentException(ExceptionLocalization.buildMessage("metamodel_managed_type_attribute_not_present", new Object[]{attrName, this.getClassType()}));
+            }
             this.addAttributeNodeImpl(new AttributeNodeImpl<X>(attrName));
             //order is important here, must add attribute node to node list before adding to group or it will appear in node list twice.
             this.attributeGroup.addAttribute(attrName, (AttributeGroup) null);
@@ -99,21 +93,8 @@ public class EntityGraphImpl<X> extends AttributeNodeImpl<X> implements EntityGr
         if (this.attributeNodes == null) {
             buildAttributeNodes();
         }
-        Map map = new HashMap();
-        map.put(ClassConstants.Object_Class, attributeNode);
-        this.attributeNodes.put(attributeNode.getAttributeName(), map);
-    }
 
-    protected void addAttributeNodeImpl(EntityGraphImpl attributeNode) {
-        if (this.attributeNodes == null) {
-            buildAttributeNodes();
-        }
-        Map<Class, AttributeNodeImpl> map = this.attributeNodes.get(attributeNode.getAttributeName());
-        if (map == null) {
-            map = new HashMap<Class, AttributeNodeImpl>();
-            this.attributeNodes.put(attributeNode.getAttributeName(), map);
-        }
-        map.put(attributeNode.classType, attributeNode);
+        this.attributeNodes.put(attributeNode.getAttributeName(), attributeNode);
     }
 
     public void addAttributeNodes(Attribute<X, ?>... attribute) {
@@ -147,6 +128,14 @@ public class EntityGraphImpl<X> extends AttributeNodeImpl<X> implements EntityGr
         if (!this.isMutable) {
             throw new IllegalStateException(ExceptionLocalization.buildMessage("immutable_entitygraph"));
         }
+        AttributeNodeImpl node = null;
+        if (this.attributeNodes  != null){
+            node = this.attributeNodes.get(attributeName);
+        }
+        if (node == null){
+            node = new AttributeNodeImpl<X>(attributeName);
+            addAttributeNodeImpl(node);
+        }
         AttributeGroup localGroup = null;
         DatabaseMapping mapping = descriptor.getMappingForAttributeName(attributeName);
         if (mapping == null) {
@@ -155,7 +144,7 @@ public class EntityGraphImpl<X> extends AttributeNodeImpl<X> implements EntityGr
 
         localGroup = new AttributeGroup(attributeName, type, true);
 
-        ClassDescriptor targetDesc = mapping.getDescriptor();
+        ClassDescriptor targetDesc = mapping.getReferenceDescriptor();
         if (type != null && targetDesc.hasInheritance()) {
             targetDesc = targetDesc.getInheritancePolicy().getDescriptor(type);
             if (targetDesc == null) {
@@ -163,7 +152,7 @@ public class EntityGraphImpl<X> extends AttributeNodeImpl<X> implements EntityGr
             }
         }
         EntityGraphImpl entityGraph = new EntityGraphImpl(localGroup, targetDesc, attributeName);
-        addAttributeNodeImpl(entityGraph);
+        node.addSubgraph(entityGraph);
         //order is important here, must add entity graph to node list before adding to group or it will appear in node list twice.
         this.attributeGroup.addAttribute(attributeName, localGroup);
         return entityGraph;
@@ -192,6 +181,14 @@ public class EntityGraphImpl<X> extends AttributeNodeImpl<X> implements EntityGr
         if (!this.isMutable) {
             throw new IllegalStateException(ExceptionLocalization.buildMessage("immutable_entitygraph"));
         }
+        AttributeNodeImpl node = null;
+        if (this.attributeNodes  != null){
+            node = this.attributeNodes.get(attributeName);
+        }
+        if (node == null){
+            node = new AttributeNodeImpl<X>(attributeName);
+            addAttributeNodeImpl(node);
+        }
         AttributeGroup localGroup = null;
         DatabaseMapping mapping = descriptor.getMappingForAttributeName(attributeName);
         if (mapping == null) {
@@ -211,7 +208,7 @@ public class EntityGraphImpl<X> extends AttributeNodeImpl<X> implements EntityGr
             }
         }
         EntityGraphImpl entityGraph = new EntityGraphImpl(localGroup, targetDesc, attributeName);
-        addAttributeNodeImpl(entityGraph);
+        node.addKeySubgraph(entityGraph);
         //order is important here, must add entity graph to node list before adding to group or it will appear in node list twice.
         this.attributeGroup.addAttributeKey(attributeName, localGroup);
         return entityGraph;
@@ -229,6 +226,8 @@ public class EntityGraphImpl<X> extends AttributeNodeImpl<X> implements EntityGr
             }
         }
         AttributeGroup subGroup = new AttributeGroup(this.attributeGroup.getName(), type, true);
+        this.attributeGroup.getSubClassGroups().put(type, subGroup);
+        subGroup.setAllSubclasses(this.attributeGroup.getSubClassGroups());
         this.attributeGroup.insertSubClass(subGroup);
         return new EntityGraphImpl(subGroup, targetDesc);
     }
@@ -237,11 +236,7 @@ public class EntityGraphImpl<X> extends AttributeNodeImpl<X> implements EntityGr
         if (this.attributeNodes == null) {
             buildAttributeNodes();
         }
-        List<AttributeNode<?>> nodes = new ArrayList<AttributeNode<?>>();
-        for (Map<Class, AttributeNodeImpl> map : this.attributeNodes.values()) {
-            nodes.addAll((Collection<? extends AttributeNode<?>>) map.values());
-        }
-        return nodes;
+        return new ArrayList(this.attributeNodes.values());
     }
 
     public Class<X> getClassType() {
@@ -262,59 +257,47 @@ public class EntityGraphImpl<X> extends AttributeNodeImpl<X> implements EntityGr
     protected void buildAttributeNodes() {
         //this instance was built from a pre-existing attribute group so we need to rebuild
         //and entity graph
-        this.attributeNodes = new HashMap<String, Map<Class, AttributeNodeImpl>>();
+        this.attributeNodes = new HashMap<String, AttributeNodeImpl>();
         for (AttributeItem item : this.attributeGroup.getItems().values()) {
-            boolean complex = false;
+            AttributeNodeImpl node = new AttributeNodeImpl(item.getAttributeName());
             ClassDescriptor localDescriptor = null;
             if (this.descriptor != null) {
                 localDescriptor = this.descriptor.getMappingForAttributeName(item.getAttributeName()).getReferenceDescriptor();
             }
-            if (item.getGroups() != null) {
-                Map<Class, AttributeNodeImpl> subGraphs = new HashMap<Class, AttributeNodeImpl>();
-                complex = true;
+            if (item.getGroups() != null && ! item.getGroups().isEmpty()) {
                 for (AttributeGroup subGroup : item.getGroups().values()) {
                     Class type = subGroup.getType();
                     if (type == null) {
                         type = ClassConstants.Object_Class;
                     }
-                    EntityGraphImpl node = null;
                     if (localDescriptor != null) {
                         if (!type.equals(ClassConstants.Object_Class) && localDescriptor.hasInheritance()) {
                             localDescriptor = localDescriptor.getInheritancePolicy().getDescriptor(type);
                         }
-                        node = new EntityGraphImpl(subGroup, localDescriptor);
+                        node.addSubgraph(new EntityGraphImpl(subGroup, localDescriptor));
                     } else {
-                        node = new EntityGraphImpl(subGroup);
+                        node.addSubgraph(new EntityGraphImpl(subGroup));
                     }
-                    subGraphs.put(type, node);
 
                 }
-                this.attributeNodes.put(item.getAttributeName(), subGraphs);
             }
-            if (item.getKeyGroups() != null) {
-                Map<Class, AttributeNodeImpl> subGraphs = new HashMap<Class, AttributeNodeImpl>();
-                complex = true;
+            if (item.getKeyGroups() != null && ! item.getKeyGroups().isEmpty()) {
                 for (AttributeGroup subGroup : item.getKeyGroups().values()) {
                     Class type = subGroup.getType();
                     if (type == null) {
                         type = ClassConstants.Object_Class;
                     }
-                    EntityGraphImpl node = null;
                     if (localDescriptor != null) {
                         if (!type.equals(ClassConstants.Object_Class) && localDescriptor.hasInheritance()) {
                             localDescriptor = localDescriptor.getInheritancePolicy().getDescriptor(type);
                         }
-                        node = new EntityGraphImpl(subGroup, localDescriptor);
+                        node.addKeySubgraph(new EntityGraphImpl(subGroup, localDescriptor));
                     } else {
-                        node = new EntityGraphImpl(subGroup);
+                        node.addKeySubgraph(new EntityGraphImpl(subGroup));
                     }
-                    subGraphs.put(type, node);
                 }
-                this.attributeNodes.put(item.getAttributeName(), subGraphs);
             }
-            if (!complex) {
-                this.addAttributeNodeImpl(new AttributeNodeImpl(item.getAttributeName()));
-            }
+            this.attributeNodes.put(item.getAttributeName(), node);
         }
 
     }

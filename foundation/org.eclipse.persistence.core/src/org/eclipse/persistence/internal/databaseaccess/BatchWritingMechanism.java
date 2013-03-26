@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 1998, 2012 Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1998, 2013 Oracle and/or its affiliates. All rights reserved.
  * This program and the accompanying materials are made available under the 
  * terms of the Eclipse Public License v1.0 and Eclipse Distribution License v. 1.0 
  * which accompanies this distribution. 
@@ -97,7 +97,7 @@ public abstract class BatchWritingMechanism implements Cloneable, Serializable {
      * INTERNAL:
      * Sets the accessor that this mechanism will use
      */
-    public void setAccessor(DatabaseAccessor accessor) {
+    public void setAccessor(DatabaseAccessor accessor, AbstractSession session) {
         databaseAccessor = accessor;
     }
 	
@@ -134,6 +134,14 @@ public abstract class BatchWritingMechanism implements Cloneable, Serializable {
         } catch (CloneNotSupportedException notPossible) {
             throw new InternalError(notPossible.toString());
         }
+    }
+
+    /**
+     * INTERNAL:
+     * Allow initialization with the session after login.
+     */
+    public void initialize(AbstractSession session) {
+        
     }
 
 }

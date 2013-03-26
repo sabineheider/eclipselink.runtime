@@ -33,7 +33,6 @@ import org.junit.Test;
 
 public class ServerTravelerTest {
     private static final String DEFAULT_PU = "jpars_traveler-static";
-    @SuppressWarnings("unused")
     private static PersistenceContext context = null;
     private static PersistenceFactoryBase factory = null;
 
@@ -51,6 +50,9 @@ public class ServerTravelerTest {
         properties.put(PersistenceUnitProperties.CLASSLOADER, new DynamicClassLoader(Thread.currentThread().getContextClassLoader()));
         factory = new PersistenceFactoryBase();
         context = factory.bootstrapPersistenceContext(DEFAULT_PU, Persistence.createEntityManagerFactory(DEFAULT_PU, properties), RestUtils.getServerURI(), null, true);
+        if (context == null) {
+            throw new Exception("Persistence context could not be created.");
+        }
     }
 
     /**
@@ -82,6 +84,10 @@ public class ServerTravelerTest {
         }
         String response = RestUtils.restUpdate(traveler, Traveler.class.getSimpleName(), DEFAULT_PU, null, mediaType);
         assertNotNull(response);
-        assertTrue(response.contains("reservation"));
+        if (mediaType == MediaType.APPLICATION_XML_TYPE) {
+            assertTrue(response.contains("<reservation>"));
+        } else {
+            assertTrue(response.contains("\"reservation\":"));
+        }
     }
 }

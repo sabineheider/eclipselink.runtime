@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 1998, 2012 Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1998, 2013 Oracle and/or its affiliates. All rights reserved.
  * This program and the accompanying materials are made available under the 
  * terms of the Eclipse Public License v1.0 and Eclipse Distribution License v. 1.0 
  * which accompanies this distribution. 
@@ -352,6 +352,7 @@ public class ValidationExceptionResource extends ListResourceBundle {
                                            { "7353", "The mapping attribute [{1}] from the class [{0}] is not a valid mapping type for a convert specification." },
                                            { "7354", "The mapping attribute [{1}] from the class [{0}] is not a valid mapping type for a map key convert specification." },
                                            { "7355", "The mapping attribute [{1}] from the class [{0}] is not a valid mapping type for a convert using an attribute name specification. An attribute name should only be specified to traverse an Embedded mapping type." },
+                                           { "7356", "Precedure: [{1}] can not be excuted because {0} does not currently support multiple out parameters"},
                                            
  };
     

@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 1998, 2012 Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1998, 2013 Oracle and/or its affiliates. All rights reserved.
  * This program and the accompanying materials are made available under the 
  * terms of the Eclipse Public License v1.0 and Eclipse Distribution License v. 1.0 
  * which accompanies this distribution. 
@@ -246,9 +246,12 @@ public class EmbeddableAccessor extends ClassAccessor {
      */
     @Override
     public MetadataDescriptor getOwningDescriptor() {
-        // Return the first owning descriptor. In most cases this will be OK
-        // since in most cases there is only one.
-        return getOwningDescriptors().get(0);
+        if (getOwningDescriptors() != null && getOwningDescriptors().size() > 0) {
+            // Return the first owning descriptor. In most cases this will be OK
+            // since in most cases there is only one.
+            return getOwningDescriptors().get(0);
+        } 
+        return this.getDescriptor();
     }
     
     /** 
@@ -286,6 +289,10 @@ public class EmbeddableAccessor extends ClassAccessor {
         
         // Process the default access methods after determining access type.
         processAccessMethods();
+        
+        // Process a @Struct and @EIS annotation to create the correct type of descriptor.
+        processStruct();
+        processNoSql();
         
         // Process our parents metadata after processing our own.
         super.preProcess();

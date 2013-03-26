@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2011, 2012 Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2011, 2013 Oracle and/or its affiliates. All rights reserved.
  * This program and the accompanying materials are made available under the 
  * terms of the Eclipse Public License v1.0 and Eclipse Distribution License v. 1.0 
  * which accompanies this distribution. 
@@ -45,6 +45,7 @@ import org.eclipse.persistence.internal.sessions.DatabaseSessionImpl;
 import org.eclipse.persistence.jpa.JpaEntityManagerFactory;
 import org.eclipse.persistence.mappings.DatabaseMapping;
 import org.eclipse.persistence.mappings.ForeignReferenceMapping;
+import org.eclipse.persistence.queries.AttributeGroup;
 import org.eclipse.persistence.queries.DatabaseQuery;
 import org.eclipse.persistence.queries.FetchGroupTracker;
 import org.eclipse.persistence.queries.ObjectLevelReadQuery;
@@ -622,12 +623,13 @@ public class EntityManagerFactoryImpl implements EntityManagerFactory, Persisten
     }
     
     public void addNamedQuery(String name, Query query) {
-        DatabaseQuery unwrapped = (DatabaseQuery) query.unwrap(DatabaseQuery.class).clone();
-        if (((QueryImpl)query).lockMode != null){
-            ((ObjectLevelReadQuery)unwrapped).setLockModeType(((QueryImpl)query).lockMode.name(), getServerSession());
+        QueryImpl queryImpl = query.unwrap(QueryImpl.class);
+        DatabaseQuery unwrapped = (DatabaseQuery) queryImpl.getDatabaseQueryInternal().clone();
+        if (queryImpl.lockMode != null){
+            ((ObjectLevelReadQuery)unwrapped).setLockModeType(queryImpl.lockMode.name(), getServerSession());
         }
         if (unwrapped.isReadQuery()){
-            ((ReadQuery)unwrapped).setInternalMax((((QueryImpl)query).getMaxResults()));
+            ((ReadQuery)unwrapped).setInternalMax((queryImpl.getMaxResultsInternal()));
         }
         this.getServerSession().addQuery(name, unwrapped, true);
     }
@@ -649,11 +651,11 @@ public class EntityManagerFactoryImpl implements EntityManagerFactory, Persisten
         throw new PersistenceException(ExceptionLocalization.buildMessage("unable_to_unwrap_jpa", new String[]{EntityManagerFactory.class.getName(),cls.getName()}));
     }
 
-
-    // TODO: JPA 2.1 API
     public <T> void addNamedEntityGraph(String graphName, EntityGraph<T> entityGraph) {
-        // TODO: JPA 2.1 functionality
-        throw new RuntimeException("Not implemented ... WIP ...");
+        AttributeGroup group = ((EntityGraphImpl)entityGraph).getAttributeGroup().clone();
+        group.setName(graphName);
+        this.getServerSession().getAttributeGroups().put(graphName, group);
+        this.getServerSession().getDescriptor(((EntityGraphImpl)entityGraph).getClassType()).addAttributeGroup(group);
     }
 
 }

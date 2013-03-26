@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 1998, 2012 Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1998, 2013 Oracle and/or its affiliates. All rights reserved.
  * This program and the accompanying materials are made available under the
  * terms of the Eclipse Public License v1.0 and Eclipse Distribution License v. 1.0
  * which accompanies this distribution.
@@ -38,6 +38,7 @@ import org.eclipse.persistence.jaxb.javamodel.JavaModelInput;
 import org.eclipse.persistence.jaxb.javamodel.reflection.JavaClassImpl;
 import org.eclipse.persistence.jaxb.xmlmodel.JavaAttribute;
 import org.eclipse.persistence.jaxb.xmlmodel.JavaType;
+import org.eclipse.persistence.jaxb.xmlmodel.XmlNamedObjectGraph;
 import org.eclipse.persistence.jaxb.xmlmodel.XmlAbstractNullPolicy;
 import org.eclipse.persistence.jaxb.xmlmodel.XmlAccessType;
 import org.eclipse.persistence.jaxb.xmlmodel.XmlAnyAttribute;
@@ -47,6 +48,7 @@ import org.eclipse.persistence.jaxb.xmlmodel.XmlBindings;
 import org.eclipse.persistence.jaxb.xmlmodel.XmlElement;
 import org.eclipse.persistence.jaxb.xmlmodel.XmlElementRef;
 import org.eclipse.persistence.jaxb.xmlmodel.XmlElementRefs;
+import org.eclipse.persistence.jaxb.xmlmodel.XmlElementWrapper;
 import org.eclipse.persistence.jaxb.xmlmodel.XmlElements;
 import org.eclipse.persistence.jaxb.xmlmodel.XmlEnum;
 import org.eclipse.persistence.jaxb.xmlmodel.XmlEnumValue;
@@ -297,6 +299,22 @@ public class XMLProcessor {
                     // handle @XmlDiscriminatorNode override
                     if (javaType.getXmlDiscriminatorNode() != null) {
                         info.setXmlDiscriminatorNode(javaType.getXmlDiscriminatorNode());
+                    }
+                    // handle @NamedObjectGraph/@NamedObjectGraphs override
+                    if (javaType.getXmlNamedObjectGraphs() != null) {
+                        List<XmlNamedObjectGraph> currentGraphs = info.getObjectGraphs();
+                        for(XmlNamedObjectGraph nextGraph:javaType.getXmlNamedObjectGraphs().getXmlNamedObjectGraph()) {
+                            //check to see if a graph with the same name already exists
+                            //if so, remove it and replace it with the one from xml.
+                            //if not, add the new one
+                            for(XmlNamedObjectGraph nextExistingGraph: currentGraphs) {
+                                if(nextGraph.getName().equals(nextExistingGraph.getName())) {
+                                    currentGraphs.remove(nextExistingGraph);
+                                    break;
+                                }
+                            }
+                        }
+                        currentGraphs.addAll(javaType.getXmlNamedObjectGraphs().getXmlNamedObjectGraph());
                     }
                     // handle @XmlDiscriminatorValue override
                     if (javaType.getXmlDiscriminatorValue() != null) {
@@ -701,7 +719,7 @@ public class XMLProcessor {
      */
     private Property processXmlInverseReference(XmlInverseReference xmlInverseReference, Property oldProperty, TypeInfo info) {
         resetProperty(oldProperty, info);
-        oldProperty.setInverseReference(true);
+        oldProperty.setInverseReference(true, false);
         oldProperty.setInverseReferencePropertyName(xmlInverseReference.getMappedBy());
         if (xmlInverseReference.getXmlAccessMethods() != null) {
             oldProperty.setInverseReferencePropertyGetMethodName(xmlInverseReference.getXmlAccessMethods().getGetMethod());
@@ -851,6 +869,12 @@ public class XMLProcessor {
         if (xmlAnyElement.getXmlElementRefs() != null) {
             oldProperty.setXmlElementRefs(xmlAnyElement.getXmlElementRefs().getXmlElementRef());
             oldProperty.setIsReference(true);
+            
+            boolean required = true;
+            for (XmlElementRef eltRef : xmlAnyElement.getXmlElementRefs().getXmlElementRef()) {
+                required = required && eltRef.isRequired();
+            }
+            oldProperty.setIsRequired(required);
             if (xmlAnyElement.getXmlElementRefs().isSetXmlMixed()) {
                 oldProperty.setMixedContent(xmlAnyElement.getXmlElementRefs().isXmlMixed());
             }
@@ -1044,6 +1068,12 @@ public class XMLProcessor {
                 typeInfo.setIDProperty(null);
             }
         }
+        
+        if(xmlElement.getXmlInverseReference() != null){
+        	String mappedBy = xmlElement.getXmlInverseReference().getMappedBy();
+        	oldProperty.setInverseReference(true, true);
+        	oldProperty.setInverseReferencePropertyName(mappedBy);
+        }
 
         // handle xml-idref
         oldProperty.setIsXmlIdRef(xmlElement.isXmlIdref());
@@ -1082,7 +1112,11 @@ public class XMLProcessor {
             // no xml-path, so use name/namespace from xml-element, and process wrapper
             name = xmlElement.getName();
             namespace = xmlElement.getNamespace();
-            if (xmlElement.getXmlElementWrapper() != null) {
+            XmlElementWrapper xmlElementWrapper = xmlElement.getXmlElementWrapper();
+            if (xmlElementWrapper != null) {
+                if (DEFAULT.equals(xmlElementWrapper.getName())) {
+                    xmlElementWrapper.setName(typeInfo.getXmlNameTransformer().transformElementName(oldProperty.getPropertyName()));
+                }
                 oldProperty.setXmlElementWrapper(xmlElement.getXmlElementWrapper());
                 if(oldProperty.isMap()){
                 	name = xmlElement.getXmlElementWrapper().getName();
@@ -1309,6 +1343,7 @@ public class XMLProcessor {
         eltRefs.add(xmlElementRef);
         oldProperty.setXmlElementRefs(eltRefs);
         oldProperty.setIsReference(true);
+        oldProperty.setIsRequired(xmlElementRef.isRequired());
         
         // handle XmlAdapter
         if (xmlElementRef.getXmlJavaTypeAdapter() != null) {
@@ -1360,12 +1395,15 @@ public class XMLProcessor {
         resetProperty(oldProperty, info);
 
         List<XmlElementRef> eltRefs = new ArrayList<XmlElementRef>();
+        boolean required = true;
         for (XmlElementRef eltRef : xmlElementRefs.getXmlElementRef()) {
             eltRefs.add(eltRef);
+            required = required && eltRef.isRequired();
         }
 
         oldProperty.setXmlElementRefs(eltRefs);
         oldProperty.setIsReference(true);
+        oldProperty.setIsRequired(required);
         
         // handle XmlAdapter
         if (xmlElementRefs.getXmlJavaTypeAdapter() != null) {

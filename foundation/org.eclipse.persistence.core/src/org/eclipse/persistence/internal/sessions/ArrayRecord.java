@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 1998, 2010 Oracle. All rights reserved.
+ * Copyright (c) 1998, 2013 Oracle and/or its affiliates. All rights reserved.
  * This program and the accompanying materials are made available under the 
  * terms of the Eclipse Public License v1.0 and Eclipse Distribution License v. 1.0 
  * which accompanies this distribution. 
@@ -12,6 +12,7 @@
  ******************************************************************************/  
 package org.eclipse.persistence.internal.sessions;
 
+import java.io.StringWriter;
 import java.util.*;
 import org.eclipse.persistence.internal.helper.*;
 import org.eclipse.persistence.sessions.DatabaseRecord;
@@ -65,7 +66,6 @@ public class ArrayRecord extends DatabaseRecord {
      * Clear the contents of the row.
      */
     public void clear() {
-        checkValues();
         this.fieldsArray = null;
         this.valuesArray = null;
         super.clear();
@@ -251,10 +251,11 @@ public class ArrayRecord extends DatabaseRecord {
      * replaces the value at index with value
      */
     public void replaceAt(Object value, int index) {
-        checkValues();
-        this.fieldsArray = null;
-        this.valuesArray = null;
-        super.replaceAt(value, index);
+        if (this.valuesArray != null) {
+            this.valuesArray[index] = value;
+        } else {
+            super.replaceAt(value, index);
+        }
     }
 
     protected void setFields(Vector fields) {
@@ -280,6 +281,28 @@ public class ArrayRecord extends DatabaseRecord {
             return this.fields.size();
         } else {
             return this.fieldsArray.length;            
+        }
+    }
+
+    @Override
+    public String toString() {
+        if (this.valuesArray != null) {
+            StringWriter writer = new StringWriter();
+            writer.write(Helper.getShortClassName(getClass()));
+            writer.write("(");
+    
+            for (int index = 0; index < this.fieldsArray.length; index++) {
+                writer.write(Helper.cr());
+                writer.write("\t");
+                writer.write(String.valueOf(this.fieldsArray[index]));
+                writer.write(" => ");
+                writer.write(String.valueOf(this.valuesArray[index]));
+            }
+            writer.write(")");
+    
+            return writer.toString();
+        } else {
+            return super.toString();
         }
     }
 }

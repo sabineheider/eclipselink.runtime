@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2012 Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, 2013 Oracle and/or its affiliates. All rights reserved.
  * This program and the accompanying materials are made available under the 
  * terms of the Eclipse Public License v1.0 and Eclipse Distribution License v. 1.0 
  * which accompanies this distribution. 
@@ -276,10 +276,10 @@ public class QueryImpl {
      * @return the number of entities updated or deleted
      */
     public int executeUpdate() {
+        // bug51411440: need to throw IllegalStateException if query
+        // executed on closed em
+        this.entityManager.verifyOpenWithSetRollbackOnly();
         try {
-            // bug51411440: need to throw IllegalStateException if query
-            // executed on closed em
-            entityManager.verifyOpen();
             setAsSQLModifyQuery();
             // bug:4294241, only allow modify queries - UpdateAllQuery preferred
             if (!(getDatabaseQueryInternal() instanceof ModifyQuery)) {
@@ -297,9 +297,15 @@ public class QueryImpl {
             }
             Integer changedRows = (Integer) getActiveSession().executeQuery(databaseQuery, parameterValues);
             return changedRows.intValue();
-        } catch (RuntimeException e) {
+        } catch (PersistenceException exception) {
             setRollbackOnly();
-            throw e;
+            throw exception;
+        } catch (IllegalStateException exception) {
+            setRollbackOnly();
+            throw exception;
+        }catch (RuntimeException exception) {
+            setRollbackOnly();
+            throw new PersistenceException(exception);
         }
     }
 
@@ -368,7 +374,7 @@ public class QueryImpl {
             }
         } else {
             setRollbackOnly();
-            return e;
+            return new PersistenceException(e);
         }
     }
 
@@ -420,18 +426,13 @@ public class QueryImpl {
      *             if not a Java Persistence query language SELECT query
      */
     public LockModeType getLockMode() {
-        try {
-            entityManager.verifyOpen();
+        entityManager.verifyOpen();
 
-            if (!getDatabaseQueryInternal().isObjectLevelReadQuery()) {
-                throw new IllegalStateException(ExceptionLocalization.buildMessage("invalid_lock_query", (Object[]) null));
-            }
-
-            return this.lockMode;
-        } catch (RuntimeException e) {
-            setRollbackOnly();
-            throw e;
+        if (!getDatabaseQueryInternal().isObjectLevelReadQuery()) {
+            throw new IllegalStateException(ExceptionLocalization.buildMessage("invalid_lock_query", (Object[]) null));
         }
+
+        return this.lockMode;
     }
 
     /**
@@ -440,10 +441,10 @@ public class QueryImpl {
      * @return a list of the results
      */
     public List getResultList() {
+        // bug51411440: need to throw IllegalStateException if query
+        // executed on closed em
+        this.entityManager.verifyOpenWithSetRollbackOnly();
         try {
-            // bug51411440: need to throw IllegalStateException if query
-            // executed on closed em
-            this.entityManager.verifyOpen();
             setAsSQLReadQuery();
             propagateResultProperties();
             // bug:4297903, check container policy class and throw exception if
@@ -467,9 +468,15 @@ public class QueryImpl {
             return (List) executeReadQuery();
         } catch (LockTimeoutException exception) {
             throw exception;
-        } catch (RuntimeException exception) {
+        } catch (PersistenceException exception) {
             setRollbackOnly();
             throw exception;
+        } catch (IllegalStateException exception) {
+            setRollbackOnly();
+            throw exception;
+        } catch (RuntimeException exception) {
+            setRollbackOnly();
+            throw new PersistenceException(exception);
         }
     }
  
@@ -495,10 +502,10 @@ public class QueryImpl {
      */
     public Object getSingleResult() {
         boolean rollbackOnException = true;
+        // bug51411440: need to throw IllegalStateException if query
+        // executed on closed em
+        this.entityManager.verifyOpenWithSetRollbackOnly();
         try {
-            // bug51411440: need to throw IllegalStateException if query
-            // executed on closed em
-            entityManager.verifyOpen();
             setAsSQLReadQuery();
             propagateResultProperties();
             // This API is used to return non-List results, so no other validation is done.
@@ -526,11 +533,17 @@ public class QueryImpl {
             }
         } catch (LockTimeoutException exception) {
             throw exception;
-        } catch (RuntimeException exception) {
+        } catch (PersistenceException exception) {
             if (rollbackOnException) {
                 setRollbackOnly();
             }
             throw exception;
+        } catch (IllegalStateException exception) {
+            setRollbackOnly();
+            throw exception;
+        } catch (RuntimeException exception) {
+            setRollbackOnly();
+            throw new PersistenceException(exception);
         }
     }
 
@@ -598,6 +611,7 @@ public class QueryImpl {
      * @since Java Persistence API 2.0
      */
     public int getFirstResult() {
+        entityManager.verifyOpenWithSetRollbackOnly();
         if (this.firstResultIndex == UNDEFINED) {
             return 0;
         }
@@ -698,7 +712,7 @@ public class QueryImpl {
     public static String getParameterId(Parameter param){
         Integer id= param.getPosition();
         if (id == null ){
-            return String.valueOf(param.getName());
+            return String.valueOf(((ParameterExpressionImpl)param).getInternalName());
         }
         return String.valueOf(id);
     }
@@ -712,6 +726,7 @@ public class QueryImpl {
      * @return boolean indicating whether parameter has been bound
      */
     public boolean isBound(Parameter<?> param) {
+        entityManager.verifyOpenWithSetRollbackOnly();
         if (param == null)
             return false;
         return this.parameterValues.containsKey(getParameterId(param));
@@ -828,9 +843,18 @@ public class QueryImpl {
      * @since Java Persistence API 2.0
      */
     public int getMaxResults() {
+        entityManager.verifyOpenWithSetRollbackOnly();
         if (this.maxResults == UNDEFINED) {
             return Integer.MAX_VALUE;
         }
+        return this.maxResults;
+    }
+
+    /**
+     * @see javax.persistence.Query#getMaxResults()
+     * @since Java Persistence API 2.0
+     */
+    public int getMaxResultsInternal() {
         return this.maxResults;
     }
 
@@ -973,6 +997,7 @@ public class QueryImpl {
      * @since Java Persistence 2.0
      */
     public Map<String, Object> getHints() {
+        entityManager.verifyOpenWithSetRollbackOnly();
         return (Map<String, Object>) getDatabaseQueryInternal().getProperty(QueryHintsHandler.QUERY_HINT_PROPERTY);
     }
 
@@ -981,19 +1006,15 @@ public class QueryImpl {
      * @since Java Persistence 2.0
      */
     public <T> Parameter<T> getParameter(String name, Class<T> type) {
-        try {
-            entityManager.verifyOpen();
-            Parameter param = (Parameter) getInternalParameters().get(name);
-            if (param == null) {
-                throw new IllegalArgumentException(ExceptionLocalization.buildMessage("NO_PARAMETER_WITH_NAME", new Object[] { name, this.databaseQuery }));
-            } else if (param.getParameterType() != null && type != null && !type.isAssignableFrom(param.getParameterType())){
-                throw new IllegalArgumentException(ExceptionLocalization.buildMessage("INCORRECT_PARAMETER_TYPE", new Object[] { name, this.databaseQuery }));
-            }
-            return param;
-        } catch (RuntimeException e) {
-            setRollbackOnly();
-            throw e;
+        //don't rollback transaction on error
+        entityManager.verifyOpen();
+        Parameter param = (Parameter) getInternalParameters().get(name);
+        if (param == null) {
+            throw new IllegalArgumentException(ExceptionLocalization.buildMessage("NO_PARAMETER_WITH_NAME", new Object[] { name, this.databaseQuery }));
+        } else if (param.getParameterType() != null && type != null && !type.isAssignableFrom(param.getParameterType())){
+            throw new IllegalArgumentException(ExceptionLocalization.buildMessage("INCORRECT_PARAMETER_TYPE", new Object[] { name, type }));
         }
+        return param;
     }
 
     /**
@@ -1001,19 +1022,15 @@ public class QueryImpl {
      * @since Java Persistence 2.0
      */
     public <T> Parameter<T> getParameter(int position, Class<T> type) {
-        try {
-            entityManager.verifyOpen();
-            Parameter param = (Parameter) getInternalParameters().get(String.valueOf(position));
-            if (param == null) {
-                throw new IllegalArgumentException(ExceptionLocalization.buildMessage("NO_PARAMETER_WITH_INDEX", new Object[] { position, this.databaseQuery }));
-            } else if (param.getParameterType() != null && type != null && !type.isAssignableFrom(param.getParameterType())){
-                throw new IllegalArgumentException(ExceptionLocalization.buildMessage("INCORRECT_PARAMETER_TYPE", new Object[] { position, this.databaseQuery }));
-            }
-            return param;
-        } catch (RuntimeException e) {
-            setRollbackOnly();
-            throw e;
+        //don't rollback transaction on error
+        entityManager.verifyOpen();
+        Parameter param = (Parameter) getInternalParameters().get(String.valueOf(position));
+        if (param == null) {
+            throw new IllegalArgumentException(ExceptionLocalization.buildMessage("NO_PARAMETER_WITH_INDEX", new Object[] { position, this.databaseQuery }));
+        } else if (param.getParameterType() != null && type != null && !type.isAssignableFrom(param.getParameterType())){
+            throw new IllegalArgumentException(ExceptionLocalization.buildMessage("INCORRECT_PARAMETER_TYPE", new Object[] { position, type }));
         }
+        return param;
     }
 
     /**
@@ -1021,17 +1038,13 @@ public class QueryImpl {
      * @since Java Persistence 2.0
      */
     public Parameter<?> getParameter(String name) {
-        try {
-            entityManager.verifyOpen();
-            Parameter param = (Parameter) getInternalParameters().get(name);
-            if (param == null) {
-                throw new IllegalArgumentException(ExceptionLocalization.buildMessage("NO_PARAMETER_WITH_NAME", new Object[] { name, this.databaseQuery }));
-            }
-            return param;
-        } catch (RuntimeException e) {
-            setRollbackOnly();
-            throw e;
+        //don't rollback transaction on error
+        entityManager.verifyOpen();
+        Parameter param = (Parameter) getInternalParameters().get(name);
+        if (param == null) {
+            throw new IllegalArgumentException(ExceptionLocalization.buildMessage("NO_PARAMETER_WITH_NAME", new Object[] { name, this.databaseQuery }));
         }
+        return param;
     }
 
     /**
@@ -1039,17 +1052,13 @@ public class QueryImpl {
      * @since Java Persistence 2.0
      */
     public Parameter<?> getParameter(int position) {
-        try {
-            entityManager.verifyOpen();
-            Parameter param = (Parameter) getInternalParameters().get(String.valueOf(position));
-            if (param == null) {
-                throw new IllegalArgumentException(ExceptionLocalization.buildMessage("NO_PARAMETER_WITH_INDEX", new Object[] { position, this.databaseQuery }));
-            }
-            return param;
-        } catch (RuntimeException e) {
-            setRollbackOnly();
-            throw e;
+        //don't rollback transaction on error
+        entityManager.verifyOpen();
+        Parameter param = (Parameter) getInternalParameters().get(String.valueOf(position));
+        if (param == null) {
+            throw new IllegalArgumentException(ExceptionLocalization.buildMessage("NO_PARAMETER_WITH_INDEX", new Object[] { position, this.databaseQuery }));
         }
+        return param;
     }
 
     /**
@@ -1059,6 +1068,11 @@ public class QueryImpl {
     public <T> T getParameterValue(Parameter<T> param) {
         if (param == null)
             throw new IllegalArgumentException(ExceptionLocalization.buildMessage("PARAMETER_NILL_NOT_FOUND"));
+        
+        ParameterExpressionImpl<T> parameter = (ParameterExpressionImpl<T>) this.getInternalParameters().get(getParameterId(param));
+        if (parameter == null || !parameter.getParameterType().equals(param.getParameterType())) {
+            throw new IllegalArgumentException(ExceptionLocalization.buildMessage("NO_PARAMETER_WITH_NAME", new Object[] { param.toString(), this.databaseQuery }));
+        }
 
         return (T) this.getParameterValue(getParameterId(param));
     }
@@ -1072,23 +1086,17 @@ public class QueryImpl {
      *             if the parameter has not been been bound
      */
     public Object getParameterValue(String name) {
-        try {
-            entityManager.verifyOpen();
-            if (!getInternalParameters().containsKey(name)) {
-                throw new IllegalArgumentException(ExceptionLocalization.buildMessage("NO_PARAMETER_WITH_NAME", new Object[] { name, this.databaseQuery }));
-            }
-            if (!this.parameterValues.containsKey(name)) { // must check for
-                                                           // key. get() would
-                                                           // return negative
-                                                           // for value == null.
-                throw new IllegalStateException(ExceptionLocalization.buildMessage("NO_VALUE_BOUND", new Object[] { name }));
-            }
-            return this.parameterValues.get(name);
-
-        } catch (RuntimeException e) {
-            setRollbackOnly();
-            throw e;
+        entityManager.verifyOpen();//don't rollback transaction
+        if (!getInternalParameters().containsKey(name)) {
+            throw new IllegalArgumentException(ExceptionLocalization.buildMessage("NO_PARAMETER_WITH_NAME", new Object[] { name, this.databaseQuery }));
         }
+        if (!this.parameterValues.containsKey(name)) { // must check for
+            // key. get() would
+            // return negative
+            // for value == null.
+            throw new IllegalStateException(ExceptionLocalization.buildMessage("NO_VALUE_BOUND", new Object[] { name }));
+        }
+        return this.parameterValues.get(name);
     }
 
     /**
@@ -1100,6 +1108,7 @@ public class QueryImpl {
      *             if the parameter has not been been bound
      */
     public Object getParameterValue(int position) {
+        entityManager.verifyOpen();//don't rollback transaction
         String param = String.valueOf(position);
         
         if (!getInternalParameters().containsKey(param)) {
@@ -1118,6 +1127,7 @@ public class QueryImpl {
      * @since Java Persistence 2.0
      */
     public Set<Parameter<?>> getParameters() {
+        entityManager.verifyOpen();//don't rollback transaction
         return new HashSet(getInternalParameters().values());
     }
 

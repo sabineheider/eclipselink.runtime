@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 1998, 2012 Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1998, 2013 Oracle and/or its affiliates. All rights reserved.
  * This program and the accompanying materials are made available under the
  * terms of the Eclipse Public License v1.0 and Eclipse Distribution License v. 1.0
  * which accompanies this distribution.
@@ -74,10 +74,11 @@ import org.eclipse.persistence.sessions.remote.DistributedSession;
  * ...<br>
  * </code>
  */
-public class XMLInverseReferenceMapping extends AggregateMapping implements InverseReferenceMapping<AbstractSession, AttributeAccessor, ContainerPolicy, ClassDescriptor, DatabaseField, XMLRecord>, ContainerMapping {
+public class XMLInverseReferenceMapping extends AggregateMapping implements InverseReferenceMapping<AbstractSession, AttributeAccessor, ContainerPolicy, ClassDescriptor, DatabaseField, DatabaseMapping, XMLRecord>, ContainerMapping {
 
     private String mappedBy;
     private ContainerPolicy containerPolicy;
+    private DatabaseMapping inlineMapping;    
 
     @Override
     public boolean isXMLMapping() {
@@ -88,13 +89,28 @@ public class XMLInverseReferenceMapping extends AggregateMapping implements Inve
     public void initialize(AbstractSession session) throws DescriptorException {
         super.initialize(session);
         setFields(new Vector<DatabaseField> ());
+        if(inlineMapping != null){        	
+        	inlineMapping.initialize(session);
+        }
     }
 
+    public void preInitialize(AbstractSession session){
+    	super.preInitialize(session);
+    	if(inlineMapping != null){
+    		inlineMapping.setDescriptor(this.descriptor);
+    		inlineMapping.preInitialize(session);
+    	}
+    }
+    
     @Override
     public void postInitialize(AbstractSession session) throws DescriptorException {
         // Get the corresponding mapping from the reference descriptor and set up the
         // inverse mapping.
         DatabaseMapping mapping = getReferenceDescriptor().getMappingForAttributeName(this.mappedBy);
+
+        if (mapping instanceof XMLInverseReferenceMapping) {        
+        	mapping  = ((XMLInverseReferenceMapping)mapping).getInlineMapping();
+        }
 
         if (mapping instanceof XMLCompositeCollectionMapping) {
             XMLCompositeCollectionMapping oppositeMapping = (XMLCompositeCollectionMapping) mapping;
@@ -146,6 +162,10 @@ public class XMLInverseReferenceMapping extends AggregateMapping implements Inve
                 }
             }
         }
+        
+    	if(inlineMapping != null){
+    		inlineMapping.postInitialize(session);
+    	}
     }
 
     public String getMappedBy() {
@@ -245,7 +265,15 @@ public class XMLInverseReferenceMapping extends AggregateMapping implements Inve
         this.containerPolicy = new MapContainerPolicy(concreteClass);
     }
 
-    @Override
+    public DatabaseMapping getInlineMapping() {
+        return inlineMapping;
+    }
+
+    public void setInlineMapping(DatabaseMapping inlineMapping) {
+        this.inlineMapping = inlineMapping;
+    }
+    
+	@Override
     public void writeSingleValue(Object value, Object object, XMLRecord record, AbstractSession session) {
     }
 

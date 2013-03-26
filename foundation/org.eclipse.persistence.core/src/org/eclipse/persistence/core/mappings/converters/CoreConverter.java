@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2012 Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, 2013 Oracle and/or its affiliates. All rights reserved.
  * This program and the accompanying materials are made available under the
  * terms of the Eclipse Public License v1.0 and Eclipse Distribution License v. 1.0
  * which accompanies this distribution.
@@ -15,6 +15,11 @@ package org.eclipse.persistence.core.mappings.converters;
 import org.eclipse.persistence.core.mappings.CoreMapping;
 import org.eclipse.persistence.core.sessions.CoreSession;
 
+/**
+ * INTERNAL
+ * A abstraction of converter capturing behavior common to all persistence 
+ * types.
+ */
 public interface CoreConverter<
     MAPPING extends CoreMapping, 
     SESSION extends CoreSession> {

@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 1998, 2012 Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1998, 2013 Oracle and/or its affiliates. All rights reserved.
  * This program and the accompanying materials are made available under the
  * terms of the Eclipse Public License v1.0 and Eclipse Distribution License v. 1.0
  * which accompanies this distribution.
@@ -333,10 +333,11 @@ public class EntityManagerImpl implements org.eclipse.persistence.jpa.JpaEntityM
     public void addOpenQuery(QueryImpl query) {
         getOpenQueriesMap().put(query, query);
     	
-        // If there is an open transaction, tag the query to it to be closed
+        // If there is an open entity transaction, tag the query to it to be closed
         // on commit or rollback.
-        if (getTransaction() != null) {
-            ((EntityTransactionImpl) getTransaction()).addOpenQuery(query);
+        Object transaction = checkForTransaction(false);        
+        if (transaction != null && transaction instanceof EntityTransactionImpl) {
+            ((EntityTransactionImpl) transaction).addOpenQuery(query);
         }
     }
     
@@ -846,11 +847,8 @@ public class EntityManagerImpl implements org.eclipse.persistence.jpa.JpaEntityM
                 } catch (org.eclipse.persistence.exceptions.OptimisticLockException eclipselinkOLE) {
                     throw new OptimisticLockException(eclipselinkOLE);
                 }
-            } catch (RuntimeException e) {
-                if (EclipseLinkException.class.isAssignableFrom(e.getClass())) {
-                    throw new PersistenceException(e);
-                }
-                throw e;
+            } catch (EclipseLinkException e) {
+                throw new PersistenceException(e);
             }
         } catch (RuntimeException e) {
             setRollbackOnly();
@@ -1003,7 +1001,8 @@ public class EntityManagerImpl implements org.eclipse.persistence.jpa.JpaEntityM
     public void refresh(Object entity, LockModeType lockMode, Map<String, Object> properties) {
         try {
             verifyOpen();
-            UnitOfWorkImpl uow = getActivePersistenceContext(checkForTransaction(false));
+            boolean validateExistence =  (lockMode != null && !lockMode.equals(LockModeType.NONE));
+            UnitOfWorkImpl uow = getActivePersistenceContext(checkForTransaction(validateExistence));
             if (!contains(entity, uow)) {
                 throw new IllegalArgumentException(ExceptionLocalization.buildMessage("cant_refresh_not_managed_object", new Object[] { entity }));
             }
@@ -1888,6 +1887,16 @@ public class EntityManagerImpl implements org.eclipse.persistence.jpa.JpaEntityM
             throw new IllegalStateException(ExceptionLocalization.buildMessage("operation_on_closed_entity_manager"));
         }
     }
+    
+    /**
+     * used to save having to constantly use a try/catch to call setRollbackOnly 
+     */
+    public void verifyOpenWithSetRollbackOnly() {
+        if (!this.isOpen || !this.factory.isOpen()) {
+            setRollbackOnly();
+            throw new IllegalStateException(ExceptionLocalization.buildMessage("operation_on_closed_entity_manager"));
+        }
+    }
 
     public RepeatableWriteUnitOfWork getActivePersistenceContext(Object txn) {
         // use local uow as it will be local to this EM and not on the txn
@@ -1916,19 +1925,16 @@ public class EntityManagerImpl implements org.eclipse.persistence.jpa.JpaEntityM
             this.extendedPersistenceContext.setShouldOrderUpdates(this.shouldOrderUpdates);
             this.extendedPersistenceContext.setShouldCascadeCloneToJoinedRelationship(true);
             this.extendedPersistenceContext.setShouldStoreByPassCache(this.cacheStoreBypass);
-            if (txn != null  && (syncType == null || syncType.equals(SynchronizationType.SYNCHRONIZED))) {
-                // if there is an active txn we must register with it on
-                // creation of PC
-                transaction.registerUnitOfWorkWithTxn(this.extendedPersistenceContext);
+            if (txn != null) {
+                // if there is a txn, it means we have been marked to join with it.  
+                // All that is left is to register the UOW with the transaction
+                transaction.registerIfRequired(this.extendedPersistenceContext);
             }
             if (client.shouldLog(SessionLog.FINER, SessionLog.TRANSACTION)) {
                 client.log(SessionLog.FINER, SessionLog.TRANSACTION, "acquire_unit_of_work_with_argument", String.valueOf(System.identityHashCode(this.extendedPersistenceContext)));
             }
         }
         if (this.beginEarlyTransaction && txn != null && !this.extendedPersistenceContext.isInTransaction()) {
-            if (!this.isJoinedToTransaction()){
-                throw new IllegalStateException(ExceptionLocalization.buildMessage("cannot_read_through_txn_for_unsynced_pc"));
-            }
             // gf3334, force persistence context early transaction
             this.extendedPersistenceContext.beginEarlyTransaction();
         }
@@ -1944,6 +1950,7 @@ public class EntityManagerImpl implements org.eclipse.persistence.jpa.JpaEntityM
      * rolled back or after clear method was called).
      */
     public void setProperties(Map properties) {
+        verifyOpenWithSetRollbackOnly();
         this.properties = properties;
         if(this.hasActivePersistenceContext()) {
             this.extendedPersistenceContext.getParent().setProperties(properties);
@@ -1959,6 +1966,7 @@ public class EntityManagerImpl implements org.eclipse.persistence.jpa.JpaEntityM
      * @see EntityManager#setProperty(java.lang.String, java.lang.Object)
      */
     public void setProperty(String propertyName, Object value) {
+        verifyOpenWithSetRollbackOnly();
         if(propertyName == null || value == null) {
             return;
         }
@@ -2000,19 +2008,23 @@ public class EntityManagerImpl implements org.eclipse.persistence.jpa.JpaEntityM
     }
 
     /**
-     * Return the current transaction object. If validateExistence is true throw
-     * an error if there is no transaction, otherwise return null.
+     * Return the current, joined transaction object. If validateExistence is true throw
+     * an error if there is no joined transaction, otherwise return null.
      */
     protected Object checkForTransaction(boolean validateExistence) {
-        return this.transaction.checkForTransaction(validateExistence);
+        Object txn = this.transaction.checkForTransaction(validateExistence);
+        //use transaction.isJoinedToTransaction EM is open verification.
+        if ((txn != null) && !transaction.isJoinedToTransaction(this.extendedPersistenceContext)) {
+            if (validateExistence) {
+                throw new TransactionRequiredException(ExceptionLocalization.buildMessage("cannot_use_transaction_on_unsynced_pc"));
+            }
+            return null;
+        }
+        return txn;
     }
 
     public boolean shouldFlushBeforeQuery() {
-        Object foundTransaction = checkForTransaction(false);
-        if ((foundTransaction != null) && transaction.shouldFlushBeforeQuery(getActivePersistenceContext(foundTransaction))) {
-            return true;
-        }
-        return false;
+        return (checkForTransaction(false)!= null);
     }
 
     /**
@@ -2036,13 +2048,11 @@ public class EntityManagerImpl implements org.eclipse.persistence.jpa.JpaEntityM
     public void joinTransaction() {
         try {
             verifyOpen();
-            checkForTransaction(true);
-            if(this.hasActivePersistenceContext()) {
-                transaction.registerUnitOfWorkWithTxn(this.extendedPersistenceContext);
-            } else {
-                // extendedPersistenceContext will be registered with transaction when created.
-                transaction.verifyRegisterUnitOfWorkWithTxn();
-            }
+            //An EntityTransactionWrapper throws an exception, while
+            //if using JTA and extendedPersistenceContext is active, then this will have the UOW register with the transaction.
+            //If there is no context, the JTATransactionWrapper will register a listener with the transaction to keep track of when
+            //it completes.  Any UOW created while the transaction is still active will then automatically register/join with it.
+            transaction.registerIfRequired(this.extendedPersistenceContext);
         } catch (RuntimeException e) {
             setRollbackOnly();
             throw e;
@@ -2109,6 +2119,14 @@ public class EntityManagerImpl implements org.eclipse.persistence.jpa.JpaEntityM
 
     protected void setJTATransactionWrapper() {
         transaction = new JTATransactionWrapper(this);
+        //if this is not unsynchronized and there is a transaction, this EM needs to join it
+        if (syncType == null || syncType.equals(SynchronizationType.SYNCHRONIZED)) {
+            //use the wrapper's checkForTransaction as this.checkForTransaction does an unnecessary isJoined check
+            if (transaction.checkForTransaction(false) != null) {
+                //extendedPersistenceContext should be null, which will force the wrapper to register with the transaction
+                transaction.registerIfRequired(this.extendedPersistenceContext);
+            }
+        }
     }
 
     /**
@@ -2511,10 +2529,8 @@ public class EntityManagerImpl implements org.eclipse.persistence.jpa.JpaEntityM
      * @since Java Persistence 2.0
      */
     public CriteriaBuilder getCriteriaBuilder() {
+        verifyOpenWithSetRollbackOnly();
         // defer to the parent entityManagerFactory
-        if(!this.isOpen()) {
-            throw new IllegalStateException(ExceptionLocalization.buildMessage("operation_on_closed_entity_manager"));
-        }
         return this.factory.getCriteriaBuilder();
     }
     
@@ -2591,10 +2607,8 @@ public class EntityManagerImpl implements org.eclipse.persistence.jpa.JpaEntityM
      * @since Java Persistence 2.0
      */
     public Metamodel getMetamodel() {
+        verifyOpenWithSetRollbackOnly();
         // defer to the parent entityManagerFactory
-        if(!this.isOpen()) {
-            throw new IllegalStateException(ExceptionLocalization.buildMessage("operation_on_closed_entity_manager"));
-        }
         return this.factory.getMetamodel();
     }
 
@@ -2827,10 +2841,7 @@ public class EntityManagerImpl implements org.eclipse.persistence.jpa.JpaEntityM
 
     public boolean isJoinedToTransaction() {
         verifyOpen();
-        if(this.hasActivePersistenceContext()) {
-                return transaction.isJoinedToTransaction(this.extendedPersistenceContext);
-        }
-        return false;
+        return transaction.isJoinedToTransaction(this.extendedPersistenceContext);
     }
 
     public <T> EntityGraph<T> createEntityGraph(Class<T> rootType) {
@@ -2844,7 +2855,7 @@ public class EntityManagerImpl implements org.eclipse.persistence.jpa.JpaEntityM
     public EntityGraph<?> createEntityGraph(String graphName) {
         AttributeGroup group = this.getAbstractSession().getAttributeGroups().get(graphName);
         if (group == null){
-            throw new IllegalArgumentException(ExceptionLocalization.buildMessage("no_entity_graph_of_name", new Object[]{graphName}));
+            return null;
         }
         ClassDescriptor descriptor = this.getAbstractSession().getDescriptor(group.getType());
         return new EntityGraphImpl(group.clone(), descriptor);
@@ -2879,4 +2890,12 @@ public class EntityManagerImpl implements org.eclipse.persistence.jpa.JpaEntityM
         return result;
     }
 
+    /**
+     * INTERNAL:
+     * Tracks if this EntityManager should automatically associate with the transaction or not
+     * @return the syncType
+     */
+    public SynchronizationType getSyncType() {
+        return syncType;
+    }
 }

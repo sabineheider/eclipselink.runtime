@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2012 Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, 2013 Oracle and/or its affiliates. All rights reserved.
  * This program and the accompanying materials are made available under the
  * terms of the Eclipse Public License v1.0 and Eclipse Distribution License v. 1.0
  * which accompanies this distribution.
@@ -19,6 +19,7 @@ import org.eclipse.persistence.oxm.CharacterEscapeHandler;
 import org.eclipse.persistence.oxm.XMLMarshalListener;
 import org.eclipse.persistence.oxm.attachment.XMLAttachmentMarshaller;
 import org.eclipse.persistence.platform.xml.XMLTransformer;
+import org.xml.sax.ErrorHandler;
 
 /**
  *
@@ -34,6 +35,7 @@ public abstract class Marshaller<
     protected CONTEXT context;
     private String encoding;
     private boolean equalUsingIdenity;
+    private ErrorHandler errorHandler;
     private boolean formattedOutput;
     private String indentString;
     protected NAMESPACE_PREFIX_MAPPER mapper;
@@ -56,6 +58,7 @@ public abstract class Marshaller<
         this.context = (CONTEXT) marshaller.getContext();
         this.encoding = marshaller.getEncoding();
         this.equalUsingIdenity = marshaller.isEqualUsingIdenity();
+        this.errorHandler = marshaller.getErrorHandler();
         this.formattedOutput = marshaller.isFormattedOutput();
         this.indentString = marshaller.getIndentString();
         this.mapper = (NAMESPACE_PREFIX_MAPPER) marshaller.getNamespacePrefixMapper();
@@ -92,6 +95,10 @@ public abstract class Marshaller<
      */
     public String getEncoding() {
         return encoding;
+    }
+
+    public ErrorHandler getErrorHandler() {
+        return errorHandler;
     }
 
     /**
@@ -162,6 +169,8 @@ public abstract class Marshaller<
      */
     public abstract boolean isReduceAnyArrays();
 
+    public abstract boolean isWrapperAsCollectionName();
+
     /**
      * Set this Marshaller's CharacterEscapeHandler.
      * @since 2.3.3
@@ -184,6 +193,10 @@ public abstract class Marshaller<
      */
     public void setEqualUsingIdenity(boolean equalUsingIdenity) {
         this.equalUsingIdenity = equalUsingIdenity;
+    }
+
+    public void setErrorHandler(ErrorHandler errorHandler) {
+        this.errorHandler = errorHandler;
     }
 
     /**

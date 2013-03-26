@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 1998, 2012 Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1998, 2013 Oracle and/or its affiliates. All rights reserved.
  * This program and the accompanying materials are made available under the 
  * terms of the Eclipse Public License v1.0 and Eclipse Distribution License v. 1.0 
  * which accompanies this distribution. 
@@ -50,10 +50,13 @@ import org.eclipse.persistence.oxm.XMLMarshaller;
 import org.eclipse.persistence.oxm.record.MarshalRecord;
 import org.eclipse.persistence.oxm.record.XMLEventWriterRecord;
 import org.eclipse.persistence.oxm.record.XMLStreamWriterRecord;
+import org.eclipse.persistence.core.queries.CoreAttributeGroup;
 import org.eclipse.persistence.descriptors.ClassDescriptor;
 import org.eclipse.persistence.exceptions.XMLMarshalException;
 import org.eclipse.persistence.internal.core.helper.CoreClassConstants;
+import org.eclipse.persistence.internal.helper.ClassConstants;
 import org.eclipse.persistence.internal.jaxb.many.ManyValue;
+import org.eclipse.persistence.internal.jaxb.ObjectGraphImpl;
 import org.eclipse.persistence.internal.jaxb.WrappedValue;
 import org.eclipse.persistence.internal.oxm.Constants;
 import org.eclipse.persistence.internal.oxm.Root;
@@ -281,6 +284,8 @@ public class JAXBMarshaller implements javax.xml.bind.Marshaller {
             return xmlMarshaller.getValueWrapper(); 
         } else if (MarshallerProperties.JSON_NAMESPACE_SEPARATOR.equals(key)) {
             return xmlMarshaller.getNamespaceSeparator();
+        } else if (MarshallerProperties.JSON_WRAPPER_AS_ARRAY_NAME.equals(key)) {
+            return xmlMarshaller.isWrapperAsCollectionName();
         } else if (SUN_CHARACTER_ESCAPE_HANDLER.equals(key) || SUN_JSE_CHARACTER_ESCAPE_HANDLER.equals(key)) {
             if (xmlMarshaller.getCharacterEscapeHandler() instanceof CharacterEscapeHandlerWrapper) {
                 CharacterEscapeHandlerWrapper wrapper = (CharacterEscapeHandlerWrapper) xmlMarshaller.getCharacterEscapeHandler();
@@ -293,6 +298,12 @@ public class JAXBMarshaller implements javax.xml.bind.Marshaller {
             	return null;
             }
             return wrapper.getPrefixMapper();
+        } else if (MarshallerProperties.OBJECT_GRAPH.equals(key)) {
+            Object graph = xmlMarshaller.getMarshalAttributeGroup();
+            if(graph instanceof CoreAttributeGroup) {
+                return new ObjectGraphImpl((CoreAttributeGroup)graph);
+            }
+            return graph;
         }
         throw new PropertyException(key);
     }
@@ -728,7 +739,9 @@ public class JAXBMarshaller implements javax.xml.bind.Marshaller {
             } else if (MarshallerProperties.JSON_MARSHAL_EMPTY_COLLECTIONS.equals(key)){
             	xmlMarshaller.setMarshalEmptyCollections((Boolean) value);
             } else if (MarshallerProperties.JSON_REDUCE_ANY_ARRAYS.equals(key)){
-            	xmlMarshaller.setReduceAnyArrays((Boolean) value);
+                xmlMarshaller.setReduceAnyArrays((Boolean) value);
+            } else if (MarshallerProperties.JSON_WRAPPER_AS_ARRAY_NAME.equals(key)) {
+                xmlMarshaller.setWrapperAsCollectionName((Boolean) value);
             } else if (MarshallerProperties.CHARACTER_ESCAPE_HANDLER.equals(key)) {
                 xmlMarshaller.setCharacterEscapeHandler((CharacterEscapeHandler) value);
             } else if (SUN_CHARACTER_ESCAPE_HANDLER.equals(key) || SUN_JSE_CHARACTER_ESCAPE_HANDLER.equals(key)) {
@@ -778,6 +791,16 @@ public class JAXBMarshaller implements javax.xml.bind.Marshaller {
                  	throw new PropertyException(key, Constants.EMPTY_STRING);                	
                  }
                 xmlMarshaller.setNamespaceSeparator((Character)value);
+            } else if(MarshallerProperties.OBJECT_GRAPH.equals(key)) {
+                if(value == null) {
+                    xmlMarshaller.setMarshalAttributeGroup(null);
+                } else if(value instanceof ObjectGraphImpl) {
+                    xmlMarshaller.setMarshalAttributeGroup(((ObjectGraphImpl)value).getAttributeGroup());
+                } else if(value.getClass() == ClassConstants.STRING){
+                    xmlMarshaller.setMarshalAttributeGroup(value);
+                } else {
+                    throw org.eclipse.persistence.exceptions.JAXBException.invalidValueForObjectGraph(value);
+                }
             } else {
                 throw new PropertyException(key, value);
             }

@@ -139,8 +139,8 @@ import org.eclipse.persistence.internal.jpa.metadata.converters.AbstractConverte
 import org.eclipse.persistence.internal.jpa.metadata.converters.StructConverterMetadata;
 import org.eclipse.persistence.internal.jpa.metadata.listeners.EntityListenerMetadata;
 import org.eclipse.persistence.internal.jpa.metadata.partitioning.AbstractPartitioningMetadata;
-import org.eclipse.persistence.internal.jpa.metadata.queries.NamedQueryMetadata;
 import org.eclipse.persistence.internal.jpa.metadata.queries.ComplexTypeMetadata;
+import org.eclipse.persistence.internal.jpa.metadata.queries.NamedQueryMetadata;
 import org.eclipse.persistence.internal.jpa.metadata.queries.SQLResultSetMappingMetadata;
 import org.eclipse.persistence.internal.jpa.metadata.sequencing.GeneratedValueMetadata;
 import org.eclipse.persistence.internal.jpa.metadata.sequencing.SequenceGeneratorMetadata;
@@ -1754,6 +1754,15 @@ public class MetadataProject {
                 m_autoApplyConvertAccessors.put(converterAccessor.getAttributeClassification(), converterAccessor);
             }
         }
+        
+        // 4 - Pre-process the embeddables.
+        for (EmbeddableAccessor embeddable : getEmbeddableAccessors()) {
+            // If the accessor hasn't been processed yet, then process it. An
+            // EmbeddableAccessor is normally fast tracked if it is a reference.
+            if (! embeddable.isPreProcessed()) {
+                embeddable.preProcess();
+            }
+        }
     }
     
     /**
@@ -1999,7 +2008,19 @@ public class MetadataProject {
      */
     public boolean usesMultitenantSharedEmf() {
         return m_multitenantSharedEmf;
-    }    
+    }
+
+    /**
+     * INTERNAL:
+     * Return true if the entity manager factory for this project has any virtual classes
+     * 
+     */
+    public boolean hasVirtualClasses() {
+        if ((m_virtualClasses != null) && (!m_virtualClasses.isEmpty())) {
+            return true;
+        }
+        return false;
+    }
  }
 
 

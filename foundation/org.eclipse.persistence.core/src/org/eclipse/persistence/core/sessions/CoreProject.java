@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2012 Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, 2013 Oracle and/or its affiliates. All rights reserved.
  * This program and the accompanying materials are made available under the
  * terms of the Eclipse Public License v1.0 and Eclipse Distribution License v. 1.0
  * which accompanies this distribution.
@@ -16,6 +16,10 @@ import java.io.Serializable;
 import java.util.List;
 import org.eclipse.persistence.core.descriptors.CoreDescriptor;
 
+/**
+ * INTERNAL
+ * A abstraction of project capturing behavior common to all persistence types.
+ */
 public abstract class CoreProject <
    DESCRIPTOR extends CoreDescriptor,
    LOGIN extends CoreLogin,
@@ -32,7 +36,7 @@ public abstract class CoreProject <
     public abstract void convertClassNamesToClasses(ClassLoader classLoader);
 
     /**
-     * PUBLIC:
+     * INTERNAL:
      * Factory method to create session.
      * This returns an implementor of the CoreSession interface, which can be used to login
      * and add descriptors from other projects.  The CoreSession interface however should be used for

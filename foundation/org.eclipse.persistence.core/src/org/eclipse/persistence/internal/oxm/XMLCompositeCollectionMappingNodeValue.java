@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 1998, 2012 Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1998, 2013 Oracle and/or its affiliates. All rights reserved.
  * This program and the accompanying materials are made available under the 
  * terms of the Eclipse Public License v1.0 and Eclipse Distribution License v. 1.0 
  * which accompanies this distribution. 
@@ -16,6 +16,8 @@ import java.util.List;
 
 import javax.xml.namespace.QName;
 
+import org.eclipse.persistence.core.queries.CoreAttributeGroup;
+import org.eclipse.persistence.core.queries.CoreAttributeItem;
 import org.eclipse.persistence.exceptions.XMLMarshalException;
 import org.eclipse.persistence.internal.core.queries.CoreContainerPolicy;
 import org.eclipse.persistence.internal.core.sessions.CoreAbstractSession;
@@ -29,6 +31,7 @@ import org.eclipse.persistence.internal.oxm.record.MarshalRecord;
 import org.eclipse.persistence.internal.oxm.record.ObjectMarshalContext;
 import org.eclipse.persistence.internal.oxm.record.UnmarshalRecord;
 import org.eclipse.persistence.internal.oxm.record.XMLReader;
+import org.eclipse.persistence.internal.oxm.record.XMLRecord;
 import org.eclipse.persistence.internal.oxm.record.deferred.CompositeCollectionMappingContentHandler;
 import org.eclipse.persistence.oxm.mappings.nullpolicy.AbstractNullPolicy;
 import org.eclipse.persistence.oxm.mappings.nullpolicy.XMLNullRepresentationType;
@@ -48,11 +51,19 @@ import org.xml.sax.SAXException;
 public class XMLCompositeCollectionMappingNodeValue extends XMLRelationshipMappingNodeValue implements ContainerValue {
     private CompositeCollectionMapping xmlCompositeCollectionMapping;
     private int index = -1;
+    private boolean isInverseReference;
 
     public XMLCompositeCollectionMappingNodeValue(CompositeCollectionMapping xmlCompositeCollectionMapping) {
         super();
         this.xmlCompositeCollectionMapping = xmlCompositeCollectionMapping;
     }
+    
+    
+    public XMLCompositeCollectionMappingNodeValue(CompositeCollectionMapping xmlCompositeCollectionMapping, boolean isInverse) {
+        this(xmlCompositeCollectionMapping);
+        this.isInverseReference = isInverse;
+    }
+
 
     public boolean marshal(XPathFragment xPathFragment, MarshalRecord marshalRecord, Object object, CoreAbstractSession session, NamespaceResolver namespaceResolver) {
         if (xmlCompositeCollectionMapping.isReadOnly()) {
@@ -78,6 +89,16 @@ public class XMLCompositeCollectionMappingNodeValue extends XMLRelationshipMappi
         	return marshalRecord.emptyCollection(xPathFragment, namespaceResolver, xmlCompositeCollectionMapping.getWrapperNullPolicy() != null);
         }
         marshalRecord.startCollection(); 
+        
+        int size =marshalRecord.getCycleDetectionStack().size(); 
+        //when writing the collection need to see if any of the objects we are writing are in the parent collection inverse ref
+        if((isInverseReference || xmlCompositeCollectionMapping.getInverseReferenceMapping() !=null)&& size >= 2){
+            Object owner = marshalRecord.getCycleDetectionStack().get(size - 2);
+        	if(cp.contains(owner, collection, session)){
+        		return false;
+        	}
+         }
+        iterator = cp.iteratorFor(collection);
         while (cp.hasNext(iterator)) {
             Object objectValue = cp.next(iterator, session);
             marshalSingleValue(xPathFragment, marshalRecord, object, objectValue, session, namespaceResolver, ObjectMarshalContext.getInstance());
@@ -208,15 +229,15 @@ public class XMLCompositeCollectionMappingNodeValue extends XMLRelationshipMappi
 
                return;
         }
-        // convert the value - if necessary
         Object objectValue = unmarshalRecord.getChildRecord().getCurrentObject();
-        objectValue = xmlCompositeCollectionMapping.convertDataValueToObjectValue(objectValue, unmarshalRecord.getSession(), unmarshalRecord.getUnmarshaller());
-        unmarshalRecord.addAttributeValue(this, objectValue, collection);
 
         InverseReferenceMapping inverseReferenceMapping = xmlCompositeCollectionMapping.getInverseReferenceMapping();
         if(null != inverseReferenceMapping) {
             if(inverseReferenceMapping.getContainerPolicy() == null) {
-                inverseReferenceMapping.getAttributeAccessor().setAttributeValueInObject(objectValue, unmarshalRecord.getCurrentObject());
+            	Object currentValue = inverseReferenceMapping.getAttributeAccessor().getAttributeValueFromObject(objectValue);
+                if( !isInverseReference || (currentValue == null && isInverseReference)) {
+                   inverseReferenceMapping.getAttributeAccessor().setAttributeValueInObject(objectValue, unmarshalRecord.getCurrentObject());
+                }
             } else {
                 Object backpointerContainer = inverseReferenceMapping.getAttributeAccessor().getAttributeValueFromObject(objectValue);
                 if(backpointerContainer == null) {
@@ -226,6 +247,11 @@ public class XMLCompositeCollectionMappingNodeValue extends XMLRelationshipMappi
                 inverseReferenceMapping.getContainerPolicy().addInto(unmarshalRecord.getCurrentObject(), backpointerContainer, unmarshalRecord.getSession());
             }
         }
+        
+        // convert the value - if necessary
+        objectValue = xmlCompositeCollectionMapping.convertDataValueToObjectValue(objectValue, unmarshalRecord.getSession(), unmarshalRecord.getUnmarshaller());
+        unmarshalRecord.addAttributeValue(this, objectValue, collection);
+
         unmarshalRecord.setChildRecord(null);
 
     }
@@ -280,9 +306,21 @@ public class XMLCompositeCollectionMappingNodeValue extends XMLRelationshipMappi
             writeExtraNamespaces(extraNamespaces, marshalRecord, session);
 
             marshalRecord.addXsiTypeAndClassIndicatorIfRequired(descriptor, (Descriptor) xmlCompositeCollectionMapping.getReferenceDescriptor(), (Field)xmlCompositeCollectionMapping.getField(), false);
-            
+            CoreAttributeGroup group = marshalRecord.getCurrentAttributeGroup();
+            CoreAttributeGroup nestedGroup = XMLRecord.DEFAULT_ATTRIBUTE_GROUP;
+            CoreAttributeItem item = group.getItem(getMapping().getAttributeName());
+            if(item != null) {
+                if(item.getGroups() != null) {
+                    nestedGroup = item.getGroup(descriptor.getJavaClass());
+                } 
+                if(nestedGroup == null) {
+                    nestedGroup = item.getGroup() == null?XMLRecord.DEFAULT_ATTRIBUTE_GROUP:item.getGroup();
+                }
+            }
+            marshalRecord.pushAttributeGroup(nestedGroup);
             objectBuilder.buildRow(marshalRecord, value, session, marshaller, xPathFragment);
             marshalRecord.afterContainmentMarshal(object, value);
+            marshalRecord.popAttributeGroup();
             marshalRecord.endElement(xPathFragment, namespaceResolver);
             marshalRecord.removeExtraNamespacesFromNamespaceResolver(extraNamespaces, session);    
         } else {            
@@ -336,6 +374,11 @@ public class XMLCompositeCollectionMappingNodeValue extends XMLRelationshipMappi
      */
     public boolean isDefaultEmptyContainer() {
         return xmlCompositeCollectionMapping.isDefaultEmptyContainer();
+    }
+
+    @Override
+    public boolean isWrapperAllowedAsCollectionName() {
+        return true;
     }
 
 }

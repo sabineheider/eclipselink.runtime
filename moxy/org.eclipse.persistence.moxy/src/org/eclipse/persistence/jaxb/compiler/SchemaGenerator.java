@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 1998, 2012 Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1998, 2013 Oracle and/or its affiliates. All rights reserved.
  * This program and the accompanying materials are made available under the 
  * terms of the Eclipse Public License v1.0 and Eclipse Distribution License v. 1.0 
  * which accompanies this distribution. 
@@ -457,8 +457,8 @@ public class SchemaGenerator {
             TypeDefParticle parentCompositor = compositor;
             boolean isChoice = (parentCompositor instanceof Choice);
             ComplexType parentType = type;
-            // ignore transient and inverse reference properties
-            if (!next.isTransient() && !next.isInverseReference()) {
+            // ignore transient and inverse reference/non-writeable properties          
+            if(!next.isTransient() && !(next.isInverseReference() && !next.isWriteableInverseReference())){          
                 // handle xml extensions
                 if (next.isVirtual()) {
                     boolean extSchemaAny = false;
@@ -1893,6 +1893,8 @@ public class SchemaGenerator {
             if (property.getGenericType() != null) {
                 element.setMinOccurs(Occurs.ZERO);
                 element.setMaxOccurs(Occurs.UNBOUNDED);
+            }else if(!property.isRequired()){
+            	element.setMinOccurs(Occurs.ZERO);
             }
             compositor.addElement(element);
         } else {
@@ -1900,6 +1902,9 @@ public class SchemaGenerator {
             Choice choice = new Choice();
             if (property.getGenericType() != null) {
                 choice.setMaxOccurs(Occurs.UNBOUNDED);
+            }
+            if (!property.isRequired()){
+            	choice.setMinOccurs(Occurs.ZERO);
             }
             for (ElementDeclaration elementDecl : referencedElements) {
                 Element element = new Element();

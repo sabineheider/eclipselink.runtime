@@ -11,6 +11,8 @@
  *     tware - initial implementation 
  *     02/06/2013-2.5 Guy Pelletier 
  *       - 382503: Use of @ConstructorResult with createNativeQuery(sqlString, resultSetMapping) results in NullPointerException
+ *     03/01/2013-2.5 Chris Delahunt
+ *       - 402147: JPA query methods need to throw IllegalStateException if EM was closed
  ******************************************************************************/  
 package org.eclipse.persistence.testing.tests.jpa21.advanced;
 
@@ -22,6 +24,7 @@ import javax.persistence.EntityManager;
 import javax.persistence.EntityManagerFactory;
 import javax.persistence.LockModeType;
 import javax.persistence.Parameter;
+import javax.persistence.PersistenceException;
 import javax.persistence.Query;
 import javax.persistence.TypedQuery;
 import javax.persistence.criteria.CriteriaBuilder;
@@ -67,6 +70,7 @@ public class QueryTestSuite extends JUnitTestCase {
         suite.addTest(new QueryTestSuite("testCriteriaGetJoinType"));
         suite.addTest(new QueryTestSuite("testConstructorResultQuery"));
         suite.addTest(new QueryTestSuite("testCriteriaIsCorelated"));
+        suite.addTest(new QueryTestSuite("testQueryExceptionOnClosedEM"));
         return suite;
     }    
     
@@ -188,7 +192,11 @@ public class QueryTestSuite extends JUnitTestCase {
                 }
                 
                 fail("Null pointer exception caught on constructor result query.");
-            } catch (QueryException e) {
+            } catch (PersistenceException exc) {// QueryException.INVALID_CONTAINER_CLASS
+                if (! (exc.getCause() instanceof QueryException)) {
+                    throw exc;
+                }
+                QueryException e = (QueryException)exc.getCause();
                 assertTrue(e.getErrorCode() == QueryException.COLUMN_RESULT_NOT_FOUND);
             } finally {
                 closeEntityManager(em);
@@ -251,6 +259,89 @@ public class QueryTestSuite extends JUnitTestCase {
             fail("proper exception not thrown when calling getCorrelationParent on non-correlated from.");
         } catch (IllegalStateException e){}
     }
+    
+    
+    /* bug 402147 - JPA query methods need to throw IllegalStateException if EM was closed
+     * Tests the following methods:
+     *   getParameter(String name, Class<T> type)
+     *   getParameter(int position, Class<T> type)
+     *   getParameter(String name)
+     *   getParameter(int position)
+     *   getParameterValue(String name)
+     *   getParameterValue(int position)
+     *   getParameters()
+     *   getFirstResult()
+     *   isBound(Parameter<?> param)
+     *   getMaxResults()
+     */
+    public void testQueryExceptionOnClosedEM() {
+        EntityManager em = createEntityManager();
+        Query query = em.createQuery("Select e from Employee e");
+        em.close();
+        List<String> failedMethodList = new ArrayList();
+        try{
+            query.getLockMode();
+            failedMethodList.add("getLockMode");
+        } catch (IllegalStateException e){}
+        try{
+            query.getParameter("doesntmatter");
+            failedMethodList.add("getParameter(String)");
+        } catch (IllegalStateException e){}
+        try{
+            query.getParameter(1);
+            failedMethodList.add("getParameter(int)");
+        } catch (IllegalStateException e){}
+        try{
+            query.getParameter("doesntmatter", Employee.class);
+            failedMethodList.add("getParameter(String, class)");
+        } catch (IllegalStateException e){}
+        try{
+            query.getParameter(1, Employee.class);
+            failedMethodList.add("getParameter(int, class)");
+        } catch (IllegalStateException e){}
+        try{
+            query.getParameterValue("doesntmatter");
+            failedMethodList.add("getParameterValue(String)");
+        } catch (IllegalStateException e){}
+        try{
+            query.getParameterValue(1);
+            failedMethodList.add("getParameterValue(int)");
+        } catch (IllegalStateException e){}
+        try{
+            query.getParameters();
+            failedMethodList.add("getParameters()");
+        } catch (IllegalStateException e){}
+        try{
+            query.getFirstResult();
+            failedMethodList.add("getFirstResult()");
+        } catch (IllegalStateException e){}
+        try{
+            query.isBound(null);
+            failedMethodList.add("isBound(Parameter)");
+        } catch (IllegalStateException e){}
+        try{
+            query.getMaxResults();
+            failedMethodList.add("getMaxResults()");
+        } catch (IllegalStateException e){}
+        try{
+            query.getHints();
+            failedMethodList.add("getHints()");
+        } catch (IllegalStateException e){}
+        
+        if (!failedMethodList.isEmpty()) {
+            //format the string of methods that failed
+            String methodList = null;
+            for (String methodName: failedMethodList) {
+                if (methodList==null) {
+                    methodList = methodName;
+                } else {
+                    methodList = methodList +", "+methodName;
+                }
+            }
+            this.fail("Expected IllegalStateException not thrown from Query methods "+methodList);
+        }
+    }
+    
     
     @Override
     public String getPersistenceUnitName() {

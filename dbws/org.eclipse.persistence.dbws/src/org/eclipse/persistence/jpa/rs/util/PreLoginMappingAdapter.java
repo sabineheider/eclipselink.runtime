@@ -125,7 +125,7 @@ public class PreLoginMappingAdapter extends SessionEventListener {
                                         if (inverseDescriptor != null) {
                                             DatabaseMapping inverseMapping = inverseDescriptor.getMappingForAttributeName(jpaMapping.getMappedBy());
                                             if (inverseMapping != null) {
-                                                convertMappingToXMLInverseReferenceMapping(inverseDescriptor, inverseMapping, jpaMapping.getAttributeName());
+                                                convertMappingToXMLInverseReferenceMapping(inverseDescriptor, inverseMapping, jpaMapping);
                                             }
                                         }
                                     }
@@ -170,12 +170,28 @@ public class PreLoginMappingAdapter extends SessionEventListener {
                     if (mapping.isAbstractCompositeObjectMapping() || mapping.isAbstractCompositeCollectionMapping()) {
                         if (jpaDescriptor != null) {
                             DatabaseMapping dbMapping = jpaDescriptor.getMappingForAttributeName(mapping.getAttributeName());
-                            if ((dbMapping != null) && (dbMapping instanceof ForeignReferenceMapping)) {
+                            if ((dbMapping instanceof ForeignReferenceMapping)) {
                                 ForeignReferenceMapping jpaMapping = (ForeignReferenceMapping) dbMapping;
                                 if (jpaMapping != null) {
                                     ClassDescriptor jaxbDescriptor = project.getDescriptorForAlias(jpaMapping.getDescriptor().getAlias());
                                     if (jaxbDescriptor != null) {
-                                        convertMappingToXMLChoiceMapping(jaxbDescriptor, jpaMapping, cl);
+                                        convertMappingToXMLChoiceMapping(jaxbDescriptor, jpaMapping, cl, jpaSession);
+                                    }
+                                }
+                            }
+                        } else if (mapping instanceof XMLCompositeObjectMapping) {
+                            // Fix for Bug 403113 - JPA-RS Isn't Serializing an Embeddable defined in an ElementCollection to JSON Correctly 
+                            // add choice mapping for one-to-one relationships within embeddables
+                            // Based on (http://wiki.eclipse.org/EclipseLink/Examples/JPA/NoSQL#Step_2_:_Map_the_data), 
+                            // the mappedBy option on relationships is not supported for NoSQL data, so no need to add inverse mapping
+                            XMLCompositeObjectMapping jpaMapping = (XMLCompositeObjectMapping) mapping;
+                            if (jpaMapping != null) {
+                                ClassDescriptor jaxbDescriptor = project.getDescriptorForAlias(jpaMapping.getDescriptor().getAlias());
+                                if (jaxbDescriptor != null) {
+                                    Class clazz = jpaMapping.getReferenceClass();
+                                    if (clazz != null) {
+                                        if ((jpaSession.getDescriptor(clazz) != null) && (jpaSession.getDescriptor(clazz).isEISDescriptor()))
+                                            convertMappingToXMLChoiceMapping(jaxbDescriptor, jpaMapping, cl, jpaSession);
                                     }
                                 }
                             }
@@ -185,6 +201,8 @@ public class PreLoginMappingAdapter extends SessionEventListener {
             }
         }
     }
+    
+    
 
     /**
      * Update the targetMapping to have the same accessor as the originMapping
@@ -216,9 +234,13 @@ public class PreLoginMappingAdapter extends SessionEventListener {
      * @param mapping
      * @param mappedBy
      */
-    private static void convertMappingToXMLInverseReferenceMapping(ClassDescriptor jaxbDescriptor, DatabaseMapping mapping, String mappedBy) {
+    private static void convertMappingToXMLInverseReferenceMapping(ClassDescriptor jaxbDescriptor, DatabaseMapping mapping, ForeignReferenceMapping jpaMapping) {
         if ((mapping != null) && (jaxbDescriptor != null)) {
             if (!(mapping.isXMLMapping())) {
+                return;
+            }
+            
+            if ((jpaMapping.isAggregateCollectionMapping()) || (jpaMapping.isAggregateMapping())) {
                 return;
             }
 
@@ -226,7 +248,8 @@ public class PreLoginMappingAdapter extends SessionEventListener {
             copyAccessorToMapping(mapping, jaxbInverseMapping);
             jaxbInverseMapping.setProperties(mapping.getProperties());
             jaxbInverseMapping.setIsReadOnly(mapping.isReadOnly());
-            jaxbInverseMapping.setMappedBy(mappedBy);
+            jaxbInverseMapping.setMappedBy(jpaMapping.getAttributeName());
+
             if (mapping.isAbstractCompositeCollectionMapping()) {
                 jaxbInverseMapping.setContainerPolicy(mapping.getContainerPolicy());
                 jaxbInverseMapping.setReferenceClass(((XMLCompositeCollectionMapping) mapping).getReferenceClass());
@@ -246,42 +269,67 @@ public class PreLoginMappingAdapter extends SessionEventListener {
      * @param jpaMapping the jpa mapping
      * @param cl the classloader
      */
-    private static void convertMappingToXMLChoiceMapping(ClassDescriptor jaxbDescriptor, DatabaseMapping jpaMapping, ClassLoader cl) {
+    @SuppressWarnings("rawtypes")
+    private static void convertMappingToXMLChoiceMapping(ClassDescriptor jaxbDescriptor, DatabaseMapping jpaMapping, ClassLoader cl, AbstractSession jpaSession) {
         if ((jpaMapping != null) && (jaxbDescriptor != null)) {
+            if ((jpaMapping instanceof ForeignReferenceMapping) && ((jpaMapping.isAggregateCollectionMapping()) || (jpaMapping.isAggregateMapping()))) {
+                // Fix for Bug 402385 - JPA-RS: ClassNotFound when using ElementCollection of Embeddables
+                // Aggregates don't have identity to create links, thus no weaved REST adapters to insert choice mappings   
+                return;
+            }
+
             String attributeName = jpaMapping.getAttributeName();
             DatabaseMapping jaxbMapping = jaxbDescriptor.getMappingForAttributeName(jpaMapping.getAttributeName());
             if (!(jaxbMapping.isXMLMapping() && (jaxbMapping.isAbstractCompositeCollectionMapping() || jaxbMapping.isAbstractCompositeObjectMapping()))) {
                 return;
             }
-            String adapterClassName = RestAdapterClassWriter.constructClassNameForReferenceAdapter(jpaMapping.getReferenceDescriptor().getJavaClassName());
-            try {
-                if (jaxbMapping.isAbstractCompositeObjectMapping()) {
-                    XMLChoiceObjectMapping xmlChoiceMapping = new XMLChoiceObjectMapping();
-                    xmlChoiceMapping.setAttributeName(attributeName);
-                    copyAccessorToMapping(jaxbMapping, xmlChoiceMapping);
-                    xmlChoiceMapping.setProperties(jaxbMapping.getProperties());
 
-                    xmlChoiceMapping.addChoiceElement(attributeName, Link.class);
-                    xmlChoiceMapping.addChoiceElement(attributeName, jpaMapping.getReferenceDescriptor().getJavaClass());
+            ClassDescriptor refDesc = null;
 
-                    xmlChoiceMapping.setConverter(new XMLJavaTypeConverter(Class.forName(adapterClassName, true, cl)));
-                    jaxbDescriptor.removeMappingForAttributeName(jaxbMapping.getAttributeName());
-                    jaxbDescriptor.addMapping(xmlChoiceMapping);
-                } else if (jaxbMapping.isAbstractCompositeCollectionMapping()) {
-                    XMLChoiceCollectionMapping xmlChoiceMapping = new XMLChoiceCollectionMapping();
-                    xmlChoiceMapping.setAttributeName(attributeName);
-                    copyAccessorToMapping(jaxbMapping, xmlChoiceMapping);
-                    xmlChoiceMapping.setProperties(jaxbMapping.getProperties());
-                    
-                    xmlChoiceMapping.addChoiceElement(attributeName, Link.class);
-                    xmlChoiceMapping.addChoiceElement(attributeName, jpaMapping.getReferenceDescriptor().getJavaClass());
-                    
-                    xmlChoiceMapping.setConverter(new XMLJavaTypeConverter(Class.forName(adapterClassName, true, cl)));
-                    jaxbDescriptor.removeMappingForAttributeName(jaxbMapping.getAttributeName());
-                    jaxbDescriptor.addMapping(xmlChoiceMapping);
+            if (jpaMapping instanceof ForeignReferenceMapping) {
+                Class clazz = ((ForeignReferenceMapping) jpaMapping).getReferenceClass();
+                refDesc = jpaSession.getDescriptor(clazz);
+            } else if (jpaMapping instanceof XMLCompositeObjectMapping) {
+                Class clazz = ((XMLCompositeObjectMapping) jpaMapping).getReferenceClass();
+                refDesc = jpaSession.getDescriptor(clazz);
+            }
+
+            if (refDesc == null) {
+                return;
+            }
+
+            String adapterClassName = RestAdapterClassWriter.constructClassNameForReferenceAdapter(refDesc.getJavaClassName());
+            if (adapterClassName != null) {
+                try {
+                    if (jaxbMapping.isAbstractCompositeObjectMapping()) {
+                        XMLChoiceObjectMapping xmlChoiceMapping = new XMLChoiceObjectMapping();
+                        xmlChoiceMapping.setAttributeName(attributeName);
+                        copyAccessorToMapping(jaxbMapping, xmlChoiceMapping);
+                        xmlChoiceMapping.setProperties(jaxbMapping.getProperties());
+
+                        xmlChoiceMapping.addChoiceElement(attributeName, Link.class);
+                        xmlChoiceMapping.addChoiceElement(attributeName, refDesc.getJavaClass());
+
+                        xmlChoiceMapping.setConverter(new XMLJavaTypeConverter(Class.forName(adapterClassName, true, cl)));
+                        jaxbDescriptor.removeMappingForAttributeName(jaxbMapping.getAttributeName());
+                        jaxbDescriptor.addMapping(xmlChoiceMapping);
+
+                    } else if (jaxbMapping.isAbstractCompositeCollectionMapping()) {
+                        XMLChoiceCollectionMapping xmlChoiceMapping = new XMLChoiceCollectionMapping();
+                        xmlChoiceMapping.setAttributeName(attributeName);
+                        copyAccessorToMapping(jaxbMapping, xmlChoiceMapping);
+                        xmlChoiceMapping.setProperties(jaxbMapping.getProperties());
+
+                        xmlChoiceMapping.addChoiceElement(attributeName, Link.class);
+                        xmlChoiceMapping.addChoiceElement(attributeName, refDesc.getJavaClass());
+
+                        xmlChoiceMapping.setConverter(new XMLJavaTypeConverter(Class.forName(adapterClassName, true, cl)));
+                        jaxbDescriptor.removeMappingForAttributeName(jaxbMapping.getAttributeName());
+                        jaxbDescriptor.addMapping(xmlChoiceMapping);
+                    }
+                } catch (ClassNotFoundException e) {
+                    throw new JPARSException(e.toString());
                 }
-            } catch (ClassNotFoundException e) {
-                throw new JPARSException(e.toString());
             }
         }
     }

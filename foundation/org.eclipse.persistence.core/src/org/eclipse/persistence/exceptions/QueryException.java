@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 1998, 2012 Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1998, 2013 Oracle and/or its affiliates. All rights reserved.
  * This program and the accompanying materials are made available under the 
  * terms of the Eclipse Public License v1.0 and Eclipse Distribution License v. 1.0 
  * which accompanies this distribution. 
@@ -201,6 +201,7 @@ public class QueryException extends ValidationException {
     public static final int NATIVE_SQL_QUERIES_ARE_DISABLED = 6175;
     public final static int EXCEPTION_WHILE_LOADING_CONSTRUCTOR = 6176;
     public final static int COLUMN_RESULT_NOT_FOUND = 6177;
+    public final static int RESULT_SET_ACCESS_OPTIMIZATION_IS_NOT_POSSIBLE = 6178;
     
     /**
      * INTERNAL:
@@ -1617,5 +1618,12 @@ public class QueryException extends ValidationException {
         return queryException;
     }
     
+    public static QueryException resultSetAccessOptimizationIsNotPossible(DatabaseQuery query) {
+        Object[] args = {};
+
+        QueryException queryException = new QueryException(ExceptionMessageGenerator.buildMessage(QueryException.class, RESULT_SET_ACCESS_OPTIMIZATION_IS_NOT_POSSIBLE, args), query);
+        queryException.setErrorCode(RESULT_SET_ACCESS_OPTIMIZATION_IS_NOT_POSSIBLE);
+        return queryException;
+    }
 }
 

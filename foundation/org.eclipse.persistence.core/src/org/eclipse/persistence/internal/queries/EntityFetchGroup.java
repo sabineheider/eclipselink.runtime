@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2011, 2012 Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2011, 2013 Oracle and/or its affiliates. All rights reserved.
  * This program and the accompanying materials are made available under the 
  * terms of the Eclipse Public License v1.0 and Eclipse Distribution License v. 1.0 
  * which accompanies this distribution. 
@@ -18,6 +18,7 @@ package org.eclipse.persistence.internal.queries;
 import java.util.Collection;
 import java.util.Iterator;
 
+import org.eclipse.persistence.core.queries.CoreAttributeGroup;
 import org.eclipse.persistence.internal.localization.ExceptionLocalization;
 import org.eclipse.persistence.internal.sessions.AbstractSession;
 import org.eclipse.persistence.queries.AttributeGroup;
@@ -80,7 +81,7 @@ public class EntityFetchGroup extends FetchGroup {
     }
     
     @Override
-    public void addAttribute(String attributeNameOrPath, AttributeGroup group) {
+    public void addAttribute(String attributeNameOrPath, CoreAttributeGroup group) {
         throw new IllegalStateException(ExceptionLocalization.buildMessage("cannot_update_entity_fetch-group", new Object[]{this, attributeNameOrPath}));
     }
 
@@ -136,7 +137,7 @@ public class EntityFetchGroup extends FetchGroup {
      * EntityFetchGroup.
      */
     @Override
-    public boolean isSupersetOf(AttributeGroup anotherGroup) {
+    public boolean isSupersetOf(CoreAttributeGroup anotherGroup) {
         if (anotherGroup == null) {
             return false;
         }

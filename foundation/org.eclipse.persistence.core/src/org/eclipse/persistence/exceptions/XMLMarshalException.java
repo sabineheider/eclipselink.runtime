@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 1998, 2012 Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1998, 2013 Oracle and/or its affiliates. All rights reserved.
  * This program and the accompanying materials are made available under the 
  * terms of the Eclipse Public License v1.0 and Eclipse Distribution License v. 1.0 
  * which accompanies this distribution. 
@@ -63,6 +63,7 @@ public class XMLMarshalException extends ValidationException {
     public static final int PLATFORM_NOT_SUPPORTED_WITH_JSON_MEDIA_TYPE = 25038;
     public static final int UNMARSHAL_FROM_STRING_FAILED = 25039;
     public static final int MISSING_ID_FOR_IDREF = 25040;
+    public static final int INVALID_ATTRIBUTE_GROUP_NAME = 25041;
 
     // ==========================================================================================
     protected XMLMarshalException(String message) {
@@ -428,5 +429,12 @@ public class XMLMarshalException extends ValidationException {
         XMLMarshalException exception = new XMLMarshalException(ExceptionMessageGenerator.buildMessage(XMLMarshalException.class, MISSING_ID_FOR_IDREF, args));        
         exception.setErrorCode(MISSING_ID_FOR_IDREF);
         return exception;
-    } 
+    }
+    
+    public static XMLMarshalException invalidAttributeGroupName(String groupName, String className) {
+        Object[] args = {groupName, className};
+        XMLMarshalException exception = new XMLMarshalException(ExceptionMessageGenerator.buildMessage(XMLMarshalException.class, INVALID_ATTRIBUTE_GROUP_NAME, args));
+        exception.setErrorCode(INVALID_ATTRIBUTE_GROUP_NAME);
+        return exception;
+    }
 }

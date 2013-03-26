@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 1998, 2012 Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1998, 2013 Oracle and/or its affiliates. All rights reserved.
  * This program and the accompanying materials are made available under the 
  * terms of the Eclipse Public License v1.0 and Eclipse Distribution License v. 1.0 
  * which accompanies this distribution. 
@@ -32,6 +32,7 @@ import org.eclipse.persistence.jaxb.DefaultXMLNameTransformer;
 import org.eclipse.persistence.jaxb.javamodel.Helper;
 import org.eclipse.persistence.jaxb.javamodel.JavaClass;
 
+import org.eclipse.persistence.jaxb.xmlmodel.XmlNamedObjectGraph;
 import org.eclipse.persistence.jaxb.xmlmodel.XmlAccessOrder;
 import org.eclipse.persistence.jaxb.xmlmodel.XmlAccessType;
 import org.eclipse.persistence.jaxb.xmlmodel.XmlVirtualAccessMethods;
@@ -87,6 +88,8 @@ public class TypeInfo {
     private Map<Object, Object> userProperties;
     private List<Property> xmlKeyProperties;
     private List<Property> predicateProperties;
+    
+    private List<XmlNamedObjectGraph> objectGraphs;
 
     private boolean isMixed;
     private boolean isTransient;
@@ -1192,5 +1195,11 @@ public class TypeInfo {
     public void setPackageLevelXmlAccessorFactory(AccessorFactoryWrapper packageLevelXmlAccessorFactory) {
         this.packageLevelXmlAccessorFactory = packageLevelXmlAccessorFactory;
     }
-
+    
+    public List<XmlNamedObjectGraph> getObjectGraphs() {
+        if(this.objectGraphs == null) {
+            this.objectGraphs = new ArrayList<XmlNamedObjectGraph>();
+        }
+        return this.objectGraphs;
+    }
 }

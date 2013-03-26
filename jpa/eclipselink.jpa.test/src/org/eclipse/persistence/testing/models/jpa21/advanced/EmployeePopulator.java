@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2012 Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, 2013 Oracle and/or its affiliates. All rights reserved.
  * This program and the accompanying materials are made available under the 
  * terms of the Eclipse Public License v1.0 and Eclipse Distribution License v. 1.0 
  * which accompanies this distribution. 
@@ -744,6 +744,7 @@ public class EmployeePopulator {
         smallProjectExample8();
         smallProjectExample9();
         smallProjectExample10();
+        runnerExample1();
     }
 
     public StoredProcedureDefinition buildMySQLResultSetProcedure() {
@@ -769,6 +770,24 @@ public class EmployeePopulator {
         StoredProcedureDefinition proc = new StoredProcedureDefinition();
         proc.setName("Delete_All_Responsibilities");
         proc.addStatement("DELETE FROM JPA21_RESPONS");
+        return proc;
+    }
+    
+    public StoredProcedureDefinition buildStoredProcedureReadAddressCity(DatabasePlatform platform) {
+        StoredProcedureDefinition proc = new StoredProcedureDefinition();
+        proc.setName("Read_Address_City");
+        proc.addArgument("address_id_v", Integer.class);
+        proc.addOutputArgument("city_v", String.class);
+        
+        String statement = null;
+        if (platform.isSQLServer() || platform.isSybase()) {
+            // 260263: SQLServer 2005/2008 requires parameter matching in the select clause for stored procedures
+            statement = "SELECT CITY INTO @city_v FROM JPA21_ADDRESS WHERE ADDRESS_ID = @address_id_v";
+        } else {
+            statement = "SELECT CITY INTO city_v FROM JPA21_ADDRESS WHERE (ADDRESS_ID = address_id_v)";
+        }
+        
+        proc.addStatement(statement);
         return proc;
     }
     
@@ -888,8 +907,10 @@ public class EmployeePopulator {
         StoredProcedureDefinition proc = new StoredProcedureDefinition();
         proc.setName("Read_Using_Sys_Cursor");
 
+        proc.addArgument("f_name_v", String.class);
         proc.addOutputArgument("p_recordset", "SYS_REFCURSOR");
-        proc.addStatement("OPEN p_recordset FOR SELECT EMP_ID FROM JPA21_EMPLOYEE ORDER BY EMP_ID");
+        
+        proc.addStatement("OPEN p_recordset FOR SELECT EMP_ID, F_NAME FROM JPA21_EMPLOYEE WHERE F_NAME = f_name_v ORDER BY EMP_ID");
         
         return proc;
     }
@@ -1411,6 +1432,7 @@ public class EmployeePopulator {
         PopulationManager.getDefaultManager().addAllObjectsForClass(Employee.class, allObjects);
         PopulationManager.getDefaultManager().addAllObjectsForClass(SmallProject.class, allObjects);
         PopulationManager.getDefaultManager().addAllObjectsForClass(LargeProject.class, allObjects);
+        PopulationManager.getDefaultManager().addAllObjectsForClass(Runner.class, allObjects);
         unitOfWork.registerAllObjects(allObjects);
         unitOfWork.commit();
         
@@ -1434,6 +1456,7 @@ public class EmployeePopulator {
                 schema.replaceObject(buildStoredProcedureResultSetAndUpdateFromAddress(platform));
                 schema.replaceObject(buildStoredProcedureReadAllAddresses());
                 schema.replaceObject(buildStoredProcedureReadAllEmployees());
+                schema.replaceObject(buildStoredProcedureReadAddressCity(platform));
                 schema.replaceObject(buildStoredProcedureDeleteAllResponsibilities());
                 
                 if (platform.isOracle()) {
@@ -1491,6 +1514,22 @@ public class EmployeePopulator {
 
     protected void registerObject(Object domainObject, String identifier) {
         populationManager.registerObject(domainObject, identifier);
+    }
+    
+    public Runner runnerExample1(){
+        if (containsObject(Runner.class, "0001")){
+            return (Runner)getObject(Runner.class, "0001");
+        }
+        
+        Runner runner = new Runner();
+        runner.setAge(35);
+        runner.setFirstName("John");
+        runner.setLastName("Smith");
+        Shoe shoe = new Shoe("One", "Star");
+        shoe.setRunner(runner);
+        runner.getShoes().put(new ShoeTag("ONESTAR"), shoe);
+        registerObject(runner, "0001");
+        return runner;
     }
 
     public SmallProject smallProjectExample1() {

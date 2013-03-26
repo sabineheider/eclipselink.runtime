@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2012, 2013 Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, 2013, 2013 Oracle and/or its affiliates. All rights reserved.
  * This program and the accompanying materials are made available under the
  * terms of the Eclipse Public License v1.0 and Eclipse Distribution License v. 1.0
  * which accompanies this distribution.
@@ -116,6 +116,23 @@ public final class TableVariableDeclaration extends AbstractExpression {
 		if (identificationVariable != null) {
 			children.add(identificationVariable);
 		}
+	}
+
+	/**
+	 * {@inheritDoc}
+	 */
+	@Override
+	public JPQLQueryBNF findQueryBNF(Expression expression) {
+
+		if ((tableExpression != null) && tableExpression.isAncestor(expression)) {
+			return getQueryBNF(TableExpressionBNF.ID);
+		}
+
+		if ((identificationVariable != null) && identificationVariable.isAncestor(expression)) {
+			return getQueryBNF(IdentificationVariableBNF.ID);
+		}
+
+		return super.findQueryBNF(expression);
 	}
 
 	/**

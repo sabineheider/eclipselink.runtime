@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2012 Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, 2013 Oracle and/or its affiliates. All rights reserved.
  * This program and the accompanying materials are made available under the 
  * terms of the Eclipse Public License v1.0 and Eclipse Distribution License v. 1.0 
  * which accompanies this distribution. 
@@ -57,6 +57,7 @@ import org.eclipse.persistence.exceptions.DatabaseException;
 import org.eclipse.persistence.internal.databaseaccess.Accessor;
 import org.eclipse.persistence.internal.databaseaccess.DatabaseAccessor;
 import org.eclipse.persistence.internal.databaseaccess.DatabaseCall;
+import org.eclipse.persistence.internal.databaseaccess.OutputParameterForCallableStatement;
 import org.eclipse.persistence.internal.helper.DatabaseField;
 import org.eclipse.persistence.internal.jpa.querydef.ParameterExpressionImpl;
 import org.eclipse.persistence.internal.localization.ExceptionLocalization;
@@ -80,6 +81,11 @@ public class StoredProcedureQueryImpl extends QueryImpl implements StoredProcedu
     protected DatabaseCall executeCall;
     protected Statement executeStatement;
     protected int executeResultSetIndex = -1;
+    
+    // If the procedure returns output cursor(s), we'll use them to satisfy
+    // getResultList and getSingleResult calls so keep track of our index.
+    protected int outputCursorIndex = -1;
+    protected boolean isOutputCursorResultSet = false;
     
     /**
      * Base constructor for EJBQueryImpl. Initializes basic variables.
@@ -222,8 +228,7 @@ public class StoredProcedureQueryImpl extends QueryImpl implements StoredProcedu
     }
     
     /**
-     * Build a ResultSetMappingQuery from a sql result set mapping name and a
-     * stored procedure call.
+     * Build a DataReadQuery with the stored procedure call given.
      */
     public static DatabaseQuery buildStoredProcedureQuery(StoredProcedureCall call, Map<String, Object> hints, ClassLoader classLoader, AbstractSession session) {
         DataReadQuery query = new DataReadQuery();
@@ -298,7 +303,6 @@ public class StoredProcedureQueryImpl extends QueryImpl implements StoredProcedu
      * timeout value set and only the statement is rolled back
      * @throws PersistenceException if the query execution exceeds the query 
      * timeout value set and the transaction is rolled back
-     * is rolled back
      */
     public boolean execute() {
         try {
@@ -330,12 +334,26 @@ public class StoredProcedureQueryImpl extends QueryImpl implements StoredProcedu
             
             hasMoreResults = executeCall.getExecuteReturnValue();
             
+            // If execute returned false but we have output cursors then return
+            // true and build the results from the output cursors. 
+            if (!hasMoreResults && getCall().hasOutputCursors()) {
+                hasMoreResults = true;
+                outputCursorIndex = 0;
+                isOutputCursorResultSet = true;
+            }
+            
             return hasMoreResults;
         } catch (LockTimeoutException exception) {
             throw exception;
-        } catch (RuntimeException exception) {
+        } catch (PersistenceException exception) {
             setRollbackOnly();
             throw exception;
+        } catch (IllegalStateException e){
+            setRollbackOnly();
+            throw e;
+        } catch (RuntimeException exception) {
+            setRollbackOnly();
+            throw new PersistenceException(exception);
         } 
     }
     
@@ -367,9 +385,15 @@ public class StoredProcedureQueryImpl extends QueryImpl implements StoredProcedu
             }
         } catch (LockTimeoutException exception) {
             throw exception;
+        } catch (PersistenceException e) {
+            setRollbackOnly();
+            throw e;
+        } catch (IllegalStateException e){
+            setRollbackOnly();
+            throw e;
         } catch (RuntimeException exception) {
             setRollbackOnly();
-            throw exception;
+            throw new PersistenceException(exception);
         } finally {
             close(); // Close the connection once we're done.
         }
@@ -404,21 +428,27 @@ public class StoredProcedureQueryImpl extends QueryImpl implements StoredProcedu
                 Integer parameterType = getCall().getParameterTypes().get(index);
                 String argumentName = getCall().getProcedureArgumentNames().get(index);
                     
-                DatabaseField field;
+                DatabaseField field = null;
                     
                 if (parameterType == getCall().INOUT) {
                     field = (DatabaseField) ((Object[]) parameter)[0];
                 } else if (parameterType == getCall().IN || parameterType == getCall().OUT || parameterType == getCall().OUT_CURSOR) {
                     field = (DatabaseField) parameter;
-                } else {
-                    continue; // not a parameter we care about at this point.
+                } else if (parameterType == getCall().LITERAL) {
+                    if (parameter instanceof OutputParameterForCallableStatement) {
+                        // Case: Oracle OUT_CURSOR after execution.
+                        field = ((OutputParameterForCallableStatement) parameter).getOutputField();
+                    }
                 }
-                        
-                // If the argument name is null then it is a positional parameter.
-                if (argumentName == null) {
-                    parameters.put(field.getName(), new ParameterExpressionImpl(null, field.getType(), Integer.parseInt(field.getName())));
-                } else {
-                    parameters.put(field.getName(), new ParameterExpressionImpl(null, field.getType(), field.getName()));
+                    
+                // If field is not null (one we care about) then add it, otherwise continue.
+                if (field != null) {
+                    // If the argument name is null then it is a positional parameter.
+                    if (argumentName == null) {
+                        parameters.put(field.getName(), new ParameterExpressionImpl(null, field.getType(), Integer.parseInt(field.getName())));
+                    } else {
+                        parameters.put(field.getName(), new ParameterExpressionImpl(null, field.getType(), field.getName()));
+                    }
                 }
                         
                 ++index;
@@ -496,6 +526,9 @@ public class StoredProcedureQueryImpl extends QueryImpl implements StoredProcedu
      */
     @Override
     public List getResultList() {
+        // bug51411440: need to throw IllegalStateException if query
+        // executed on closed em
+        this.entityManager.verifyOpenWithSetRollbackOnly();
         try {
             // If there is no execute statement, the user has not called
             // execute and is simply calling getResultList directly on the query.
@@ -515,13 +548,23 @@ public class StoredProcedureQueryImpl extends QueryImpl implements StoredProcedu
                 }
             } else {
                 if (hasMoreResults()) {
-                    // Build the result records first.
-                    List result = buildResultRecords(executeStatement.getResultSet());
+                    if (isOutputCursorResultSet) {
+                        // Return result set list for the current outputCursorIndex.
+                        List results = (List) getOutputParameterValue(getCall().getOutputCursors().get(outputCursorIndex++).getName());
+                        
+                        // Update the hasMoreResults flag.
+                        hasMoreResults = (outputCursorIndex < getCall().getOutputCursors().size());
+                        
+                        return results;
+                    } else {
+                        // Build the result records first.
+                        List result = buildResultRecords(executeStatement.getResultSet());
                     
-                    // Move the result pointer.
-                    moveResultPointer();
+                        // Move the result pointer.
+                        moveResultPointer();
                     
-                    return getResultSetMappingQuery().buildObjectsFromRecords(result, ++executeResultSetIndex);
+                        return getResultSetMappingQuery().buildObjectsFromRecords(result, ++executeResultSetIndex);
+                    }
                 } else {
                     return null;
                 }
@@ -532,6 +575,7 @@ public class StoredProcedureQueryImpl extends QueryImpl implements StoredProcedu
             setRollbackOnly();
             throw e;
         } catch (IllegalStateException e) {
+            setRollbackOnly();
             throw e;
         } catch (Exception e) {
             setRollbackOnly();
@@ -557,6 +601,9 @@ public class StoredProcedureQueryImpl extends QueryImpl implements StoredProcedu
      */
     @Override
     public Object getSingleResult() {
+        // bug51411440: need to throw IllegalStateException if query
+        // executed on closed em
+        this.entityManager.verifyOpenWithSetRollbackOnly();
         try {
             // If there is no execute statement, the user has not called
             // execute and is simply calling getSingleResult directly on the query.
@@ -578,18 +625,32 @@ public class StoredProcedureQueryImpl extends QueryImpl implements StoredProcedu
             } else {
                 if (hasMoreResults()) {
                     // Build the result records first.
-                    List result = buildResultRecords(executeStatement.getResultSet());
+                    List results;
                     
-                    // Move the result pointer.
-                    moveResultPointer();
+                    if (isOutputCursorResultSet) {
+                        // Return result set list for the current outputCursorIndex.
+                        results = (List) getOutputParameterValue(getCall().getOutputCursors().get(outputCursorIndex++).getName());
+                        
+                        // Update the hasMoreResults flag.
+                        hasMoreResults = (outputCursorIndex < getCall().getOutputCursors().size());
+                    } else {
+                        // Build the result records first.
+                        List result = buildResultRecords(executeStatement.getResultSet());
                     
-                    List results = getResultSetMappingQuery().buildObjectsFromRecords(result, ++executeResultSetIndex);
+                        // Move the result pointer.
+                        moveResultPointer();
+                        
+                        results = getResultSetMappingQuery().buildObjectsFromRecords(result, ++executeResultSetIndex);
+                    }
+                    
                     if (results.size() > 1) {
                         throwNonUniqueResultException(ExceptionLocalization.buildMessage("too_many_results_for_get_single_result", (Object[]) null));
                     } else if (results.isEmpty()) {
                         throwNoResultException(ExceptionLocalization.buildMessage("no_entities_retrieved_for_get_single_result", (Object[]) null));
                     }
                         
+                    // TODO: if hasMoreResults is true, we 'could' and maybe should throw an exception here.
+                    
                     return results.get(0);
                 } else {
                     return null;
@@ -601,6 +662,7 @@ public class StoredProcedureQueryImpl extends QueryImpl implements StoredProcedu
             setRollbackOnly();
             throw e;
         } catch (IllegalStateException e) {
+            setRollbackOnly();
             throw e;
         } catch (Exception e) {
             setRollbackOnly();
@@ -623,7 +685,7 @@ public class StoredProcedureQueryImpl extends QueryImpl implements StoredProcedu
      * is rolled back
      */
     public int getUpdateCount() {
-        entityManager.verifyOpen();
+        entityManager.verifyOpenWithSetRollbackOnly();
         
         if (executeStatement != null) {
             try {
@@ -636,7 +698,6 @@ public class StoredProcedureQueryImpl extends QueryImpl implements StoredProcedu
                 if (updateCount > -1) {
                     moveResultPointer();
                 }
-                
                 return updateCount;
             } catch (SQLException e) {
                 throw getDetailedException(DatabaseException.sqlException(e, executeCall, executeCall.getQuery().getAccessor(), executeCall.getQuery().getSession(), false));
@@ -704,6 +765,7 @@ public class StoredProcedureQueryImpl extends QueryImpl implements StoredProcedu
      * @return the same query instance
      */
     public StoredProcedureQuery registerStoredProcedureParameter(int position, Class type, ParameterMode mode) {
+        entityManager.verifyOpenWithSetRollbackOnly();
         StoredProcedureCall call = (StoredProcedureCall) getDatabaseQuery().getCall();
         
         if (mode.equals(ParameterMode.IN)) {
@@ -713,16 +775,7 @@ public class StoredProcedureQueryImpl extends QueryImpl implements StoredProcedu
         } else if (mode.equals(ParameterMode.INOUT)) {
             call.addUnamedInOutputArgument(String.valueOf(position), String.valueOf(position), type);
         } else if (mode.equals(ParameterMode.REF_CURSOR)) {
-            boolean multipleCursors = call.getParameterTypes().contains(call.OUT_CURSOR);
-            
-            call.useUnnamedCursorOutputAsResultSet();
-            
-            // There are multiple cursor output parameters, then do not use the 
-            // cursor as the result set. This will be set to true in the calls
-            // above so we must do the multiple cursor call before hand.
-            if (multipleCursors) {
-                call.setIsCursorOutputProcedure(false);
-            }
+            call.useUnnamedCursorOutputAsResultSet(position);
         }
         
         // Force a re-calculate of the parameters.
@@ -743,25 +796,19 @@ public class StoredProcedureQueryImpl extends QueryImpl implements StoredProcedu
      * @return the same query instance
      */
     public StoredProcedureQuery registerStoredProcedureParameter(String parameterName, Class type, ParameterMode mode) {
+        entityManager.verifyOpenWithSetRollbackOnly();
         StoredProcedureCall call = (StoredProcedureCall) getDatabaseQuery().getCall();
 
         if (mode.equals(ParameterMode.IN)) {
             call.addNamedArgument(parameterName, parameterName, type);
         } else if (mode.equals(ParameterMode.OUT)) {
             call.addNamedOutputArgument(parameterName, parameterName, type);
+            call.setCursorOrdinalPosition(parameterName, call.getParameters().size());
         } else if (mode.equals(ParameterMode.INOUT)) {
             call.addNamedInOutputArgument(parameterName, parameterName, parameterName, type);
+            call.setCursorOrdinalPosition(parameterName, call.getParameters().size());
         } else if (mode.equals(ParameterMode.REF_CURSOR)) {
-            boolean multipleCursors = call.getParameterTypes().contains(call.OUT_CURSOR);
-            
             call.useNamedCursorOutputAsResultSet(parameterName);
-            
-            // There are multiple cursor output parameters, then do not use the 
-            // cursor as the result set. This will be set to true in the calls
-            // above so we must do the multiple cursor call before hand.
-            if (multipleCursors) {
-                call.setIsCursorOutputProcedure(false);
-            }
         }
 
         // Force a re-calculate of the parameters.
@@ -850,7 +897,7 @@ public class StoredProcedureQueryImpl extends QueryImpl implements StoredProcedu
      * incorrect type
      */
     public StoredProcedureQuery setParameter(int position, Calendar value, TemporalType temporalType) {
-        entityManager.verifyOpen();
+        entityManager.verifyOpenWithSetRollbackOnly();
         return setParameter(position, convertTemporalType(value, temporalType));
     }
     
@@ -866,7 +913,7 @@ public class StoredProcedureQueryImpl extends QueryImpl implements StoredProcedu
      * incorrect type
      */
     public StoredProcedureQuery setParameter(int position, Date value, TemporalType temporalType) {
-        entityManager.verifyOpen();
+        entityManager.verifyOpenWithSetRollbackOnly();
         return setParameter(position, convertTemporalType(value, temporalType));
     }
     
@@ -904,8 +951,16 @@ public class StoredProcedureQueryImpl extends QueryImpl implements StoredProcedu
         if (param == null) {
             throw new IllegalArgumentException(ExceptionLocalization.buildMessage("NULL_PARAMETER_PASSED_TO_SET_PARAMETER"));
         }
-        
-        return this.setParameter(getParameterId(param), value, temporalType);
+        //bug 402686: type validation
+        String position = getParameterId(param);
+        ParameterExpressionImpl parameter = (ParameterExpressionImpl) this.getInternalParameters().get(position);
+        if (parameter == null ) {
+            throw new IllegalArgumentException(ExceptionLocalization.buildMessage("NO_PARAMETER_WITH_NAME", new Object[] { param.toString(), this.databaseQuery }));
+        }
+        if (!parameter.getParameterType().equals(param.getParameterType())) {
+            throw new IllegalArgumentException(ExceptionLocalization.buildMessage("INCORRECT_PARAMETER_TYPE", new Object[] { position, param.getParameterType() }));
+        }
+        return this.setParameter(position, value, temporalType);
     }
     
     /**
@@ -922,8 +977,16 @@ public class StoredProcedureQueryImpl extends QueryImpl implements StoredProcedu
         if (param == null) {
             throw new IllegalArgumentException(ExceptionLocalization.buildMessage("NULL_PARAMETER_PASSED_TO_SET_PARAMETER"));
         }
-        
-        return this.setParameter(getParameterId(param), value, temporalType);
+        //bug 402686: type validation
+        String position = getParameterId(param);
+        ParameterExpressionImpl parameter = (ParameterExpressionImpl) this.getInternalParameters().get(position);
+        if (parameter == null ) {
+            throw new IllegalArgumentException(ExceptionLocalization.buildMessage("NO_PARAMETER_WITH_NAME", new Object[] { param.toString(), this.databaseQuery }));
+        }
+        if (!parameter.getParameterType().equals(param.getParameterType())) {
+            throw new IllegalArgumentException(ExceptionLocalization.buildMessage("INCORRECT_PARAMETER_TYPE", new Object[] { position, param.getParameterType() }));
+        }
+        return this.setParameter(position, value, temporalType);
     }
     
     /**
@@ -939,8 +1002,16 @@ public class StoredProcedureQueryImpl extends QueryImpl implements StoredProcedu
         if (param == null) {
             throw new IllegalArgumentException(ExceptionLocalization.buildMessage("NULL_PARAMETER_PASSED_TO_SET_PARAMETER"));
         }
-        
-        return this.setParameter(getParameterId(param), value);
+        //bug 402686: type validation
+        String position = getParameterId(param);
+        ParameterExpressionImpl parameter = (ParameterExpressionImpl) this.getInternalParameters().get(position);
+        if (parameter == null ) {
+            throw new IllegalArgumentException(ExceptionLocalization.buildMessage("NO_PARAMETER_WITH_NAME", new Object[] { param.toString(), this.databaseQuery }));
+        }
+        if (!parameter.getParameterType().equals(param.getParameterType())) {
+            throw new IllegalArgumentException(ExceptionLocalization.buildMessage("INCORRECT_PARAMETER_TYPE", new Object[] { position, param.getParameterType() }));
+        }
+        return this.setParameter(position, value);
     }
     
     /**
@@ -955,7 +1026,7 @@ public class StoredProcedureQueryImpl extends QueryImpl implements StoredProcedu
      * incorrect type
      */
     public StoredProcedureQuery setParameter(String name, Calendar value, TemporalType temporalType) {
-        entityManager.verifyOpen();
+        entityManager.verifyOpenWithSetRollbackOnly();
         return setParameter(name, convertTemporalType(value, temporalType));
     }
 
@@ -971,7 +1042,7 @@ public class StoredProcedureQueryImpl extends QueryImpl implements StoredProcedu
      * incorrect type
      */
     public StoredProcedureQuery setParameter(String name, Date value, TemporalType temporalType) {
-        entityManager.verifyOpen();
+        entityManager.verifyOpenWithSetRollbackOnly();
         return setParameter(name, convertTemporalType(value, temporalType));
     }
     
@@ -994,6 +1065,32 @@ public class StoredProcedureQueryImpl extends QueryImpl implements StoredProcedu
             setRollbackOnly();
             throw e;
         }
+    }
+
+    /**
+     * Bind an argument to a named or indexed parameter.
+     * 
+     * @param name
+     *            the parameter name
+     * @param value
+     *            to bind
+     * @param isIndex
+     *            defines if index or named
+     */
+    protected void setParameterInternal(String name, Object value, boolean isIndex) {
+        Parameter parameter = this.getInternalParameters().get(name);
+        StoredProcedureCall call = (StoredProcedureCall) getDatabaseQuery().getCall();
+        if (parameter == null) {
+            if (isIndex) {
+                throw new IllegalArgumentException(ExceptionLocalization.buildMessage("ejb30-wrong-argument-index", new Object[] { name, call.getProcedureName() }));
+            } else {
+                throw new IllegalArgumentException(ExceptionLocalization.buildMessage("ejb30-wrong-argument-name", new Object[] { name, call.getProcedureName() }));
+            }
+        }
+        if (!isValidActualParameter(value, parameter.getParameterType())) {
+            throw new IllegalArgumentException(ExceptionLocalization.buildMessage("ejb30-incorrect-parameter-type", new Object[] { name, value.getClass(), parameter.getParameterType(), call.getProcedureName() }));
+        }
+        this.parameterValues.put(name, value);
     }
 }
 

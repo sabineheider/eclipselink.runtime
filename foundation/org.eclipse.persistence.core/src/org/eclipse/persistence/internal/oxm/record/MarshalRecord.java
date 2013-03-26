@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2012 Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, 2013 Oracle and/or its affiliates. All rights reserved.
  * This program and the accompanying materials are made available under the
  * terms of the Eclipse Public License v1.0 and Eclipse Distribution License v. 1.0
  * which accompanies this distribution.
@@ -26,6 +26,7 @@ import org.eclipse.persistence.internal.oxm.XMLConversionManager;
 import org.eclipse.persistence.internal.oxm.XPathFragment;
 import org.eclipse.persistence.internal.oxm.XPathNode;
 import org.eclipse.persistence.oxm.record.MarshalRecord.CycleDetectionStack;
+import org.eclipse.persistence.core.queries.CoreAttributeGroup;
 import org.w3c.dom.Node;
 
 /**
@@ -88,6 +89,8 @@ public interface MarshalRecord<
 
     public void endPrefixMapping(String prefix);
 
+    public CoreAttributeGroup getCurrentAttributeGroup();
+
     public CycleDetectionStack<Object>  getCycleDetectionStack();
 
     public ArrayList<XPathNode> getGroupingElements();
@@ -98,6 +101,8 @@ public interface MarshalRecord<
             XMLConversionManager conversionManager);
 
     public boolean hasCustomNamespaceMapper();
+
+    public boolean isWrapperAsCollectionName();
 
     public boolean isXOPPackage();
 
@@ -116,8 +121,12 @@ public interface MarshalRecord<
     public XPathFragment openStartGroupingElements(
             NAMESPACE_RESOLVER namespaceResolver);
 
+    public void popAttributeGroup();
+
     public void predicateAttribute(XPathFragment anXPathFragment,
             NAMESPACE_RESOLVER namespaceResolver);
+
+    public void pushAttributeGroup(CoreAttributeGroup group);
 
     public void removeExtraNamespacesFromNamespaceResolver(List<Namespace> extraNamespaces, CoreAbstractSession session);
 
@@ -128,10 +137,9 @@ public interface MarshalRecord<
     public void setLeafElementType(QName leafElementType);
 
     public void setMarshaller(MARSHALLER marshaller);
-
+    
     public void startCollection();
-
+    
     public void startPrefixMapping(String prefix, String uri);
-
 
 }

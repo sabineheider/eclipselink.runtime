@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2009, 2012 Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2009, 2013 Oracle and/or its affiliates. All rights reserved.
  * This program and the accompanying materials are made available under the
  * terms of the Eclipse Public License v1.0 and Eclipse Distribution License v. 1.0
  * which accompanies this distribution.
@@ -465,7 +465,7 @@ public class CriteriaBuilderImpl implements JpaCriteriaBuilder, Serializable {
      */
     public Predicate not(Expression<Boolean> restriction){
         if (((InternalExpression)restriction).isPredicate()){
-            return ((PredicateImpl)restriction).not();
+            return ((Predicate)restriction).not();
         }
         org.eclipse.persistence.expressions.Expression parentNode = null;
         List<Expression<?>> compoundExpressions = null;
@@ -2088,7 +2088,9 @@ public class CriteriaBuilderImpl implements JpaCriteriaBuilder, Serializable {
      * @return in predicate
      */
     public <T> In<T> in(Expression<? extends T> expression){
-        return new InImpl(metamodel, expression, buildList(expression));
+        List list = new ArrayList();
+        list.add(expression);
+        return new InImpl(metamodel, (ExpressionImpl) expression, new ArrayList(), list);
     }
 
     // coalesce, nullif:

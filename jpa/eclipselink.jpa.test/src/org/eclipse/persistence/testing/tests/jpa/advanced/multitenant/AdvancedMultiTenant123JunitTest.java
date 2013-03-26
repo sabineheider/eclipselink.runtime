@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2011, 2012 Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2011, 2013 Oracle and/or its affiliates. All rights reserved.
  * This program and the accompanying materials are made available under the 
  * terms of the Eclipse Public License v1.0 and Eclipse Distribution License v. 1.0 
  * which accompanies this distribution. 
@@ -163,7 +163,6 @@ public class AdvancedMultiTenant123JunitTest extends AdvancedMultiTenantJunitTes
             // Try a delete all on single table (Contracts)
             try {
                 beginTransaction(em);
-                this.getServerSession(getMULTI_TENANT_PU_123()).setLogLevel(0);
                 int contracts = em.createNamedQuery("FindAllContracts").getResultList().size();                
                 int deletes = em.createNamedQuery("DeleteAllContracts").executeUpdate();
                 assertTrue("Incorrect number of contracts deleted [" + deletes + "], expected [" + contracts + "]", deletes == 2);

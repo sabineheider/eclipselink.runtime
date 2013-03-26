@@ -34,6 +34,7 @@ import javax.xml.transform.sax.SAXResult;
 import javax.xml.transform.stream.StreamResult;
 import javax.xml.validation.Schema;
 
+import org.eclipse.persistence.core.queries.CoreAttributeGroup;
 import org.eclipse.persistence.exceptions.XMLMarshalException;
 import org.eclipse.persistence.internal.core.sessions.CoreAbstractSession;
 import org.eclipse.persistence.internal.helper.ClassConstants;
@@ -63,7 +64,6 @@ import org.w3c.dom.Document;
 import org.w3c.dom.Element;
 import org.w3c.dom.Node;
 import org.xml.sax.ContentHandler;
-import org.xml.sax.ErrorHandler;
 import org.xml.sax.ext.LexicalHandler;
 
 public abstract class XMLMarshaller<
@@ -125,7 +125,6 @@ public abstract class XMLMarshaller<
 
     protected XMLAttachmentMarshaller attachmentMarshaller;
     private String attributePrefix;
-    private ErrorHandler errorHandler;
     private boolean fragment;
     private boolean includeRoot = true;
     private boolean marshalEmptyCollections = true;
@@ -137,7 +136,9 @@ public abstract class XMLMarshaller<
     private String schemaLocation;
     protected XMLTransformer transformer;
     private String valueWrapper;
+    private boolean wrapperAsCollectionName = false;
     private String xmlHeader;
+    private Object marshalAttributeGroup;
 
     public XMLMarshaller(CONTEXT context) {
         super(context);
@@ -155,7 +156,6 @@ public abstract class XMLMarshaller<
         super(xmlMarshaller);
         attachmentMarshaller = xmlMarshaller.getAttachmentMarshaller();
         attributePrefix = xmlMarshaller.getAttributePrefix();
-        errorHandler = xmlMarshaller.getErrorHandler();
         fragment = xmlMarshaller.isFragment();
         includeRoot = xmlMarshaller.isIncludeRoot();
         marshalEmptyCollections = xmlMarshaller.isMarshalEmptyCollections();
@@ -170,6 +170,7 @@ public abstract class XMLMarshaller<
 
         schemaLocation = xmlMarshaller.getSchemaLocation();
         valueWrapper = xmlMarshaller.getValueWrapper();
+        wrapperAsCollectionName = xmlMarshaller.isWrapperAsCollectionName();
         xmlHeader = xmlMarshaller.getXmlHeader();
     }
 
@@ -337,10 +338,6 @@ public abstract class XMLMarshaller<
           return descriptor;
       }
 
-    public ErrorHandler getErrorHandler() {
-        return errorHandler;
-    }
-
      /**
      * Get the MediaType for this xmlMarshaller.
      * See org.eclipse.persistence.oxm.MediaType for the media types supported by EclipseLink MOXy
@@ -465,6 +462,10 @@ public abstract class XMLMarshaller<
      */
     public boolean isMarshalEmptyCollections() {
         return marshalEmptyCollections;
+    }
+
+    public boolean isWrapperAsCollectionName() {
+        return wrapperAsCollectionName;
     }
 
     protected boolean isSimpleXMLRoot(Root xmlRoot) {
@@ -606,6 +607,20 @@ public abstract class XMLMarshaller<
             marshalRecord.setCustomNamespaceMapper(true);
         }
 
+        if(this.getMarshalAttributeGroup() != null) {
+            if(marshalAttributeGroup.getClass() == ClassConstants.STRING) {
+                CoreAttributeGroup group = descriptor.getAttributeGroup((String)marshalAttributeGroup);
+                if(group != null) {
+                    marshalRecord.pushAttributeGroup(group);
+                } else {
+                    throw XMLMarshalException.invalidAttributeGroupName((String)marshalAttributeGroup, descriptor.getJavaClassName());
+                }
+            } else if(marshalAttributeGroup instanceof CoreAttributeGroup) {
+                marshalRecord.pushAttributeGroup((CoreAttributeGroup)marshalAttributeGroup);
+            } else {
+                //Error case
+            }
+        }
         NamespaceResolver nr = marshalRecord.getNamespaceResolver();
         if(node != null) {
             if(isXMLRoot) {
@@ -1037,7 +1052,7 @@ public abstract class XMLMarshaller<
 
         
         MarshalRecord writerRecord;
-        writer = new BufferedWriter(writer);
+        writer = wrapWriter(writer);
         if (isFormattedOutput()) {
             if(mediaType.isApplicationJSON()) {                          
                 writerRecord = new JSONFormattedWriterRecord(writer, callbackName);                
@@ -1116,6 +1131,18 @@ public abstract class XMLMarshaller<
     }
 
     /**
+     * INTERNAL:
+     * Wrap Writer in a BufferedWriter only if its write() operations may be costly
+     * (such as FileWriters and OutputStreamWriters). 
+     */
+    private Writer wrapWriter(Writer writer) {
+        if (writer instanceof OutputStreamWriter || writer instanceof FileWriter) {
+            return new BufferedWriter(writer);
+        }
+        return writer;
+    }
+
+    /**
      * PUBLIC:
      * Convert the given object to an XML Document
      * @param object the object to marshal
@@ -1184,10 +1211,6 @@ public abstract class XMLMarshaller<
         if(null != transformer) {
             transformer.setEncoding(newEncoding);
         }
-    }
-
-    public void setErrorHandler(ErrorHandler errorHandler) {
-        this.errorHandler = errorHandler;
     }
 
     /**
@@ -1281,6 +1304,10 @@ public abstract class XMLMarshaller<
        schemaLocation = newSchemaLocation;
     }
 
+    public void setWrapperAsCollectionName(boolean wrapperAsCollectionName) {
+        this.wrapperAsCollectionName = wrapperAsCollectionName;
+    }
+
     /**
      * Name of the property to marshal/unmarshal as a wrapper on the text() mappings   
      * Ignored marshalling XML.  
@@ -1307,4 +1334,12 @@ public abstract class XMLMarshaller<
         this.xmlHeader = xmlHeader;
     }
 
+    public void setMarshalAttributeGroup(Object group) {
+        this.marshalAttributeGroup = group;
+        
+    }
+    
+    public Object getMarshalAttributeGroup() {
+        return this.marshalAttributeGroup;
+    }
 }

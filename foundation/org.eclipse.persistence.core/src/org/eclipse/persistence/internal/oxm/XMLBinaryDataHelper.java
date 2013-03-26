@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 1998, 2012 Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1998, 2013 Oracle and/or its affiliates. All rights reserved.
  * This program and the accompanying materials are made available under the 
  * terms of the Eclipse Public License v1.0 and Eclipse Distribution License v. 1.0 
  * which accompanies this distribution. 
@@ -370,16 +370,14 @@ public class XMLBinaryDataHelper {
                 }
             }
         } else if (obj instanceof byte[]) {
-            ByteArrayInputStream stream = new ByteArrayInputStream((byte[]) obj);
-            return new StreamSource(stream);
+            return new ByteArraySource((byte[])obj);
         } else if (obj instanceof Byte[]) {
             Byte[] objectBytes = (Byte[]) obj;
             byte[] bytes = new byte[objectBytes.length];
             for (int i = 0; i < objectBytes.length; i++) {
                 bytes[i] = objectBytes[i].byteValue();
             }
-            ByteArrayInputStream stream = new ByteArrayInputStream(bytes);
-            return new StreamSource(stream);
+            return new ByteArraySource(bytes);
         } else if(obj instanceof InputStream) {
             return new StreamSource((InputStream)obj);
         }

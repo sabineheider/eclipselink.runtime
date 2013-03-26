@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 1998, 2012 Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1998, 2013 Oracle and/or its affiliates. All rights reserved.
  * This program and the accompanying materials are made available under the 
  * terms of the Eclipse Public License v1.0 and Eclipse Distribution License v. 1.0 
  * which accompanies this distribution. 
@@ -45,6 +45,7 @@ import org.eclipse.persistence.internal.sessions.AbstractSession;
 import org.eclipse.persistence.internal.sessions.DatabaseSessionImpl;
 import org.eclipse.persistence.internal.sessions.PropertiesHandler;
 import org.eclipse.persistence.jpa.JpaEntityManagerFactory;
+import org.eclipse.persistence.queries.AttributeGroup;
 import org.eclipse.persistence.queries.DatabaseQuery;
 import org.eclipse.persistence.queries.ObjectLevelReadQuery;
 import org.eclipse.persistence.queries.ReadQuery;
@@ -735,7 +736,7 @@ public class EntityManagerFactoryDelegate implements EntityManagerFactory, Persi
             ((ObjectLevelReadQuery)unwrapped).setLockModeType(((QueryImpl)query).lockMode.name(), session);
         }
         if (unwrapped.isReadQuery()){
-            ((ReadQuery)unwrapped).setInternalMax((((QueryImpl)query).getMaxResults()));
+            ((ReadQuery)unwrapped).setInternalMax((((QueryImpl)query).getMaxResultsInternal()));
         }
         this.getServerSession().addQuery(name, unwrapped, true);
     }
@@ -758,8 +759,10 @@ public class EntityManagerFactoryDelegate implements EntityManagerFactory, Persi
     }
 
     public <T> void addNamedEntityGraph(String graphName, EntityGraph<T> entityGraph) {
-        this.getAbstractSession().getAttributeGroups().put(graphName, ((EntityGraphImpl)entityGraph).getAttributeGroup());
-        this.getAbstractSession().getDescriptor(((EntityGraphImpl)entityGraph).getClassType()).addAttributeGroup(((EntityGraphImpl)entityGraph).getAttributeGroup());
+        AttributeGroup group = ((EntityGraphImpl)entityGraph).getAttributeGroup().clone();
+        group.setName(graphName);
+        this.getAbstractSession().getAttributeGroups().put(graphName, group);
+        this.getAbstractSession().getDescriptor(((EntityGraphImpl)entityGraph).getClassType()).addAttributeGroup(group);
     }
 
 }

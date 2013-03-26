@@ -19,9 +19,9 @@
 *       and are used in test results parsing
 *     - targets typically use the form <action>-<object>-<type> (ie. package-bundle-zip)
 *   - multi-word macros use underscores '_'
-*   - multi-word macro attributes are concatinated
+*   - multi-word macro attributes are concatenated
 *     e.g. 'runpathref'
-*   - multi-word tasks (taskdef) names are concatinated
+*   - multi-word tasks (taskdef) names are concatenated
 *     e.g. 'validateconnection'
 *   - OS environment variables are in ALLCAPS and have 'env' as a prefix
 *     e.g. ${env.XXX}.
@@ -2953,10 +2953,20 @@
         <ant antfile="antbuild.xml" dir="${jpatest.basedir}/../eclipselink.jpars.test"  target="create-jpars-war-file"/>
         <copy overwrite="true" file="./resource/${MODEL_NAME}/server/application.xml" todir="${build.dir}/META-INF"/>
         <copy file="${jpatest.basedir}/../eclipselink.jpars.test/eclipselink.jpars.test.war" todir="${jpatest.basedir}/${build.dir}"/>
+        <antcall target="replace-jpars-jar-with-toplink-dataservices-web-jar"/>
         <ear destfile="${jpatest.basedir}/${build.dir}/${EAR_NAME}.ear" appxml="${build.dir}/META-INF/application.xml">
-            <fileset dir="${jpatest.basedir}/${build.dir}" includes ="*.war"/>
+            <fileset dir="${jpatest.basedir}/${build.dir}" includes ="eclipselink.jpars.test.war"/>
         </ear>
         <copy file="${jpatest.basedir}/${build.dir}/${EAR_NAME}.ear" todir="."/>
+    </target>
+    <!-- replace org.eclipse.persistence.jpars*.jar with toplink-dataservices-web.jar in generated eclipselink.jpars.test.war -->
+    <target name="replace-jpars-jar-with-toplink-dataservices-web-jar" if="test.jpars.on.toplink.dataservices">
+        <unzip src="${jpatest.basedir}/${build.dir}/eclipselink.jpars.test.war" dest="${jpatest.basedir}/${build.dir}"/>
+        <delete dir="${jpatest.basedir}/${build.dir}/WEB-INF/lib"/>
+        <mkdir dir="${jpatest.basedir}/${build.dir}/WEB-INF/lib"/>
+        <copy file="/ade_autofs/ade_generic/TOPLINK_12.1.2.0.0_GENERIC.rdd/LATEST/tldev/jlib/tl/toplink-dataservices-web.jar" todir="${jpatest.basedir}/${build.dir}/WEB-INF/lib"/>
+        <zip destfile="${jpatest.basedir}/${build.dir}/eclipselink.jpars.test.war" basedir="${jpatest.basedir}/${build.dir}" 
+        includes="META-INF/MANIFEST.MF, WEB-INF/**"/>
     </target>
     <!-- Build server test ear. -->
     <target name="server-build-ear" unless="is.jaxrs.or.jpars.testing">
@@ -3659,6 +3669,15 @@
     </target>
 
     <target name="server-test-jpars" depends="clean-test, set-server-properties" if="is.glassfish.or.weblogic">
+        <antcall target="server-test-jpars-core" inheritRefs="true"/>
+    </target>
+
+    <target name="server-test-jpars-on-toplink-dataservices" depends="clean-test, set-server-properties" if="is.glassfish.or.weblogic">
+        <property name="test.jpars.on.toplink.dataservices" value="true"/>
+        <antcall target="server-test-jpars-core" inheritRefs="true"/>
+    </target>
+
+    <target name="server-test-jpars-core">
         <echo message="jpars url is ${jpars.url}"/>
         <copy file="${jpatest.basedir}/../eclipselink.jpars.test/src/META-INF/persistence.xml" tofile="${jpatest.basedir}/../eclipselink.jpars.test/src/META-INF/persistence.xml.original" overwrite="true"/>
         <replace file="${jpatest.basedir}/../eclipselink.jpars.test/src/META-INF/persistence.xml" token='Glassfish' value="${server.platform}"/>
@@ -3671,6 +3690,7 @@
         </antcall>
         <ant antfile="antbuild.xml" dir="${jpatest.basedir}/../eclipselink.jpars.test"  target="test" inheritAll="false">
             <property name="SERVER_URL" value="${jpars.url}"/>
+            <property name="JPARS_VERSION" value="v1.0"/>
         </ant>
         <antcall target="server-undeploy" inheritRefs="true">
             <param name="ear.name" value="${EAR_NAME}.ear"/>

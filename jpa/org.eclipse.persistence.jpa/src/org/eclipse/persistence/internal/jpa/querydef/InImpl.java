@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2011, 2012 Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2011, 2013 Oracle and/or its affiliates. All rights reserved.
  * This program and the accompanying materials are made available under the
  * terms of the Eclipse Public License v1.0 and Eclipse Distribution License v. 1.0
  * which accompanies this distribution.
@@ -19,6 +19,7 @@ import java.util.Collection;
 import java.util.List;
 
 import javax.persistence.criteria.Expression;
+import javax.persistence.criteria.Predicate;
 import javax.persistence.criteria.CriteriaBuilder.In;
 import javax.persistence.metamodel.Metamodel;
 
@@ -47,13 +48,19 @@ public class InImpl<T> extends CompoundExpressionImpl implements In<T> {
     
     protected org.eclipse.persistence.expressions.Expression parentNode;
     
-    public InImpl(Metamodel metamodel, Expression leftExpression, List<Expression<?>> compoundExpressions) {
-        super(metamodel, ((InternalSelection)leftExpression).getCurrentNode().in(new ArrayList()), compoundExpressions, "in");
+    public InImpl(Metamodel metamodel, ExpressionImpl leftExpression, Collection values, List expressions) {
+        super(metamodel, ((InternalSelection)leftExpression).getCurrentNode().in(values), expressions, "in");
         this.leftExpression = leftExpression;
         
     }
 
-    protected Expression leftExpression;
+    public InImpl(Metamodel metamodel, ExpressionImpl leftExpression, ExpressionImpl rightExp, List expressions) {
+        super(metamodel, rightExp.getCurrentNode().equal(leftExpression.getCurrentNode()), expressions, "in");
+        this.leftExpression = leftExpression;
+        
+    }
+
+    protected ExpressionImpl leftExpression;
 
     /**
      * Returns the expression to be tested against the
@@ -63,7 +70,27 @@ public class InImpl<T> extends CompoundExpressionImpl implements In<T> {
     public Expression<T> getExpression(){
         return this.leftExpression;
     }
+    
+    @Override
+    /**
+     * Return the top-level conjuncts or disjuncts of the predicate.
+     * 
+     * @return list boolean expressions forming the predicate
+     */
+    public List<Expression<Boolean>> getExpressions(){
+        List<Expression<Boolean>> result = new ArrayList<Expression<Boolean>>();
+        result.add(this);
+        return result;
+    }
 
+    public void findRootAndParameters(CommonAbstractCriteriaImpl query){
+        super.findRootAndParameters(query);
+    }
+
+    public boolean isPredicate(){
+        return true;
+    }
+    
     /**
      *  Add to list of values to be tested against.
      *  @param value value
@@ -105,7 +132,7 @@ public class InImpl<T> extends CompoundExpressionImpl implements In<T> {
                 throw new IllegalStateException(ExceptionLocalization.buildMessage("CANNOT_ADD_CONSTANTS_TO_SUBQUERY_IN"));
             }
         }
-
+        this.expressions.add(value);
         return this;
     }
     
@@ -116,5 +143,13 @@ public class InImpl<T> extends CompoundExpressionImpl implements In<T> {
     public void setParentNode(org.eclipse.persistence.expressions.Expression parentNode){
         this.parentNode = parentNode;
     }
-
+    
+    public Predicate not(){
+        parentNode = this.getCurrentNode().not();
+        ArrayList list = new ArrayList();
+        list.add(this);
+        CompoundExpressionImpl expr = new CompoundExpressionImpl(this.metamodel, parentNode, list, "not");
+        expr.setIsNegated(true);
+        return expr;
+    }
 }

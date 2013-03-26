@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 1998, 2012 Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1998, 2013 Oracle and/or its affiliates. All rights reserved.
  * This program and the accompanying materials are made available under the 
  * terms of the Eclipse Public License v1.0 and Eclipse Distribution License v. 1.0 
  * which accompanies this distribution. 
@@ -557,10 +557,13 @@ public class MergeManager {
             registeredObject = registerObjectForMergeCloneIntoWorkingCopy(rmiClone, shouldForceCascade());
         }
 
-        if (registeredObject == rmiClone && !shouldForceCascade()) {
+        //adding isAlreadyMerged/recoredMerge check to prevent the uow clone from being merged into twice from the same tree
+        //bug 404171
+        if ((registeredObject == rmiClone || isAlreadyMerged(registeredObject, this.session)) && !shouldForceCascade()) {
             //need to find better better fix.  prevents merging into itself.
-            return rmiClone;
+            return registeredObject;
         }
+        recordMerge(registeredObject, registeredObject, this.session);
 
         ClassDescriptor descriptor = this.session.getDescriptor(rmiClone);
         try {

@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 1998, 2012 Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1998, 2013 Oracle and/or its affiliates. All rights reserved.
  * This program and the accompanying materials are made available under the 
  * terms of the Eclipse Public License v1.0 and Eclipse Distribution License v. 1.0 
  * which accompanies this distribution. 
@@ -647,16 +647,15 @@ public class XMLChoiceObjectMapping extends DatabaseMapping implements ChoiceObj
     }
     private void addChoiceElementMapping(XMLField xmlField, String className){
          if (xmlField.getLastXPathFragment().nameIsText() || xmlField.getLastXPathFragment().isAttribute()) {
-             Class theClass = XMLConversionManager.getDefaultXMLManager().convertClassNameToClass(className);
              XMLDirectMapping xmlMapping = new XMLDirectMapping();
              xmlMapping.setAttributeAccessor(temporaryAccessor);
-             xmlMapping.setAttributeClassification(theClass);
+             xmlMapping.setAttributeClassificationName(className);
              xmlMapping.setField(xmlField);
              if(this.choiceElementMappings.get(xmlField) == null) {
                  this.choiceElementMappings.put(xmlField, xmlMapping);
              }
-             if(this.choiceElementMappingsByClass.get(theClass) == null) {
-                 this.choiceElementMappingsByClass.put(theClass, xmlMapping);
+             if(this.choiceElementMappingsByClassName.get(className) == null) {
+                 this.choiceElementMappingsByClassName.put(className, xmlMapping);
              }        
          } else {
              if(isBinaryType(className)) {

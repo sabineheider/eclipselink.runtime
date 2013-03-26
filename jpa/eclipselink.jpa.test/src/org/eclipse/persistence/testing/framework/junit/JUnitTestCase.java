@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 1998, 2009 Oracle. All rights reserved.
+ * Copyright (c) 1998, 2013 Oracle and/or its affiliates. All rights reserved.
  * This program and the accompanying materials are made available under the 
  * terms of the Eclipse Public License v1.0 and Eclipse Distribution License v. 1.0 
  * which accompanies this distribution. 
@@ -345,11 +345,15 @@ public abstract class JUnitTestCase extends TestCase {
     
     /**
      * Begin a transaction on the entity manager.
-     * This allows the same code to be used on the server where JTA is used.
+     * This allows the same code to be used on the server where JTA is used,
+     * and will join the EntityManager to the transaction.
      */
     public void beginTransaction(EntityManager entityManager) {
         if (isOnServer() && isJTA()) {
             getServerPlatform().beginTransaction();
+            //bug 404294 - the EM is required to join the transaction to be able to 
+            //    use transactions started after it was created.
+            entityManager.joinTransaction();
         } else {
             entityManager.getTransaction().begin();
         }

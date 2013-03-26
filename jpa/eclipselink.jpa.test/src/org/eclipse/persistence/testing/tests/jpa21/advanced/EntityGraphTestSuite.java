@@ -16,6 +16,7 @@
 package org.eclipse.persistence.testing.tests.jpa21.advanced;
 
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 import javax.persistence.EntityGraph;
@@ -28,9 +29,11 @@ import junit.framework.TestSuite;
 import org.eclipse.persistence.config.QueryHints;
 import org.eclipse.persistence.testing.framework.junit.JUnitTestCase;
 
+import org.eclipse.persistence.testing.models.aggregate.Project_case2;
 import org.eclipse.persistence.testing.models.jpa21.advanced.Employee;
 import org.eclipse.persistence.testing.models.jpa21.advanced.LargeProject;
 import org.eclipse.persistence.testing.models.jpa21.advanced.Project;
+import org.eclipse.persistence.testing.models.jpa21.advanced.Runner;
 
 public class EntityGraphTestSuite extends JUnitTestCase {
     protected boolean m_reset = false;
@@ -50,6 +53,8 @@ public class EntityGraphTestSuite extends JUnitTestCase {
         suite.addTest(new EntityGraphTestSuite("testSimpleGraph"));
         suite.addTest(new EntityGraphTestSuite("testEmbeddedFetchGroup"));
         suite.addTest(new EntityGraphTestSuite("testEmbeddedFetchGroupRefresh"));
+        suite.addTest(new EntityGraphTestSuite("testsubclassSubgraphs"));
+        suite.addTest(new EntityGraphTestSuite("testMapKeyFetchGroupRefresh"));
         
         return suite;
     }
@@ -89,8 +94,18 @@ public class EntityGraphTestSuite extends JUnitTestCase {
         closeEntityManager(em);
     }
     
-    public void testLoadGraph(){
-        
+    public void testsubclassSubgraphs(){
+        EntityManager em = createEntityManager();
+        EntityGraph employeeGraph = em.createEntityGraph(Project.class);
+        employeeGraph.addSubclassSubgraph(LargeProject.class).addAttributeNodes("budget");
+        employeeGraph.addAttributeNodes("description");
+        List<Project> result = em.createQuery("Select p from Project p where type(p) = LargeProject").setHint(QueryHints.JPA_FETCH_GRAPH, employeeGraph).getResultList();
+        PersistenceUnitUtil util = em.getEntityManagerFactory().getPersistenceUnitUtil();
+        for (Project project : result){
+            assertFalse("Fetch Group was not applied", util.isLoaded(project, "name"));
+            assertTrue("Fetch Group was not applied", util.isLoaded(project, "description"));
+            assertTrue("Fetch Group was not applied", util.isLoaded(project, "budget"));
+        }
     }
     
     public void testEmbeddedFetchGroup(){
@@ -120,13 +135,15 @@ public class EntityGraphTestSuite extends JUnitTestCase {
         result = (Employee) em.createQuery("Select e from Employee e order by e.salary desc").setMaxResults(1).setHint(QueryHints.JPA_FETCH_GRAPH, employeeGraph).setHint(QueryHints.REFRESH, true).getResultList().get(0);        
     }
 
-    public void testEmbededNestedFetchGroup(){
-        
+    public void testMapKeyFetchGroupRefresh(){
+        EntityManager em = createEntityManager();
+        EntityGraph runnerGraph = em.createEntityGraph(Runner.class);
+        runnerGraph.addKeySubgraph("shoes");
+        Runner result = (Runner) em.createQuery("Select r from Runner r join r.shoes s").setHint(QueryHints.JPA_FETCH_GRAPH, runnerGraph).getResultList().get(0);
+        PersistenceUnitUtil util = em.getEntityManagerFactory().getPersistenceUnitUtil();
+        assertTrue("FetchGroup was not applied", util.isLoaded(result, "shoes"));
     }
     
-    public void testMapKeyGroup(){
-        
-    }
 
     @Override
     public String getPersistenceUnitName() {

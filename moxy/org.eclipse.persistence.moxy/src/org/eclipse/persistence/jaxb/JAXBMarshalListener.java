@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 1998, 2012 Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1998, 2013 Oracle and/or its affiliates. All rights reserved.
  * This program and the accompanying materials are made available under the 
  * terms of the Eclipse Public License v1.0 and Eclipse Distribution License v. 1.0 
  * which accompanies this distribution. 
@@ -19,6 +19,7 @@ import java.util.Map;
 
 import javax.xml.bind.Marshaller;
 
+import org.eclipse.persistence.exceptions.XMLMarshalException;
 import org.eclipse.persistence.internal.oxm.Root;
 import org.eclipse.persistence.internal.security.PrivilegedAccessHelper;
 import org.eclipse.persistence.internal.security.PrivilegedMethodInvoker;
@@ -78,7 +79,9 @@ public class JAXBMarshalListener implements XMLMarshalListener {
                     }else{
                         PrivilegedAccessHelper.invokeMethod(callback.getBeforeMarshalCallback(), obj, new Object[]{marshaller});
                     }
-                } catch(Exception ex) {}
+                } catch(Exception ex) {
+                    throw XMLMarshalException.marshalException(ex);
+                }
             }
         }
         if (listener != null) {
@@ -108,7 +111,9 @@ public class JAXBMarshalListener implements XMLMarshalListener {
                     }else{
                         PrivilegedAccessHelper.invokeMethod(callback.getAfterMarshalCallback(), obj, new Object[]{marshaller});
                     }
-                } catch(Exception ex) {}
+                } catch(Exception ex) {
+                    throw XMLMarshalException.marshalException(ex);
+                }
             }
         }
         if (listener != null) {

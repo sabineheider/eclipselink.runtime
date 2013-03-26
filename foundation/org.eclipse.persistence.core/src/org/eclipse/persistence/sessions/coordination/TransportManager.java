@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 1998, 2012 Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1998, 2013 Oracle and/or its affiliates. All rights reserved.
  * This program and the accompanying materials are made available under the 
  * terms of the Eclipse Public License v1.0 and Eclipse Distribution License v. 1.0 
  * which accompanies this distribution. 
@@ -164,11 +164,20 @@ public abstract class TransportManager {
 
     /**
      * PUBLIC:
-     * Return the password used as the value to the SECURITY_CREDENTIALS key in the
-     * cached context properties.
+     * Return the password used as the value to the SECURITY_CREDENTIALS key in 
+     * the cached context properties.
      */
     public String getPassword() {
-        return (String)getRemoteContextProperties().get(Context.SECURITY_CREDENTIALS);
+        return (String) decrypt(getEncryptedPassword());
+    }
+    
+    /**
+     * PUBLIC:
+     * Return the encrypted (assumed) password used as the value to the 
+     * SECURITY_CREDENTIALS key in the cached context properties.
+     */
+    public String getEncryptedPassword() {
+        return (String) getRemoteContextProperties().get(Context.SECURITY_CREDENTIALS);
     }
 
     /**
@@ -359,19 +368,26 @@ public abstract class TransportManager {
      * Set encryption class that will be loaded by the SecurableObjectHolder
      */
     public void setEncryptionClassName(String encryptionClassName) {
-        String originalPwd = null;
-        if (getPassword() != null) {
-            originalPwd = decrypt(getPassword());
-        }
-
+        SecurableObjectHolder oldHolder = securableObjectHolder;
+        
         // re-initialize encryption mechanism
         securableObjectHolder = new SecurableObjectHolder();
         securableObjectHolder.setEncryptionClassName(encryptionClassName);
 
         // re-encrypt password
-        setPassword(originalPwd);
+        if (hasPassword()) {
+            setPassword(oldHolder.getSecurableObject().decryptPassword(getEncryptedPassword()));
+        }
     }
 
+    /**
+     * INTERNAL:
+     * @return true if a non null password has been set.
+     */
+    protected boolean hasPassword() { 
+        return getRemoteContextProperties().containsKey(Context.SECURITY_CREDENTIALS) && getRemoteContextProperties().get(Context.SECURITY_CREDENTIALS) != null;
+    }
+    
     /**
      * INTERNAL:
      * Initialize default properties.
@@ -419,9 +435,10 @@ public abstract class TransportManager {
         Object[] args = { remoteProperties };
         rcm.logDebug("context_props_for_remote_lookup", args);
 
-        if (getPassword() != null) {
-            // decrypt password just before looking up context
-            remoteProperties.put(Context.SECURITY_CREDENTIALS, decrypt(getPassword()));
+        if (hasPassword()) {
+            // decrypt password just before looking up context. Calling 
+            // getPassword() will decrypt it.
+            remoteProperties.put(Context.SECURITY_CREDENTIALS, getPassword());
         }
 
         return getContext(remoteProperties);

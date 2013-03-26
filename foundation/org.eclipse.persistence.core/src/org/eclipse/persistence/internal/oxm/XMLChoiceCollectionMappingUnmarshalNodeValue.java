@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 1998, 2012 Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1998, 2013 Oracle and/or its affiliates. All rights reserved.
  * This program and the accompanying materials are made available under the 
  * terms of the Eclipse Public License v1.0 and Eclipse Distribution License v. 1.0 
  * which accompanies this distribution. 
@@ -38,7 +38,7 @@ import org.xml.sax.Attributes;
  * handled when used with the TreeObjectBuilder.</p> 
  * @author mmacivor
  */
-public class XMLChoiceCollectionMappingUnmarshalNodeValue extends NodeValue implements ContainerValue {
+public class XMLChoiceCollectionMappingUnmarshalNodeValue extends MappingNodeValue implements ContainerValue {
     private NodeValue choiceElementNodeValue;
     private NodeValue choiceElementMarshalNodeValue;
     private ChoiceCollectionMapping xmlChoiceCollectionMapping;
@@ -164,7 +164,11 @@ public class XMLChoiceCollectionMappingUnmarshalNodeValue extends NodeValue impl
     public boolean isUnmarshalNodeValue() {
         return true;
     }
-    
+
+    public boolean isWrapperAllowedAsCollectionName() {
+        return false;
+    }
+
     public boolean isMarshalNodeValue() {
         return false;
     }

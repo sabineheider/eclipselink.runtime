@@ -254,6 +254,10 @@ public abstract class AbstractEncapsulatedExpression extends AbstractExpression 
 	                                                    int whitespaceCount,
 	                                                    boolean tolerant);
 
+	/**
+	 * Removes the encapsulated {@link Expression} that was parsed, it should not be part of this one.
+	 * This happens when the parsed information does not have both '(' and ')'.
+	 */
 	protected abstract void removeEncapsulatedExpression();
 
 	/**

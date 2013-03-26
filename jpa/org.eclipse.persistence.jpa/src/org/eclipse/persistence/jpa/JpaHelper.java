@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 1998, 2012 Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1998, 2013 Oracle and/or its affiliates. All rights reserved.
  * This program and the accompanying materials are made available under the 
  * terms of the Eclipse Public License v1.0 and Eclipse Distribution License v. 1.0 
  * which accompanies this distribution. 
@@ -153,10 +153,20 @@ public class JpaHelper {
      * return that interface from this method instead
      * 
      * @see JpaEntityManagerFactory
+     * @deprecated
      */ 
-    public static EntityManagerFactoryImpl getEntityManagerFactory(EntityManagerFactory emf) { 
-        if (emf instanceof EntityManagerFactoryImpl) { 
-            return ((EntityManagerFactoryImpl)emf); 
+    public static EntityManagerFactoryImpl getEntityManagerFactory(EntityManagerFactoryImpl emf) { 
+        return ((EntityManagerFactoryImpl)emf); 
+    }
+
+    /** 
+     * Given a JPA EntityManagerFactory attempt to cast it to a EclipseLink EMF.
+     * 
+     * @see JpaEntityManagerFactory
+     */ 
+    public static JpaEntityManagerFactory getEntityManagerFactory(EntityManagerFactory emf) { 
+        if (emf instanceof JpaEntityManagerFactory) { 
+            return ((JpaEntityManagerFactory)emf); 
         }
         throw new IllegalArgumentException(ExceptionLocalization.buildMessage("jpa_helper_invalid_entity_manager_factory", new Object[]{emf.getClass()}));
     }

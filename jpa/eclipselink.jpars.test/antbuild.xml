@@ -20,9 +20,9 @@
 *       and are used in test results parsing
 *     - targets typically use the form <action>-<object>-<type> (ie. package-bundle-zip)
 *   - multi-word macros use underscores '_'
-*   - multi-word macro attributes are concatinated
+*   - multi-word macro attributes are concatenated
 *     e.g. 'runpathref'
-*   - multi-word tasks (taskdef) names are concatinated
+*   - multi-word tasks (taskdef) names are concatenated
 *     e.g. 'validateconnection'
 *   - OS environment variables are in ALLCAPS and have 'env' as a prefix
 *     e.g. ${env.XXX}.
@@ -246,9 +246,12 @@
     <!-- Run targets -->
     <target name="test" depends="compile-jpars-tests" description="run jpars tests">
         <property name="SERVER_URL" value="http://localhost:8080"/>
+        <property name="JPARS_VERSION" value="v1.0"/>
         <echo message="Server url is ${SERVER_URL}"/>
+        <echo message="jpars version is ${JPARS_VERSION}"/>
         <run_jpars_tests runpathref="jparstest.run.path"/>
     </target>
+
     <target name="test-against-jar" depends="compile-jpars-tests-against-jar" description="run jpars tests against eclipselink.jar">
         <run_jpars_tests runpathref="jparstest.run.against.jar.path"/>
     </target>
@@ -262,6 +265,7 @@
         <mkdir dir="${eclipselink.jpars.test}/stage/WEB-INF/classes/org/eclipse/persistence/jpars/test/model/auction"/>
         <mkdir dir="${eclipselink.jpars.test}/stage/WEB-INF/classes/org/eclipse/persistence/jpars/test/model/dynamic"/>
         <mkdir dir="${eclipselink.jpars.test}/stage/WEB-INF/classes/org/eclipse/persistence/jpars/test/model/employee"/>
+        <mkdir dir="${eclipselink.jpars.test}/stage/WEB-INF/classes/org/eclipse/persistence/jpars/test/model/traveler"/>
         <mkdir dir="${eclipselink.jpars.test}/stage/WEB-INF/classes/org/eclipse/persistence/jpars/test/model/multitenant"/>
         <mkdir dir="${eclipselink.jpars.test}/stage/WEB-INF/classes/org/eclipse/persistence/jpars/test/model/weaving"/>
         <mkdir dir="${eclipselink.jpars.test}/stage/WEB-INF/classes/META-INF"/>
@@ -281,6 +285,9 @@
         </copy>
         <copy todir="${eclipselink.jpars.test}/stage/WEB-INF/classes/org/eclipse/persistence/jpars/test/model/employee">
             <fileset dir="${eclipselink.jpars.test}/classes/org/eclipse/persistence/jpars/test/model/employee" includes="*.class"/>
+        </copy>
+        <copy todir="${eclipselink.jpars.test}/stage/WEB-INF/classes/org/eclipse/persistence/jpars/test/model/traveler">
+            <fileset dir="${eclipselink.jpars.test}/classes/org/eclipse/persistence/jpars/test/model/traveler" includes="*.class"/>
         </copy>
         <copy todir="${eclipselink.jpars.test}/stage/WEB-INF/classes/org/eclipse/persistence/jpars/test/model/weaving">
             <fileset dir="${eclipselink.jpars.test}/classes/org/eclipse/persistence/jpars/test/model/weaving" includes="*.class"/>
@@ -323,7 +330,8 @@
                 <sysproperty key="useDeploymentXML" value="false"/>
                 <sysproperty key="test.properties" value="${jparstest.build.location}/test.properties"/>
                 <sysproperty key="jpars.xmlfile.directory" value="META-INF/xmldocs/"/>
-        <sysproperty key="server.uri.base" value="${SERVER_URL}"/>
+                <sysproperty key="server.uri.base" value="${SERVER_URL}"/>
+                <sysproperty key="jpars.version.string" value="${JPARS_VERSION}"/>
                 <batchtest todir="${report.dir}">
                     <fileset dir="${src.dir}">
                         <include name="${jpars.test.class}"/>

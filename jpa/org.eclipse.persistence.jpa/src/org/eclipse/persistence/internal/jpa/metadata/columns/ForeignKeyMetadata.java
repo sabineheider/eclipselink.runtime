@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2012, 2013 Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, 2013, 2013 Oracle and/or its affiliates. All rights reserved.
  * This program and the accompanying materials are made available under the 
  * terms of the Eclipse Public License v1.0 and Eclipse Distribution License v. 1.0 
  * which accompanies this distribution. 
@@ -148,7 +148,7 @@ public class ForeignKeyMetadata extends ORMetadata {
      * INTERNAL:
      */
     protected boolean isProviderDefaultConstraintMode() {
-        return m_constraintMode != null && m_constraintMode.equals(MetadataConstants.JPA_CONSTRAINT_MODE_NO_CONSTRAINT);
+        return m_constraintMode != null && m_constraintMode.equals(MetadataConstants.JPA_CONSTRAINT_MODE_PROVIDER_DEFAULT);
     }
     
     /**

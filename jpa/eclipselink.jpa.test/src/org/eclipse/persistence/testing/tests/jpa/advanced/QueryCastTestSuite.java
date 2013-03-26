@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2011, 2012 Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2011, 2013 Oracle and/or its affiliates. All rights reserved.
  * This program and the accompanying materials are made available under the 
  * terms of the Eclipse Public License v1.0 and Eclipse Distribution License v. 1.0 
  * which accompanies this distribution. 
@@ -108,12 +108,10 @@ public class QueryCastTestSuite extends JUnitTestCase {
         if (getServerSession().getPlatform().isPostgreSQL()) {
             getServerSession().getLogin().setShouldForceFieldNamesToUpperCase(true);
         }
-        getServerSession().setLogLevel(0);
     }
 
     public void testDowncastOneToManyLeafQueryKey(){
         EntityManager em = createEntityManager();
-        getServerSession().setLogLevel(0);
         beginTransaction(em);
         try {
 
@@ -1273,7 +1271,6 @@ public class QueryCastTestSuite extends JUnitTestCase {
     
     //expected to fail.  "AS" doesn't add typecast to filter results
     public void testTreatUsingAndOrSTI(){
-        getServerSession().setLogLevel(0);
         EntityManager em = createEntityManager();
         beginTransaction(em);
         try {

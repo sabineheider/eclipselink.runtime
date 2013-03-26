@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2011, 2012 Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2011, 2013 Oracle and/or its affiliates. All rights reserved.
  * This program and the accompanying materials are made available under the
  * terms of the Eclipse Public License v1.0 and Eclipse Distribution License v. 1.0
  * which accompanies this distribution.
@@ -122,17 +122,19 @@ public class JSONWriterRecord extends MarshalRecord<XMLMarshaller> {
     public boolean emptyCollection(XPathFragment xPathFragment, NamespaceResolver namespaceResolver, boolean openGrouping) {    	
     	 if(marshaller.isMarshalEmptyCollections()){  
     		 super.emptyCollection(xPathFragment, namespaceResolver, true);
-    		 startCollection();
-    		 if(xPathFragment != null && !xPathFragment.isSelfFragment()){
-	    		 openStartElement(xPathFragment, namespaceResolver);	    		 
-	    		 if(!levels.isEmpty()){
-	          	   Level position = levels.peek();
-	          	   position.setNeedToCloseComplex(false);
-	          	   position.setNeedToOpenComplex(false);
-	          	 }
-	    		 endElement(xPathFragment, namespaceResolver);
-    		 }
-    		 endEmptyCollection();
+            if (null != xPathFragment) {
+                startCollection();
+                if (!xPathFragment.isSelfFragment()) {
+                    openStartElement(xPathFragment, namespaceResolver);
+                    if (!levels.isEmpty()) {
+                        Level position = levels.peek();
+                        position.setNeedToCloseComplex(false);
+                        position.setNeedToOpenComplex(false);
+                    }
+                    endElement(xPathFragment, namespaceResolver);
+                }
+                endEmptyCollection();
+            }
     		 return true;
     	 }else{
     		 return super.emptyCollection(xPathFragment, namespaceResolver, openGrouping);
@@ -758,6 +760,11 @@ public class JSONWriterRecord extends MarshalRecord<XMLMarshaller> {
                 throw XMLMarshalException.marshalException(sex);
             }
         }
+    }
+
+    @Override
+    public boolean isWrapperAsCollectionName() {
+        return marshaller.isWrapperAsCollectionName();
     }
 
     /**

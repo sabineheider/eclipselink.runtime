@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 1998, 2012 Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1998, 2013 Oracle and/or its affiliates. All rights reserved.
  * This program and the accompanying materials are made available under the 
  * terms of the Eclipse Public License v1.0 and Eclipse Distribution License v. 1.0 
  * which accompanies this distribution. 
@@ -16,9 +16,11 @@
 package org.eclipse.persistence.platform.database;
 
 import java.io.*;
-import java.sql.Types;
 import java.util.*;
 
+import org.eclipse.persistence.internal.sessions.AbstractRecord;
+import org.eclipse.persistence.internal.sessions.AbstractSession;
+import org.eclipse.persistence.queries.StoredProcedureCall;
 import org.eclipse.persistence.exceptions.ValidationException;
 import org.eclipse.persistence.expressions.ExpressionOperator;
 import org.eclipse.persistence.internal.databaseaccess.DatabaseCall;
@@ -50,24 +52,12 @@ import org.eclipse.persistence.tools.schemaframework.FieldDefinition;
 public class PostgreSQLPlatform extends DatabasePlatform {
 
     private static final String LIMIT = " LIMIT ";
-
     private static final String OFFSET = " OFFSET ";
 
     public PostgreSQLPlatform() {
         super();
+        this.cursorCode = 1111; //jdbc.Types.OTHER - PostGreSQL expects this for refCursor types
         this.pingSQL = "SELECT 1";
-    }
-
-    /**
-     * Return the JDBC type for the Java type. For some reason PostgreSQL does
-     * not seem to like the JDBC Blob type (PostgreSQL 8.2).
-     */
-    @Override
-    public int getJDBCType(Class javaType) {
-        if (javaType == ClassConstants.BLOB) {
-            return Types.LONGVARBINARY;
-        }
-        return super.getJDBCType(javaType);
     }
 
     /**
@@ -196,7 +186,7 @@ public class PostgreSQLPlatform extends DatabasePlatform {
     @Override
     public boolean shouldPrintOutputTokenAtStart() {
         // TODO: Check with the reviewer where this is used
-        return false;
+        return true;
     }
 
     /**
@@ -405,14 +395,52 @@ public class PostgreSQLPlatform extends DatabasePlatform {
         return "; END ; $$ LANGUAGE plpgsql;";
     }
 
-    /**
-     * INTERNAL: Used for sp calls.
+     /**
+     * INTERNAL: Used for sp calls.  PostGreSQL uses a different method for executing StoredProcedures than other platforms.
      */
     @Override
-    public String getProcedureCallHeader() {
-        return "EXECUTE ";
-    }
+    public String buildProcedureCallString(StoredProcedureCall call, AbstractSession session, AbstractRecord row) {
+        StringWriter tailWriter = new StringWriter();
+        StringWriter writer = new StringWriter();
+        boolean outParameterFound = false;;
 
+        tailWriter.write(call.getProcedureName());
+        tailWriter.write("(");
+
+        int indexFirst = call.getFirstParameterIndexForCallString();
+        int size = call.getParameters().size();
+        String nextBindString = "?";
+
+        for (int index = indexFirst; index < size; index++) {
+             String name = call.getProcedureArgumentNames().get(index);
+             Object parameter = call.getParameters().get(index);
+             Integer parameterType = call.getParameterTypes().get(index);
+             // If the argument is optional and null, ignore it.
+             if (!call.hasOptionalArguments() || !call.getOptionalArguments().contains(parameter) || (row.get(parameter) != null)) {
+                  if (!call.isOutputParameterType(parameterType)) {
+                       tailWriter.write(nextBindString);
+                       nextBindString = ", ?";
+                  } else {
+                       if (outParameterFound) {
+                            //multiple outs found
+                            throw ValidationException.multipleOutParamsNotSupported(Helper.getShortClassName(this), call.getProcedureName());
+                       }
+                       outParameterFound = true; //PostGreSQL uses a very different header to execute when there are out params
+                  }
+             }
+        }
+        tailWriter.write(")");
+
+        if (outParameterFound) {
+             writer.write("{?= CALL ");
+             tailWriter.write("}");
+        } else {
+             writer.write("SELECT * FROM ");
+        }
+        writer.write(tailWriter.toString());
+
+        return writer.toString();
+    }
     /**
      * INTERNAL Used for stored function calls.
      */

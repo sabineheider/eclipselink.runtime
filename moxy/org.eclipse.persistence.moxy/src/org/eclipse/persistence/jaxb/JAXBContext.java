@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 1998, 2012 Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1998, 2013 Oracle and/or its affiliates. All rights reserved.
  * This program and the accompanying materials are made available under the
  * terms of the Eclipse Public License v1.0 and Eclipse Distribution License v. 1.0
  * which accompanies this distribution.
@@ -42,13 +42,16 @@ import javax.xml.stream.FactoryConfigurationError;
 import javax.xml.stream.XMLInputFactory;
 import javax.xml.transform.Source;
 
+import org.eclipse.persistence.core.queries.CoreAttributeGroup;
 import org.eclipse.persistence.core.sessions.CoreProject;
 import org.eclipse.persistence.descriptors.ClassDescriptor;
+import org.eclipse.persistence.exceptions.ConversionException;
 import org.eclipse.persistence.exceptions.JAXBException;
 import org.eclipse.persistence.internal.core.helper.CoreClassConstants;
 import org.eclipse.persistence.internal.helper.ConversionManager;
 import org.eclipse.persistence.internal.jaxb.JAXBSchemaOutputResolver;
 import org.eclipse.persistence.internal.jaxb.JaxbClassLoader;
+import org.eclipse.persistence.internal.jaxb.ObjectGraphImpl;
 import org.eclipse.persistence.internal.jaxb.WrappedValue;
 import org.eclipse.persistence.internal.jaxb.many.ManyValue;
 import org.eclipse.persistence.internal.oxm.Constants;
@@ -617,7 +620,22 @@ public class JAXBContext extends javax.xml.bind.JAXBContext {
     public <T> T createByXPath(Object parentObject, String xPath, NamespaceResolver namespaceResolver, Class<T> returnType) {
         return getXMLContext().createByXPath(parentObject, xPath, namespaceResolver, returnType);
     }
-
+    
+    public ObjectGraph createObjectGraph(Class type) {
+        CoreAttributeGroup group = new CoreAttributeGroup(null, type, true);
+        return new ObjectGraphImpl(group);
+    }
+    
+    public ObjectGraph createObjectGraph(String typeName) {
+        ClassLoader loader = this.contextInput.classLoader;
+        try {
+            Class cls = PrivilegedAccessHelper.getClassForName(typeName, true, loader);
+            return createObjectGraph(cls);
+        } catch(Exception ex) {
+           throw ConversionException.couldNotBeConvertedToClass(typeName, Class.class, ex);
+        }
+    }
+    
     protected JAXBElement createJAXBElementFromXMLRoot(Root xmlRoot, Class declaredType) {
         Object value = xmlRoot.getObject();
 
@@ -777,6 +795,12 @@ public class JAXBContext extends javax.xml.bind.JAXBContext {
                             line = reader.readLine();
                         }
                     } catch (Exception ex) {
+                    } finally {
+                        try {
+                            reader.close();
+                        } catch (Exception e) {
+                            // ignore
+                        }
                     }
                 }
             }
@@ -1432,6 +1456,8 @@ public class JAXBContext extends javax.xml.bind.JAXBContext {
             	setPropertyOnMarshaller(JAXBContextProperties.JSON_INCLUDE_ROOT, marshaller);
             	setPropertyOnMarshaller(JAXBContextProperties.JSON_VALUE_WRAPPER, marshaller);
             	setPropertyOnMarshaller(JAXBContextProperties.JSON_NAMESPACE_SEPARATOR, marshaller);
+            	setPropertyOnMarshaller(JAXBContextProperties.OBJECT_GRAPH, marshaller);
+            	setPropertyOnMarshaller(JAXBContextProperties.JSON_WRAPPER_AS_ARRAY_NAME, marshaller);
             }
         
             return marshaller;
@@ -1456,6 +1482,8 @@ public class JAXBContext extends javax.xml.bind.JAXBContext {
                  setPropertyOnUnmarshaller(JAXBContextProperties.JSON_INCLUDE_ROOT, unmarshaller);
                  setPropertyOnUnmarshaller(JAXBContextProperties.JSON_VALUE_WRAPPER, unmarshaller);
                  setPropertyOnUnmarshaller(JAXBContextProperties.JSON_NAMESPACE_SEPARATOR, unmarshaller);
+                 setPropertyOnUnmarshaller(JAXBContextProperties.OBJECT_GRAPH, unmarshaller);
+                 setPropertyOnUnmarshaller(JAXBContextProperties.JSON_WRAPPER_AS_ARRAY_NAME, unmarshaller);
              }
              return unmarshaller;
         }
