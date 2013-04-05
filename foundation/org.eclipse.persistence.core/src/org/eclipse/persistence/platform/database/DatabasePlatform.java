@@ -33,5 +33,4 @@ public class DatabasePlatform extends org.eclipse.persistence.internal.databasea
     public DatabasePlatform() {
     	super();
     }
-    
 }

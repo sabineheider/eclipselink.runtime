@@ -394,7 +394,7 @@ public class OraclePlatform extends org.eclipse.persistence.platform.database.Da
      */
     @Override
     public String getProcedureCallHeader() {
-        return "BEGIN ";
+        return useJDBCStoredProcedureSyntax() ? "{CALL " : "BEGIN ";  
     }
 
     /**
@@ -402,7 +402,7 @@ public class OraclePlatform extends org.eclipse.persistence.platform.database.Da
      */
     @Override
     public String getProcedureCallTail() {
-        return "; END;";
+        return useJDBCStoredProcedureSyntax() ? "}" : "; END;";
     }
     
     /**
@@ -758,7 +758,16 @@ public class OraclePlatform extends org.eclipse.persistence.platform.database.Da
         return "SYSDATE";
     }
 
-
+    /**
+     * INTERNAL:
+     * Should the variable name of a stored procedure call be printed as part of the procedure call
+     * e.g. EXECUTE PROCEDURE MyStoredProc(myvariable = ?)
+     */
+    @Override
+    public boolean shouldPrintStoredProcedureArgumentNameInCall() {
+        return ! useJDBCStoredProcedureSyntax();
+    }
+    
     /**
      * JDBC defines and outer join syntax, many drivers do not support this. So we normally avoid it.
      */
@@ -870,6 +879,17 @@ public class OraclePlatform extends org.eclipse.persistence.platform.database.Da
      */
     public Connection unwrapOracleConnection(Connection connection) {
         return connection;
+    }
+    
+    /**
+     * Return true if JDBC syntax should be used for stored procedure calls.
+     */
+    public boolean useJDBCStoredProcedureSyntax() {
+        if (useJDBCStoredProcedureSyntax == null) {
+            useJDBCStoredProcedureSyntax = this.driverName != null && this.driverName.equals("Oracle");
+        }
+        
+        return useJDBCStoredProcedureSyntax;
     }
     
     //Oracle Rownum support
