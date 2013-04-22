@@ -2177,7 +2177,9 @@ public abstract class ForeignReferenceMapping extends DatabaseMapping {
                 targetQuery.setIsExecutionClone(true);
             }
             targetQuery.setQueryId(sourceQuery.getQueryId());
-            targetQuery.setAccessors(sourceQuery.getAccessors());
+            if (sourceQuery.usesResultSetAccessOptimization()) {
+                targetQuery.setAccessors(sourceQuery.getAccessors());
+            }
             ((ObjectLevelReadQuery)targetQuery).setRequiresDeferredLocks(sourceQuery.requiresDeferredLocks());
         }
 
@@ -2308,6 +2310,7 @@ public abstract class ForeignReferenceMapping extends DatabaseMapping {
         if (joinManager == null) {
             nestedQuery = prepareNestedJoins(joinManager, sourceQuery, executionSession);
             nestedQuery.setSession(executionSession);
+            nestedQuery.setPrefetchedCacheKeys(sourceQuery.getPrefetchedCacheKeys());
             return nestedQuery;
         }
         // PERF: Also store the clone of the nested query on the execution query to avoid
@@ -2329,6 +2332,7 @@ public abstract class ForeignReferenceMapping extends DatabaseMapping {
             nestedQuery.setExecutionTime(joinManager.getBaseQuery().getExecutionTime());
             joinManager.getJoinedMappingQueryClones().put(this, nestedQuery);
         }
+        nestedQuery.setPrefetchedCacheKeys(sourceQuery.getPrefetchedCacheKeys());
         // Must also set data results to the nested query if it uses to-many joining.
         if (nestedQuery.hasJoining() && nestedQuery.getJoinedAttributeManager().isToManyJoin()) {
             // The data results only of the child object are required, they must also be trimmed.

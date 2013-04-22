@@ -96,7 +96,6 @@ import org.eclipse.persistence.testing.tests.jpa.relationships.IsolatedCacheTest
 import org.eclipse.persistence.testing.tests.jpa.relationships.RelationshipModelJUnitTestSuite;
 import org.eclipse.persistence.testing.tests.jpa.relationships.UniAndBiDirectionalMappingTestSuite;
 import org.eclipse.persistence.testing.tests.jpa.relationships.VirtualAttributeTestSuite;
-import org.eclipse.persistence.testing.tests.jpa.remote.RemoteEntityManagerTestSuite;
 import org.eclipse.persistence.testing.tests.jpa.validation.QueryParameterValidationTestSuite;
 import org.eclipse.persistence.testing.tests.jpa.validation.ValidationTestSuite;
 import org.eclipse.persistence.testing.tests.jpa.xml.EntityMappingsJUnitTestSuite;
@@ -299,7 +298,8 @@ public class FullRegressionTestSuite extends TestSuite {
         fullSuite.addTest(PartitionedXMLTestSuite.suite());
         fullSuite.addTest(PLSQLTestSuite.suite());
         fullSuite.addTest(XMLPLSQLTestSuite.suite());
-        fullSuite.addTest(RemoteEntityManagerTestSuite.suite());
+        // Has security manager issues on some JVMs.
+        //fullSuite.addTest(RemoteEntityManagerTestSuite.suite());
 
         // Composite tests.
         fullSuite.addTest(org.eclipse.persistence.testing.tests.jpa.composite.advanced.EntityManagerJUnitTestSuite.suite());
