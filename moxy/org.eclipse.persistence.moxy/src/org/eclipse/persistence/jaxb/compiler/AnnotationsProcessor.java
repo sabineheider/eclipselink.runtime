@@ -1588,7 +1588,7 @@ public class AnnotationsProcessor {
      */
     private void preProcessXmlAccessorType(JavaClass javaClass, TypeInfo info, NamespaceInfo packageNamespace) {
         org.eclipse.persistence.jaxb.xmlmodel.XmlAccessType xmlAccessType;
-        if (helper.isAnnotationPresent(javaClass, XmlAccessorType.class)) {
+        if (javaClass.getDeclaredAnnotation(helper.getJavaClass(XmlAccessorType.class)) != null) {
             XmlAccessorType accessorType = (XmlAccessorType) helper.getAnnotation(javaClass, XmlAccessorType.class);
             xmlAccessType = org.eclipse.persistence.jaxb.xmlmodel.XmlAccessType.fromValue(accessorType.value().name());
             info.setXmlAccessType(xmlAccessType);
@@ -1607,6 +1607,11 @@ public class AnnotationsProcessor {
             JavaClass next = helper.getJavaClass(info.getJavaClassName()).getSuperclass();
             while (next != null && !(next.getName().equals(JAVA_LANG_OBJECT))) {
                 TypeInfo parentInfo = this.typeInfo.get(next.getName());
+                // If parentInfo is null, hasn't been processed yet
+                if (shouldGenerateTypeInfo(next)) {
+                    buildNewTypeInfo(new JavaClass[] { next });
+                    parentInfo = this.typeInfo.get(next.getName());
+                }
                 if (parentInfo != null && parentInfo.isSetXmlAccessType()) {
                     info.setXmlAccessType(parentInfo.getXmlAccessType());
                     break;
@@ -1795,7 +1800,7 @@ public class AnnotationsProcessor {
                 return true;
             }
         }
-        if (helper.isBuiltInJavaType(javaClass)) {
+        if (helper.isBuiltInJavaType(javaClass) && !javaClass.isEnum()) {
             return false;
         }
         if (helper.isCollectionType(javaClass) || helper.isMapType(javaClass)) {
@@ -3185,12 +3190,30 @@ public class AnnotationsProcessor {
             XmlEnum xmlEnum = (XmlEnum) helper.getAnnotation(javaClass, XmlEnum.class);
             restrictionClass = xmlEnum.value();
       	    JavaClass restrictionJavaClass= helper.getJavaClass(restrictionClass);
-
       	    boolean restrictionIsEnum = helper.isAnnotationPresent(restrictionJavaClass, XmlEnum.class);
+
       	    if(!restrictionIsEnum){
-        	     restrictionBase = getSchemaTypeFor(helper.getJavaClass(restrictionClass));                  
-            }else{
-	            while (restrictionIsEnum) {
+      	    	 if(helper.isBuiltInJavaType(restrictionJavaClass)){  
+      	    		restrictionBase = getSchemaTypeFor(helper.getJavaClass(restrictionClass));          
+      	    	 }else{
+      	    		TypeInfo restrictionInfo = typeInfo.get(restrictionJavaClass.getQualifiedName());
+          	    	if(restrictionInfo == null){
+          	    		 JavaClass[] jClasses = new JavaClass[] { restrictionJavaClass };
+                         buildNewTypeInfo(jClasses);
+                         restrictionInfo = typeInfo.get(restrictionJavaClass.getQualifiedName());
+          	    	}else if(restrictionInfo != null && !restrictionInfo.isPostBuilt()){
+          	    		postBuildTypeInfo(new JavaClass[] { restrictionJavaClass });
+          	    	}
+          	    	
+          	    	Property xmlValueProp  =restrictionInfo.getXmlValueProperty();
+          	    	if(xmlValueProp != null){
+          	    		restrictionJavaClass = xmlValueProp.getActualType();      	    		
+          	    	    restrictionBase = getSchemaTypeFor(restrictionJavaClass);
+          	    	    restrictionClass = helper.getClassForJavaClass(restrictionJavaClass);
+          	    	}      	
+      	    	 }
+      	    }else{
+      	    	while (restrictionIsEnum) {
 	            	
 	                  TypeInfo restrictionTypeInfo = typeInfo.get(restrictionJavaClass.getQualifiedName());
 	                  if(restrictionTypeInfo == null && shouldGenerateTypeInfo(restrictionJavaClass)){
@@ -3205,7 +3228,7 @@ public class AnnotationsProcessor {
 	                 restrictionJavaClass= helper.getJavaClass(restrictionClass);
 	                 restrictionIsEnum = helper.isAnnotationPresent(restrictionJavaClass, XmlEnum.class);
 	            }
-            }
+      	    }      	    
         } 
         info.setRestrictionBase(restrictionBase);
      

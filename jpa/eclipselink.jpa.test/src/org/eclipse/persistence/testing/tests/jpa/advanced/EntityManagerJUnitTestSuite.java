@@ -9097,8 +9097,7 @@ public class EntityManagerJUnitTestSuite extends JUnitTestCase {
         emps.toString();
         closeEntityManager(em);
     }
-    
-    
+
     // Bug 237281 - ensure we throw the correct exception when trying to persist a non-entity subclass of an entity
     public void testExceptionForPersistNonEntitySubclass(){
         EntityManager em = createEntityManager();
