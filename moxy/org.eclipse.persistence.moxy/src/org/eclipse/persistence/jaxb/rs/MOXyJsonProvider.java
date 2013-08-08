@@ -201,6 +201,7 @@ public class MOXyJsonProvider implements MessageBodyReader<Object>, MessageBodyW
  
     private static final String APPLICATION_XJAVASCRIPT = "application/x-javascript";
     private static final String CHARSET = "charset";
+    private static final QName EMPTY_STRING_QNAME = new QName("");
     private static final String JSON = "json";
     private static final String PLUS_JSON = "+json";
 
@@ -311,6 +312,19 @@ public class MOXyJsonProvider implements MessageBodyReader<Object>, MessageBodyW
         }
     }
 
+    private JAXBContext getJAXBContext(Class<?> type, Type genericType, Annotation[] annotations, MediaType mediaType) {
+        if(null == genericType) {
+            genericType = type;
+        }
+
+        try {
+            Class<?> domainClass = getDomainClass(genericType);
+            return getJAXBContext(domainClass, annotations, mediaType, null);
+        } catch(JAXBException e) {
+            return null;
+        }
+    }
+
     /**
      * By default the JSON-binding will ignore namespace qualification. If this 
      * property is set the portion of the key before the namespace separator
@@ -414,7 +428,7 @@ public class MOXyJsonProvider implements MessageBodyReader<Object>, MessageBodyW
             Class domainClass = getDomainClass(genericType);
             return isReadable(domainClass, null, annotations, mediaType) || String.class == domainClass;
         } else {
-            return true;
+            return null != getJAXBContext(type, genericType, annotations, mediaType);
         }
     }
 
@@ -501,7 +515,7 @@ public class MOXyJsonProvider implements MessageBodyReader<Object>, MessageBodyW
             Class domainClass = getDomainClass(genericType);
             return isWriteable(domainClass, null, annotations, mediaType) || domainClass == String.class;
          } else {
-            return true;
+             return null != getJAXBContext(type, genericType, annotations, mediaType);
         }
     }
 
@@ -568,8 +582,11 @@ public class MOXyJsonProvider implements MessageBodyReader<Object>, MessageBodyW
             preReadFrom(type, genericType, annotations, mediaType, httpHeaders, unmarshaller);
 
             StreamSource jsonSource;
-            Map<String, String> mediaTypeParameters = mediaType.getParameters();
-            if(mediaTypeParameters.containsKey(CHARSET)) {
+            Map<String, String> mediaTypeParameters = null;
+            if(null != mediaType) {
+                mediaTypeParameters = mediaType.getParameters();
+            }
+            if(null != mediaTypeParameters && mediaTypeParameters.containsKey(CHARSET)) {
                 String charSet = mediaTypeParameters.get(CHARSET);
                 Reader entityReader = new InputStreamReader(entityStream, charSet);
                 jsonSource = new StreamSource(entityReader);
@@ -584,19 +601,18 @@ public class MOXyJsonProvider implements MessageBodyReader<Object>, MessageBodyW
                 Object value = jaxbElement.getValue();
                 if(value instanceof ArrayList) {
                     if(type.isArray()) {
-                        ArrayList<JAXBElement> arrayList = (ArrayList<JAXBElement>) value;
+                        ArrayList<Object> arrayList = (ArrayList<Object>) value;
                         int arrayListSize = arrayList.size();
+                        boolean wrapItemInJAXBElement = wrapItemInJAXBElement(genericType);
                         Object array;
-                        if(genericType instanceof GenericArrayType) {
+                        if(wrapItemInJAXBElement) {
                             array = Array.newInstance(JAXBElement.class, arrayListSize);
-                            for(int x=0; x<arrayListSize; x++) {
-                                Array.set(array, x, arrayList.get(x));
-                            }
                         } else {
                             array = Array.newInstance(domainClass, arrayListSize);
-                            for(int x=0; x<arrayListSize; x++) {
-                                Array.set(array, x, arrayList.get(x).getValue());
-                            }
+                        }
+                        for(int x=0; x<arrayListSize; x++) {
+                            Object element = handleJAXBElement(arrayList.get(x), domainClass, wrapItemInJAXBElement);
+                            Array.set(array, x, element);
                         }
                         return array;
                     } else {
@@ -613,23 +629,10 @@ public class MOXyJsonProvider implements MessageBodyReader<Object>, MessageBodyW
                             containerPolicy = new CollectionContainerPolicy(type);
                         }
                         Object container = containerPolicy.containerInstance();
-                        boolean wrapItemInJAXBElement = false;
-                        if(genericType instanceof ParameterizedType) {
-                            Type actualType = ((ParameterizedType) genericType).getActualTypeArguments()[0];
-                            if(actualType instanceof ParameterizedType) {
-                                Type rawType = ((ParameterizedType) actualType).getRawType();
-                                wrapItemInJAXBElement = rawType == JAXBElement.class;
-                            }
-                        }
+                        boolean wrapItemInJAXBElement = wrapItemInJAXBElement(genericType);
                         for(Object element : (Collection<Object>) value) {
-                            if(wrapItemInJAXBElement) {
-                                if(!(element instanceof JAXBElement)) {
-                                    element = new JAXBElement(new QName(""), domainClass, element);
-                                } 
-                                containerPolicy.addInto(element, container, null);
-                            } else {
-                                containerPolicy.addInto(JAXBIntrospector.getValue(element), container, null);
-                            }
+                            element = handleJAXBElement(element, domainClass, wrapItemInJAXBElement);
+                            containerPolicy.addInto(element, container, null);
                         }
                         return container;
                     }
@@ -642,6 +645,32 @@ public class MOXyJsonProvider implements MessageBodyReader<Object>, MessageBodyW
             throw new WebApplicationException(builder.build());
         } catch(JAXBException jaxbException) {
             throw new WebApplicationException(jaxbException);
+        }
+    }
+
+    private boolean wrapItemInJAXBElement(Type genericType) {
+        if(genericType == JAXBElement.class) {
+            return true;
+        } else if(genericType instanceof GenericArrayType) {
+            return wrapItemInJAXBElement(((GenericArrayType) genericType).getGenericComponentType());
+        } else if(genericType instanceof ParameterizedType) {
+            ParameterizedType parameterizedType = (ParameterizedType) genericType;
+            Type actualType = parameterizedType.getActualTypeArguments()[0];
+            return wrapItemInJAXBElement(parameterizedType.getOwnerType()) || wrapItemInJAXBElement(parameterizedType.getRawType()) || wrapItemInJAXBElement(actualType);
+        } else {
+            return false;
+        }
+    }
+
+    private Object handleJAXBElement(Object element, Class domainClass, boolean wrapItemInJAXBElement) {
+        if(wrapItemInJAXBElement) {
+            if(element instanceof JAXBElement) {
+                return element;
+            } else {
+                return new JAXBElement(EMPTY_STRING_QNAME, domainClass, element);
+            }
+        } else {
+            return JAXBIntrospector.getValue(element);
         }
     }
 
@@ -798,8 +827,11 @@ public class MOXyJsonProvider implements MessageBodyReader<Object>, MessageBodyW
             marshaller.setProperty(MarshallerProperties.JSON_WRAPPER_AS_ARRAY_NAME, wrapperAsArrayName);
             marshaller.setProperty(MarshallerProperties.NAMESPACE_PREFIX_MAPPER, namespacePrefixMapper);
 
-            Map<String, String> mediaTypeParameters = mediaType.getParameters();
-            if(mediaTypeParameters.containsKey(CHARSET)) {
+            Map<String, String> mediaTypeParameters = null;
+            if(null != mediaType) {
+                mediaTypeParameters = mediaType.getParameters();
+            }
+            if(null != mediaTypeParameters && mediaTypeParameters.containsKey(CHARSET)) {
                 String charSet = mediaTypeParameters.get(CHARSET);
                 marshaller.setProperty(Marshaller.JAXB_ENCODING, charSet);
             }

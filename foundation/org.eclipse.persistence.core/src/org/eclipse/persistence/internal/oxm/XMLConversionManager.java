@@ -37,6 +37,8 @@ import javax.xml.namespace.QName;
 import org.eclipse.persistence.exceptions.ConversionException;
 import org.eclipse.persistence.exceptions.XMLConversionException;
 import org.eclipse.persistence.internal.core.helper.CoreClassConstants;
+import org.eclipse.persistence.internal.core.queries.CoreContainerPolicy;
+import org.eclipse.persistence.internal.core.sessions.CoreAbstractSession;
 import org.eclipse.persistence.internal.helper.ConversionManager;
 import org.eclipse.persistence.internal.helper.Helper;
 import org.eclipse.persistence.internal.helper.TimeZoneHolder;
@@ -51,7 +53,7 @@ import org.eclipse.persistence.internal.queries.ContainerPolicy;
  * @since    OracleAS TopLink 10<i>g</i>
  */
 
-public class XMLConversionManager extends ConversionManager implements TimeZoneHolder {
+public class XMLConversionManager extends ConversionManager implements org.eclipse.persistence.internal.oxm.ConversionManager, TimeZoneHolder {
     protected static final String GMT_ID = "GMT";
     protected static final String GMT_SUFFIX = "Z";
 
@@ -71,8 +73,6 @@ public class XMLConversionManager extends ConversionManager implements TimeZoneH
     private static final char PLUS = '+';
 
     protected DatatypeFactory datatypeFactory;
-
-    private boolean trimGMonth = false;
     
     public XMLConversionManager() {
         super();
@@ -156,7 +156,7 @@ public class XMLConversionManager extends ConversionManager implements TimeZoneH
             return sourceObject;
         } else if (javaClass == CoreClassConstants.STRING) {
            if(sourceObject instanceof List){
-        	   return convertListToString(sourceObject);
+        	   return convertListToString(sourceObject, null);
            }else{           
                return convertObjectToString(sourceObject);
            }
@@ -201,6 +201,7 @@ public class XMLConversionManager extends ConversionManager implements TimeZoneH
      * @param schemaTypeQName - the XML schema that the object is being converted from
      * @return - the newly converted object
      */
+    @Override
     public Object convertObject(Object sourceObject, Class javaClass, QName schemaTypeQName) throws ConversionException {
         if (schemaTypeQName == null) {
             return convertObject(sourceObject, javaClass);
@@ -227,7 +228,7 @@ public class XMLConversionManager extends ConversionManager implements TimeZoneH
         } else if ((javaClass == CoreClassConstants.List_Class) && (sourceObject instanceof String)) {
             return convertStringToList(sourceObject);
         } else if ((javaClass == CoreClassConstants.STRING) && (sourceObject instanceof List)) {
-            return convertListToString(sourceObject);
+            return convertListToString(sourceObject, schemaTypeQName);
         } else if (sourceObject instanceof byte[]) {
             if (schemaTypeQName.getLocalPart().equalsIgnoreCase(Constants.BASE_64_BINARY)) {
                 return buildBase64StringFromBytes((byte[]) sourceObject);
@@ -1020,47 +1021,24 @@ public class XMLConversionManager extends ConversionManager implements TimeZoneH
         }
         // gMonth
         if (Constants.G_MONTH_QNAME.equals(schemaTypeQName)) {
+            //There was previously some workaround in the method for handling gMonth and the older/invalid
+            //--MM-- format.  Output should now always be in the --MM format
+            //bug #410084        	
             xgc.setMonth(cal.get(Calendar.MONTH) + 1);
-            // Note: 'XML Schema:  Datatypes' indicates that the lexical representation is "--MM--"
-            // but the truncated representation as described in 5.2.1.3 of ISO 8601:1988 is "--MM".
-            // We always want to return the 1.5 syntax ("--MM--") to comply with the JAXB RI.
             String xmlFormat = xgc.toXMLFormat();
-            String pre  = xmlFormat.substring(0, 4); // will always be --MM
-            String post = Constants.EMPTY_STRING;
-
-            // --MM--
-            if (xmlFormat.length() == 6) {
-                if (trimGMonth()) {
-                    return pre;
-                }
-                return xmlFormat;
+            int lastDashIndex = xmlFormat.lastIndexOf('-');
+            if(lastDashIndex > 1){
+            	//this means the format is the --MM--, --MM--Z, --MM--+03:00 and we need to trim the String
+            	String pre = xmlFormat.substring(0, 4);
+            	if(xmlFormat.length() > 6){
+            		String post = xmlFormat.substring(6, xmlFormat.length());
+            		return pre + post;
+            	}else{
+            		return pre;
+            	}
             }
-
-            // --MM--Z or --MM--+03:00
-            if (xmlFormat.length() == 7 || xmlFormat.length() == 12) {
-                if (trimGMonth()) {
-                    return pre + xmlFormat.substring(6);
-                }
-                return xmlFormat;
-            }
-
-            // --MM
-            if (xmlFormat.length() == 4) {
-                if (trimGMonth()) {
-                    return xmlFormat;
-                }
-                post = "--";
-            }
-
-            // --MMZ or --MM+03:00
-            if (xmlFormat.length() == 5 || xmlFormat.length() == 10) {
-                if (trimGMonth()) {
-                    return xmlFormat;
-                }
-                post = "--" + xmlFormat.substring(4);
-            }
-
-            return pre + post;
+            return xmlFormat;
+          
         }
         // gMonthDay
         if (Constants.G_MONTH_DAY_QNAME.equals(schemaTypeQName)) {
@@ -1764,11 +1742,14 @@ public class XMLConversionManager extends ConversionManager implements TimeZoneH
     }
 
     private String stringFromXMLGregorianCalendar(XMLGregorianCalendar cal, QName schemaTypeQName) {
+    	if(schemaTypeQName !=null && schemaTypeQName.equals(cal.getXMLSchemaType()) && schemaTypeQName != Constants.G_MONTH_QNAME){
+    	  return cal.toXMLFormat();
+    	}
         GregorianCalendar gCal = cal.toGregorianCalendar();
         if(cal.getTimezone() == DatatypeConstants.FIELD_UNDEFINED) {
             gCal.clear(Calendar.ZONE_OFFSET);
-        }
-        return stringFromCalendar(gCal, schemaTypeQName);
+        }        
+        return  stringFromCalendar(gCal, schemaTypeQName);
     }
 
     private String stringFromXMLGregorianCalendar(XMLGregorianCalendar cal) {
@@ -1799,6 +1780,7 @@ public class XMLConversionManager extends ConversionManager implements TimeZoneH
      * INTERNAL:
      * Converts a String which is in Base64 format to a Byte[]
      */
+    @Override
     public byte[] convertSchemaBase64ToByteArray(Object sourceObject) throws ConversionException {
         if (sourceObject instanceof String) {
             //the base64 string may have contained embedded whitespaces. Try again after
@@ -1814,6 +1796,22 @@ public class XMLConversionManager extends ConversionManager implements TimeZoneH
         return convertObjectToByteArray(sourceObject);
     }
 
+    @Override
+    public Object convertSchemaBase64ListToByteArrayList(Object sourceObject, CoreContainerPolicy containerPolicy, CoreAbstractSession session) throws ConversionException {
+    	if (sourceObject instanceof String) { 
+    		StringTokenizer tokenizer = new StringTokenizer((String) sourceObject, " ");
+    		Object container = containerPolicy.containerInstance();
+            while (tokenizer.hasMoreElements()) {
+                String token = tokenizer.nextToken();
+                byte[] bytes = Base64.base64Decode(token.getBytes());
+                containerPolicy.addInto(bytes, container, session);
+            }
+            return container;
+    	}    	
+    	throw ConversionException.couldNotBeConverted(sourceObject, CoreClassConstants.ABYTE);
+    }
+    
+    
     protected Byte[] convertSchemaBase64ToByteObjectArray(Object sourceObject) throws ConversionException {
         byte[] bytes = convertSchemaBase64ToByteArray(sourceObject);
         Byte[] objectBytes = new Byte[bytes.length];
@@ -1823,6 +1821,7 @@ public class XMLConversionManager extends ConversionManager implements TimeZoneH
         return objectBytes;
     }
 
+    @Override
     public String buildBase64StringFromBytes(byte[] bytes) {
         byte[] convertedBytes = Base64.base64Encode(bytes);
         StringBuffer buffer = new StringBuffer();
@@ -1868,21 +1867,21 @@ public class XMLConversionManager extends ConversionManager implements TimeZoneH
      * @param elementType - the type of the elements contained in the list
      * @return - the newly converted object
      */
-    public Object convertStringToList(Object sourceObject, Class elementType, ContainerPolicy containerPolicy) throws ConversionException {
+    public Object convertStringToList(Object sourceObject, Class elementType, ContainerPolicy containerPolicy, QName schemaType) throws ConversionException {
         Collection collection = (Collection) containerPolicy.containerInstance();
 
         if (sourceObject instanceof String) {
             StringTokenizer tokenizer = new StringTokenizer((String) sourceObject, " ");
             while (tokenizer.hasMoreElements()) {
                 String token = tokenizer.nextToken();
-                collection.add(convertObject(token, elementType));
+                collection.add(convertObject(token, elementType,schemaType ));
             }
         }
 
         return collection;
     }
 
-    public String convertListToString(Object sourceObject) throws ConversionException {
+    public String convertListToString(Object sourceObject, QName schemaType) throws ConversionException {
         StringBuilder returnStringBuilder = new StringBuilder();
         if (sourceObject instanceof List) {
             List list = (List) sourceObject;
@@ -1891,7 +1890,7 @@ public class XMLConversionManager extends ConversionManager implements TimeZoneH
                     if (i > 0) {
                         returnStringBuilder.append(' ');
                     }
-                    returnStringBuilder.append(convertObjectToString(next));
+                    returnStringBuilder.append((String)convertObject(next, String.class, schemaType));
             }
         }
         return returnStringBuilder.toString();
@@ -2080,22 +2079,20 @@ public class XMLConversionManager extends ConversionManager implements TimeZoneH
         return strBldr.toString();
     }
 
-    public void setTrimGMonth(boolean value) {
-        this.trimGMonth = value;
-    }
-
-    public boolean trimGMonth() {
-        return this.trimGMonth;
-    }
-
+    @Override
     public QName buildQNameFromString(String stringValue, AbstractUnmarshalRecord record){     
+    	stringValue = stringValue.trim();
         int index = stringValue.lastIndexOf(Constants.COLON);
         if(index > -1) {
             String prefix =  stringValue.substring(0, index);
             String localName = stringValue.substring(index + 1);
             
-            String namespaceURI = record.resolveNamespacePrefix(prefix);            
-            return new QName(namespaceURI, localName, prefix);
+            if(record.isNamespaceAware()){
+                String namespaceURI = record.resolveNamespacePrefix(prefix);            
+                return new QName(namespaceURI, localName, prefix);
+            }else{
+            	return new QName(null, localName, prefix);
+            }
         } else {
             String namespaceURI = record.resolveNamespacePrefix(Constants.EMPTY_STRING);
             if(namespaceURI == null){
@@ -2108,6 +2105,7 @@ public class XMLConversionManager extends ConversionManager implements TimeZoneH
     /**
      * Replaces any CR, Tab or LF characters in the string with a single ' ' character.
      */
+    @Override
     public String normalizeStringValue(String value) {
         int i = 0;        
         int length = value.length();
@@ -2138,6 +2136,7 @@ public class XMLConversionManager extends ConversionManager implements TimeZoneH
      * Removes all leading and trailing whitespaces, and replaces any sequences of whitespaces
      * that occur in the string with a single ' ' character.
      */
+    @Override
     public String collapseStringValue(String value) {
         int length = value.length();
         
@@ -2215,4 +2214,25 @@ public class XMLConversionManager extends ConversionManager implements TimeZoneH
   			||(schemaTypeQName.equals(Constants.UNSIGNED_INT_QNAME ))
   			||(schemaTypeQName.equals(Constants.UNSIGNED_BYTE_QNAME ));  			
     }
+
+    /**
+     * @since EclipseLink 2.6.0
+     * @param schemaType The type you want to find a corresponding Java class for.
+     * @return the Java class for the XML schema type.
+     */
+    @Override
+    public Class<?> javaType(QName schemaType) {
+        return (Class<?>) getDefaultXMLTypes().get(schemaType);
+    }
+
+    /**
+     * @since EclipseLink 2.6.0
+     * @param javaType The type you want to find a corresponding schema type for.
+     * @return the schema type for the Java class.
+     */
+    @Override
+    public QName schemaType(Class<?> javaType) {
+         return (QName) getDefaultJavaTypes().get(javaType);
+    }
+
 }

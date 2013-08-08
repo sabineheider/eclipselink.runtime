@@ -18,7 +18,6 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 
-import javax.xml.namespace.NamespaceContext;
 import javax.xml.stream.XMLEventFactory;
 import javax.xml.stream.XMLEventWriter;
 import javax.xml.stream.XMLStreamException;
@@ -107,7 +106,6 @@ public class XMLEventWriterRecord extends MarshalRecord {
                  throw XMLMarshalException.marshalException(e);
              }
          } else {
-             NamespaceContext ctx = xmlEventWriter.getNamespaceContext();
              if(namespaceURI == null || namespaceURI.length() == 0) {
                  event = xmlEventFactory.createAttribute(localName, value);
              } else {
@@ -207,6 +205,11 @@ public class XMLEventWriterRecord extends MarshalRecord {
         this.xPathFragment = xPathFragment;
         this.attributes = null;
         this.namespaceDeclarations = null;
+
+        if(xPathFragment.isGeneratedPrefix()){
+        	namespaceDeclaration(xPathFragment.getPrefix(), xPathFragment.getNamespaceURI());
+        }
+        
         writePrefixMappings();
     }
 

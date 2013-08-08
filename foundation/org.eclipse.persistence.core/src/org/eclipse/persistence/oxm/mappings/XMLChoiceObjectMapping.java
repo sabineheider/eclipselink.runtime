@@ -441,7 +441,7 @@ public class XMLChoiceObjectMapping extends DatabaseMapping implements ChoiceObj
                 }
                                 
                  XMLConversionManager xmlConversionManager = (XMLConversionManager) session.getDatasourcePlatform().getConversionManager();                                      
-                 QName schemaType = (QName)xmlConversionManager.getDefaultJavaTypes().get(nextMapping.getAttributeClassification());
+                 QName schemaType = xmlConversionManager.schemaType(nextMapping.getAttributeClassification());
                  if(schemaType != null && ((XMLField)nextMapping.getField()).getSchemaType() == null) {
                      ((XMLField)nextMapping.getField()).setSchemaType(schemaType);
                  }
@@ -637,10 +637,10 @@ public class XMLChoiceObjectMapping extends DatabaseMapping implements ChoiceObj
     public void setChoiceFieldToClassAssociations(ArrayList associations) {
         if(associations.size() > 0) {
             for(Object next:associations) {
-                XMLChoiceFieldToClassAssociation association = (XMLChoiceFieldToClassAssociation)next;
-                this.addChoiceElement((XMLField)association.getXmlField(), association.getClassName());
+                XMLChoiceFieldToClassAssociation<Converter, XMLField> association = (XMLChoiceFieldToClassAssociation<Converter, XMLField>)next;
+                this.addChoiceElement(association.getXmlField(), association.getClassName());
                 if(association.getConverter() != null) {
-                    this.addConverter((XMLField)association.getXmlField(), association.getConverter());
+                    this.addConverter(association.getXmlField(), association.getConverter());
                 }
             }
         }

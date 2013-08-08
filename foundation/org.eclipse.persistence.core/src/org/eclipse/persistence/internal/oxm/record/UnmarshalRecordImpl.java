@@ -12,7 +12,6 @@
  ******************************************************************************/  
 package org.eclipse.persistence.internal.oxm.record;
 
-import java.io.StringWriter;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -31,10 +30,10 @@ import org.eclipse.persistence.exceptions.XMLMarshalException;
 import org.eclipse.persistence.internal.core.helper.CoreField;
 import org.eclipse.persistence.internal.core.sessions.CoreAbstractRecord;
 import org.eclipse.persistence.internal.core.sessions.CoreAbstractSession;
-import org.eclipse.persistence.internal.helper.Helper;
 import org.eclipse.persistence.internal.identitymaps.CacheId;
 import org.eclipse.persistence.internal.oxm.Constants;
 import org.eclipse.persistence.internal.oxm.ContainerValue;
+import org.eclipse.persistence.internal.oxm.ConversionManager;
 import org.eclipse.persistence.internal.oxm.IDResolver;
 import org.eclipse.persistence.internal.oxm.MappingNodeValue;
 import org.eclipse.persistence.internal.oxm.NamespaceResolver;
@@ -52,6 +51,7 @@ import org.eclipse.persistence.internal.oxm.XPathNode;
 import org.eclipse.persistence.internal.oxm.XPathPredicate;
 import org.eclipse.persistence.internal.oxm.XPathQName;
 import org.eclipse.persistence.internal.oxm.mappings.Descriptor;
+import org.eclipse.persistence.internal.oxm.mappings.DirectMapping;
 import org.eclipse.persistence.internal.oxm.mappings.Field;
 import org.eclipse.persistence.internal.oxm.mappings.Mapping;
 import org.eclipse.persistence.internal.oxm.record.namespaces.StackUnmarshalNamespaceResolver;
@@ -59,10 +59,7 @@ import org.eclipse.persistence.internal.oxm.record.namespaces.UnmarshalNamespace
 import org.eclipse.persistence.internal.oxm.unmapped.UnmappedContentHandler;
 import org.eclipse.persistence.internal.security.PrivilegedNewInstanceFromClass;
 import org.eclipse.persistence.internal.sessions.AbstractSession;
-import org.eclipse.persistence.mappings.foundation.AbstractDirectMapping;
 import org.eclipse.persistence.mappings.foundation.AbstractTransformationMapping;
-import org.eclipse.persistence.oxm.XMLRoot;
-import org.eclipse.persistence.oxm.XMLUnmarshalListener;
 import org.eclipse.persistence.oxm.record.DOMRecord;
 import org.eclipse.persistence.queries.ReadObjectQuery;
 import org.w3c.dom.Document;
@@ -122,7 +119,7 @@ public class UnmarshalRecordImpl extends CoreAbstractRecord implements Unmarshal
     private boolean isXsiNil;
     private boolean xpathNodeIsMixedContent = false;
     private int unmappedLevel = -1;
-    private ReferenceResolver referenceResolver = new ReferenceResolver();
+    private ReferenceResolver referenceResolver;
     
     
     protected Unmarshaller unmarshaller;
@@ -139,8 +136,18 @@ public class UnmarshalRecordImpl extends CoreAbstractRecord implements Unmarshal
 
     protected XPathFragment textWrapperFragment;    
 
+    private ConversionManager conversionManager;
+
+    protected UnmarshalRecordImpl() {
+    }
+
     public UnmarshalRecordImpl(ObjectBuilder objectBuilder) {
+        this(objectBuilder, new ReferenceResolver());
+    }
+
+    private UnmarshalRecordImpl(ObjectBuilder objectBuilder, ReferenceResolver referenceResolver) {
         super();
+        this.referenceResolver = referenceResolver;
         this.xPathFragment = new XPathFragment();
         xPathFragment.setNamespaceAware(isNamespaceAware());
         this.setUnmarshalAttributeGroup(DEFAULT_ATTRIBUTE_GROUP);
@@ -539,7 +546,7 @@ public class UnmarshalRecordImpl extends CoreAbstractRecord implements Unmarshal
                 parentRecordCurrentObject = parentRecord.getCurrentObject();
             }
             
-            XMLUnmarshalListener xmlUnmarshalListener = unmarshaller.getUnmarshalListener();
+            Unmarshaller.Listener xmlUnmarshalListener = unmarshaller.getUnmarshalListener();
             if (null != xmlUnmarshalListener) {
                 if (null == this.parentRecord) {
                     xmlUnmarshalListener.beforeUnmarshal(currentObject, null);
@@ -642,7 +649,7 @@ public class UnmarshalRecordImpl extends CoreAbstractRecord implements Unmarshal
                 }
             }
 
-            XMLUnmarshalListener listener = unmarshaller.getUnmarshalListener();
+            Unmarshaller.Listener listener = unmarshaller.getUnmarshalListener();
             if (listener != null) {
                 if (this.parentRecord != null) {
                     listener.afterUnmarshal(currentObject, parentRecord.getCurrentObject());
@@ -815,6 +822,7 @@ public class UnmarshalRecordImpl extends CoreAbstractRecord implements Unmarshal
                     return;
                 }
             } else {
+                
                 xPathNode = node;
                 unmarshalContext.startElement(this);
                 levelIndex++;
@@ -822,6 +830,10 @@ public class UnmarshalRecordImpl extends CoreAbstractRecord implements Unmarshal
                 String xsiNilValue = atts.getValue(javax.xml.XMLConstants.W3C_XML_SCHEMA_INSTANCE_NS_URI, Constants.SCHEMA_NIL_ATTRIBUTE);
                 if(xsiNilValue != null){
                     isXsiNil = xsiNilValue.equals(Constants.BOOLEAN_STRING_TRUE) || xsiNilValue.equals("1");
+                }
+                
+                if(node.getNullCapableValue() != null){
+                    getNullCapableValues().add(node.getNullCapableValue());
                 }
                 
                 NodeValue nodeValue = node.getUnmarshalNodeValue();
@@ -1038,7 +1050,7 @@ public class UnmarshalRecordImpl extends CoreAbstractRecord implements Unmarshal
                         if(textNodeUnmarshalNodeValue.isMappingNodeValue()) {
                             Mapping mapping = ((MappingNodeValue)textNodeUnmarshalNodeValue).getMapping();
                             if(mapping.isAbstractDirectMapping()) {
-                                Object nullValue = ((AbstractDirectMapping)mapping).getNullValue();
+                                Object nullValue = ((DirectMapping)mapping).getNullValue();
                                 if(!(Constants.EMPTY_STRING.equals(nullValue))) {
                                     setAttributeValue(null, mapping);
                                     this.removeNullCapableValue((NullCapableValue)textNodeUnmarshalNodeValue);
@@ -1278,13 +1290,6 @@ public class UnmarshalRecordImpl extends CoreAbstractRecord implements Unmarshal
         return prefix;
     }
 
-    public String toString() {
-        StringWriter writer = new StringWriter();
-        writer.write(Helper.getShortClassName(getClass()));
-        writer.write("()");
-        return writer.toString();
-    }
-
     public NodeValue getSelfNodeValueForAttribute(String namespace, String localName) {
         if (this.selfRecords != null) {
             for (int i = 0, selfRecordsSize = selfRecords.size(); i < selfRecordsSize; i++) {
@@ -1422,14 +1427,13 @@ public class UnmarshalRecordImpl extends CoreAbstractRecord implements Unmarshal
 	        childRecord.setParentRecord(this);        
 	        return childRecord;
     	}else{
-    	    childRecord = new UnmarshalRecordImpl(treeObjectBuilder);
+    	    childRecord = new UnmarshalRecordImpl(treeObjectBuilder, referenceResolver);
     	    childRecord.setSession(session);
 	        childRecord.setUnmarshaller(unmarshaller);
 	        childRecord.setTextWrapperFragment(textWrapperFragment);
 	        childRecord.setXMLReader(this.xmlReader);
 	        childRecord.setFragmentBuilder(fragmentBuilder);
 	        childRecord.setUnmarshalNamespaceResolver(unmarshalNamespaceResolver);
-	        childRecord.setReferenceResolver(referenceResolver);
 	        childRecord.setParentRecord(this);     
     	}
         return childRecord;    	
@@ -1499,7 +1503,7 @@ public class UnmarshalRecordImpl extends CoreAbstractRecord implements Unmarshal
      * @since EclipseLink 2.5.0
      */
     public Root createRoot() {
-        return new XMLRoot();
+        return unmarshaller.createRoot();
     }
 
     /**
@@ -1511,8 +1515,8 @@ public class UnmarshalRecordImpl extends CoreAbstractRecord implements Unmarshal
     }
 
     @Override
-    public AbstractSession getSession() {
-        return (AbstractSession) session;
+    public CoreAbstractSession getSession() {
+        return session;
     }
 
     @Override
@@ -1542,8 +1546,10 @@ public class UnmarshalRecordImpl extends CoreAbstractRecord implements Unmarshal
 
     @Override
     public void setLeafElementType(QName type) {
-        if(type != null){
+        if (type != null) {
             setLeafElementType(new XPathQName(type, isNamespaceAware()));
+        } else {
+            setLeafElementType((XPathQName) null);
         }
     }
 
@@ -1562,6 +1568,17 @@ public class UnmarshalRecordImpl extends CoreAbstractRecord implements Unmarshal
 
     public void setUnmarshalAttributeGroup(CoreAttributeGroup unmarshalAttributeGroup) {
         this.unmarshalAttributeGroup = unmarshalAttributeGroup;
+    }
+
+    /**
+     * @since EclipseLink 2.6.0
+     */
+    @Override
+    public ConversionManager getConversionManager() {
+        if(null == conversionManager) {
+            conversionManager = (ConversionManager) session.getDatasourcePlatform().getConversionManager();
+        }
+        return conversionManager;
     }
 
 }

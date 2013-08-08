@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 1998, 2012 Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1998, 2013 Oracle and/or its affiliates. All rights reserved.
  * This program and the accompanying materials are made available under the
  * terms of the Eclipse Public License v1.0 and Eclipse Distribution License v. 1.0
  * which accompanies this distribution.
@@ -81,6 +81,7 @@ import org.eclipse.persistence.sessions.Project;
 import org.eclipse.persistence.tools.dbws.BaseDBWSBuilderHelper;
 import org.eclipse.persistence.tools.dbws.DBWSBuilder;
 import org.eclipse.persistence.tools.dbws.DBWSBuilderHelper;
+import org.eclipse.persistence.tools.dbws.NamingConventionTransformer.ElementStyle;
 import org.eclipse.persistence.tools.dbws.ProcedureOperationModel;
 import org.eclipse.persistence.tools.dbws.Util;
 import org.eclipse.persistence.tools.oracleddl.metadata.ArgumentType;
@@ -109,6 +110,7 @@ import org.eclipse.persistence.tools.oracleddl.util.DatabaseTypeBuilder;
 import static org.eclipse.persistence.internal.helper.ClassConstants.Object_Class;
 import static org.eclipse.persistence.internal.xr.Util.SXF_QNAME;
 import static org.eclipse.persistence.internal.xr.Util.getJDBCTypeForTypeName;
+import static org.eclipse.persistence.internal.xr.Util.getClassFromJDBCType;
 import static org.eclipse.persistence.internal.xr.XRDynamicClassLoader.COLLECTION_WRAPPER_SUFFIX;
 import static org.eclipse.persistence.oxm.XMLConstants.ANY_QNAME;
 import static org.eclipse.persistence.oxm.XMLConstants.COLON;
@@ -124,13 +126,17 @@ import static org.eclipse.persistence.oxm.XMLConstants.TEXT;
 import static org.eclipse.persistence.oxm.mappings.nullpolicy.XMLNullRepresentationType.XSI_NIL;
 import static org.eclipse.persistence.tools.dbws.Util.SXF_QNAME_CURSOR;
 import static org.eclipse.persistence.tools.dbws.Util.buildCustomQName;
+import static org.eclipse.persistence.tools.dbws.Util.getAttributeClassForDatabaseType;
 import static org.eclipse.persistence.tools.dbws.Util.getGeneratedJavaClassName;
+import static org.eclipse.persistence.tools.dbws.Util.getGeneratedAlias;
 import static org.eclipse.persistence.tools.dbws.Util.getXMLTypeFromJDBCType;
 import static org.eclipse.persistence.tools.dbws.Util.hasPLSQLCursorArg;
 import static org.eclipse.persistence.tools.dbws.Util.hasComplexArgs;
 import static org.eclipse.persistence.tools.dbws.Util.qNameFromString;
+import static org.eclipse.persistence.tools.dbws.Util.shouldSetJavaType;
 import static org.eclipse.persistence.tools.dbws.Util.sqlMatch;
 import static org.eclipse.persistence.tools.dbws.Util.APP_OCTET_STREAM;
+import static org.eclipse.persistence.tools.dbws.Util.AT_SIGN;
 import static org.eclipse.persistence.tools.dbws.Util.BUILDING_QUERYOP_FOR;
 import static org.eclipse.persistence.tools.dbws.Util.CLOSE_PAREN;
 import static org.eclipse.persistence.tools.dbws.Util.CURSOR_STR;
@@ -141,6 +147,7 @@ import static org.eclipse.persistence.tools.dbws.Util.UNDERSCORE;
 import static org.eclipse.persistence.tools.dbws.Util.SLASH;
 import static org.eclipse.persistence.tools.dbws.Util.TOPLEVEL;
 import static org.eclipse.persistence.tools.dbws.Util.TYPE_STR;
+import static org.eclipse.persistence.tools.dbws.Util.XMLTYPE_STR;
 import static org.eclipse.persistence.tools.oracleddl.metadata.ArgumentTypeDirection.IN;
 import static org.eclipse.persistence.tools.oracleddl.metadata.ArgumentTypeDirection.INOUT;
 import static org.eclipse.persistence.tools.oracleddl.metadata.ArgumentTypeDirection.OUT;
@@ -148,7 +155,6 @@ import static org.eclipse.persistence.tools.oracleddl.metadata.ArgumentTypeDirec
 public class OracleHelper extends BaseDBWSBuilderHelper implements DBWSBuilderHelper {
 
     protected DatabaseTypeBuilder dtBuilder = new DatabaseTypeBuilder();
-    protected boolean hasComplexProcedureArgs = false;
     public static final String NO_PKG_MSG = "No packages were found matching the following: ";
 
     public OracleHelper(DBWSBuilder dbwsBuilder) {
@@ -161,10 +167,6 @@ public class OracleHelper extends BaseDBWSBuilderHelper implements DBWSBuilderHe
      */
     public boolean hasTables() {
         return dbTables.size() == 0 ? false : true;
-    }
-
-    public boolean hasComplexProcedureArgs() {
-        return hasComplexProcedureArgs;
     }
 
     @Override
@@ -207,7 +209,7 @@ public class OracleHelper extends BaseDBWSBuilderHelper implements DBWSBuilderHe
      */
     public void buildProcedureOperation(ProcedureOperationModel procedureOperationModel) {
         for (ProcedureType storedProcedure : procedureOperationModel.getDbStoredProcedures()) {
-            boolean hasComplexArgs = Util.hasComplexArgs(storedProcedure);
+            boolean hasComplexArgs = hasComplexArgs(storedProcedure);
             QueryOperation qo = new QueryOperation();
             qo.setName(getNameForQueryOperation(procedureOperationModel, storedProcedure));
 
@@ -309,15 +311,15 @@ public class OracleHelper extends BaseDBWSBuilderHelper implements DBWSBuilderHe
                     } else {
                         // handle PL/SQL records and collections
                         if (arg.getEnclosedType().isPLSQLType()) {
-                            hasComplexProcedureArgs = true;
                             String packageName = ((PLSQLType) arg.getEnclosedType()).getParentType().getPackageName();
+                            // may need to prepend package name
                             String typeString = (packageName != null && packageName.length() > 0) ? packageName + UNDERSCORE + arg.getTypeName() : arg.getTypeName();
-                            xmlType = buildCustomQName(typeString, dbwsBuilder);
+                            // may need to strip off %
+                            typeString = typeString.contains(PERCENT) ? typeString.replace(PERCENT, UNDERSCORE) : typeString;
+                            xmlType = buildCustomQName(nct.generateSchemaAlias(typeString), dbwsBuilder);
                         } else if (arg.getEnclosedType().isVArrayType() || arg.getEnclosedType().isObjectType() || arg.getEnclosedType().isObjectTableType()) {
                             // handle advanced JDBC types
-                            hasComplexProcedureArgs = true;
-                            String typeString = arg.getTypeName().toLowerCase().concat(TYPE_STR);
-                            xmlType = buildCustomQName(typeString, dbwsBuilder);
+                            xmlType = buildCustomQName(nct.generateSchemaAlias(arg.getTypeName()), dbwsBuilder);
                         } else {
                             switch (Util.getJDBCTypeFromTypeName(arg.getTypeName())) {
                                 case STRUCT:
@@ -406,7 +408,7 @@ public class OracleHelper extends BaseDBWSBuilderHelper implements DBWSBuilderHe
                     }
                     // for XMLType, we want the type code to be 'OPAQUE' (2007)
                     if (arg.getEnclosedType() == ScalarDatabaseTypeEnum.XMLTYPE_TYPE) {
-                        pa.setJdbcType(getJDBCTypeForTypeName(ScalarDatabaseTypeEnum.XMLTYPE_TYPE.toString()));
+                        pa.setJdbcType(getJDBCTypeForTypeName(XMLTYPE_STR));
                     }
                     if (hasComplexArgs && arg.getEnclosedType().isPLSQLType()) {
                         pa.setComplexTypeName(storedProcedure.getCatalogName() + UNDERSCORE + arg.getTypeName());
@@ -469,7 +471,11 @@ public class OracleHelper extends BaseDBWSBuilderHelper implements DBWSBuilderHe
                         if (rargDataType.isPLSQLType()) {
                             packageName = ((PLSQLType) rargDataType).getParentType().getPackageName();
                         }
+                        // may need to prepend a package name
                         returnTypeName = (packageName != null && packageName.length() > 0) ? packageName + UNDERSCORE + returnType : returnType;
+                        // may need to strip off %
+                        returnTypeName = returnTypeName.contains(PERCENT) ? returnTypeName.replace(PERCENT, UNDERSCORE) : returnTypeName;
+                        returnTypeName = nct.generateSchemaAlias(returnTypeName);
                     }
                     result.setType(buildCustomQName(returnTypeName, dbwsBuilder));
                     break;
@@ -489,7 +495,7 @@ public class OracleHelper extends BaseDBWSBuilderHelper implements DBWSBuilderHe
         }
         // for XMLType, we want the type code to be 'OPAQUE' (2007)
         if (rargDataType == ScalarDatabaseTypeEnum.XMLTYPE_TYPE) {
-            result.setJdbcType(getJDBCTypeForTypeName(ScalarDatabaseTypeEnum.XMLTYPE_TYPE.toString()));
+            result.setJdbcType(getJDBCTypeForTypeName(XMLTYPE_STR));
         }
         return result;
     }
@@ -689,6 +695,9 @@ public class OracleHelper extends BaseDBWSBuilderHelper implements DBWSBuilderHe
         return allProcsAndFuncs.isEmpty() ? null : allProcsAndFuncs;
     }
 
+    /**
+     * Create OR/OX projects for complex types, i.e. PLSQLTypes, VArray, etc.
+     */
     public void addToOROXProjectsForComplexTypes(List<CompositeDatabaseType> types, Project orProject, Project oxProject) {
         for (DatabaseType dbType : types) {
             String name;
@@ -726,11 +735,11 @@ public class OracleHelper extends BaseDBWSBuilderHelper implements DBWSBuilderHe
             } else {
                 // Advanced JDBC types need the (Java) package name prepended to the type name
                 if (Util.isTypeComplex(dbType)) {
-                    name = getGeneratedJavaClassName(dbType.getTypeName().toLowerCase(), dbwsBuilder.getProjectName());
+                    name = getGeneratedJavaClassName(dbType.getTypeName(), dbwsBuilder.getProjectName());
                 } else {
                     name = dbType.getTypeName();
                 }
-                alias = dbType.getTypeName().toLowerCase();
+                alias = getGeneratedAlias(dbType.getTypeName());
                 // handle VArray type
                 if (dbType.isVArrayType()) {
                     addToOXProjectForVArrayArg(dbType, oxProject, name, alias);
@@ -755,11 +764,15 @@ public class OracleHelper extends BaseDBWSBuilderHelper implements DBWSBuilderHe
     protected void addToOXProjectForPLSQLRecordArg(DatabaseType dbType, Project oxProject, String recordName, String recordAlias, String targetTypeName, String catalogPattern) {
         XMLDescriptor xdesc = (XMLDescriptor) oxProject.getDescriptorForAlias(recordAlias);
         if (xdesc == null) {
-            xdesc = buildAndAddNewXMLDescriptor(oxProject, recordAlias, recordName.toLowerCase(), targetTypeName, buildCustomQName(targetTypeName, dbwsBuilder).getNamespaceURI());
+            xdesc = buildAndAddNewXMLDescriptor(oxProject, recordAlias, recordName.toLowerCase(), nct.generateSchemaAlias(targetTypeName), buildCustomQName(targetTypeName, dbwsBuilder).getNamespaceURI());
         }
         // handle fields
         PLSQLRecordType plsqlRecType = (PLSQLRecordType) dbType;
         for (FieldType fType : plsqlRecType.getFields()) {
+            // custom naming transformer may exclude some fields
+            if (nct.styleForElement(fType.getFieldName()) == ElementStyle.NONE) {
+                continue;
+            }
             String lFieldName = fType.getFieldName().toLowerCase();
             if (xdesc.getMappingForAttributeName(lFieldName) == null) {
                 if (fType.isComposite()) {
@@ -880,9 +893,7 @@ public class OracleHelper extends BaseDBWSBuilderHelper implements DBWSBuilderHe
                             // direct mapping
                             AbstractDirectMapping absDirectMapping = (AbstractDirectMapping) ordtDesc.addDirectMapping(lFieldName, fieldName);
                             try {
-                                absDirectMapping.setAttributeClassificationName(
-                                        org.eclipse.persistence.internal.xr.Util.getClassFromJDBCType(fType.getTypeName(), dbwsBuilder.getDatabasePlatform()
-                                        ).getName());
+                                absDirectMapping.setAttributeClassificationName(getClassFromJDBCType(fType.getTypeName(), dbwsBuilder.getDatabasePlatform()).getName());
                             } catch (Exception x) {}
                         }
                     }
@@ -905,7 +916,7 @@ public class OracleHelper extends BaseDBWSBuilderHelper implements DBWSBuilderHe
     protected void addToOXProjectForPLSQLTableArg(DatabaseType dbType, Project oxProject, String tableName, String tableAlias, String targetTypeName, String catalogPattern) {
         XMLDescriptor xdesc = (XMLDescriptor) oxProject.getDescriptorForAlias(tableAlias);
         if (xdesc == null) {
-            xdesc = buildAndAddNewXMLDescriptor(oxProject, tableAlias, tableName.toLowerCase() + COLLECTION_WRAPPER_SUFFIX, targetTypeName, buildCustomQName(targetTypeName, dbwsBuilder).getNamespaceURI());
+            xdesc = buildAndAddNewXMLDescriptor(oxProject, tableAlias, tableName.toLowerCase() + COLLECTION_WRAPPER_SUFFIX, nct.generateSchemaAlias(targetTypeName), buildCustomQName(targetTypeName, dbwsBuilder).getNamespaceURI());
         }
 
         boolean itemsMappingFound = xdesc.getMappingForAttributeName(ITEMS_MAPPING_ATTRIBUTE_NAME) == null ? false : true;
@@ -963,7 +974,8 @@ public class OracleHelper extends BaseDBWSBuilderHelper implements DBWSBuilderHe
      */
     protected void addToOXProjectForVArrayArg(DatabaseType dbType, Project oxProject, String arrayName, String arrayAlias) {
         DatabaseType nestedDbType = ((VArrayType)dbType).getEnclosedType();
-        String referenceTypeAlias = nestedDbType.getTypeName().toLowerCase();
+        String referenceTypeAlias = getGeneratedAlias(nestedDbType.getTypeName());
+        
     	String referenceTypeName = getGeneratedJavaClassName(referenceTypeAlias, dbwsBuilder.getProjectName());
         XMLDescriptor xdesc = (XMLDescriptor)oxProject.getDescriptorForAlias(arrayAlias);
         if (xdesc == null) {
@@ -993,7 +1005,7 @@ public class OracleHelper extends BaseDBWSBuilderHelper implements DBWSBuilderHe
      */
     protected void addToORProjectForVArrayArg(DatabaseType dbType, Project orProject, String arrayName, String arrayAlias) {
         DatabaseType nestedDbType = ((VArrayType)dbType).getEnclosedType();
-        String referenceTypeAlias = nestedDbType.getTypeName().toLowerCase();
+        String referenceTypeAlias = getGeneratedAlias(nestedDbType.getTypeName());
         String referenceTypeName = getGeneratedJavaClassName(referenceTypeAlias, dbwsBuilder.getProjectName());
         ObjectRelationalDataTypeDescriptor ordt = (ObjectRelationalDataTypeDescriptor)orProject.getDescriptorForAlias(arrayAlias);
         if (ordt == null) {
@@ -1024,19 +1036,23 @@ public class OracleHelper extends BaseDBWSBuilderHelper implements DBWSBuilderHe
     protected void addToOXProjectForObjectTypeArg(DatabaseType dbType, Project oxProject, String objectName, String objectAlias) {
         XMLDescriptor xdesc = (XMLDescriptor) oxProject.getDescriptorForAlias(objectAlias);
         if (xdesc == null) {
-            xdesc = buildAndAddNewXMLDescriptor(oxProject, objectAlias, objectName, nct.generateSchemaAlias(objectAlias), buildCustomQName(objectName, dbwsBuilder).getNamespaceURI());
+            xdesc = buildAndAddNewXMLDescriptor(oxProject, objectAlias, objectName, nct.generateSchemaAlias(dbType.getTypeName()), buildCustomQName(objectName, dbwsBuilder).getNamespaceURI());
         }
         ObjectType oType = (ObjectType) dbType;
         for (FieldType field : oType.getFields()) {
+            // custom transformer may exclude some fields
+            if (nct.styleForElement(field.getFieldName()) == ElementStyle.NONE) {
+                continue;
+            }
             String lFieldName = field.getFieldName().toLowerCase();
             if (xdesc.getMappingForAttributeName(lFieldName) == null) {
                 if (field.isComposite()) {
                     String targetTypeName2 = field.getEnclosedType().getTypeName();
-                    String alias = targetTypeName2.toLowerCase();
+                    String alias = getGeneratedAlias(targetTypeName2);
                     XMLDescriptor xdesc2 = (XMLDescriptor) oxProject.getDescriptorForAlias(alias);
                     boolean buildDescriptor = xdesc2 == null;
                     if (buildDescriptor) {
-                        xdesc2 = buildAndAddNewXMLDescriptor(oxProject, alias, nct.generateSchemaAlias(alias), buildCustomQName(targetTypeName2, dbwsBuilder).getNamespaceURI());
+                        xdesc2 = buildAndAddNewXMLDescriptor(oxProject, alias, nct.generateSchemaAlias(targetTypeName2), buildCustomQName(targetTypeName2, dbwsBuilder).getNamespaceURI());
                     }
                     // handle ObjectType field
                     if (field.getEnclosedType().isObjectType()) {
@@ -1064,7 +1080,7 @@ public class OracleHelper extends BaseDBWSBuilderHelper implements DBWSBuilderHe
                         }
                         ObjectTableType tableType = (ObjectTableType) field.getEnclosedType();
                         if (tableType.getEnclosedType().isComposite()) {
-	                        String nestedTypeAlias = ((ObjectTableType) field.getEnclosedType()).getEnclosedType().getTypeName().toLowerCase();
+                            String nestedTypeAlias = getGeneratedAlias(((ObjectTableType) field.getEnclosedType()).getEnclosedType().getTypeName());
 	                        String nestedTypeName = getGeneratedJavaClassName(nestedTypeAlias, dbwsBuilder.getProjectName());
 	                        buildAndAddXMLCompositeCollectionMapping(xdesc, lFieldName, lFieldName + SLASH + ITEM_MAPPING_NAME, nestedTypeName);
                         } else {
@@ -1113,7 +1129,7 @@ public class OracleHelper extends BaseDBWSBuilderHelper implements DBWSBuilderHe
             if (ordt.getMappingForAttributeName(lFieldName) == null) {
                 if (fType.isComposite()) {
                     String targetTypeName2 = fType.getEnclosedType().getTypeName();
-                    String alias = targetTypeName2.toLowerCase();
+                    String alias = getGeneratedAlias(targetTypeName2);
                     ObjectRelationalDataTypeDescriptor ordt2 = (ObjectRelationalDataTypeDescriptor)orProject.getDescriptorForAlias(alias);
                     boolean buildDescriptor = ordt2 == null;
                     if (buildDescriptor) {
@@ -1144,7 +1160,7 @@ public class OracleHelper extends BaseDBWSBuilderHelper implements DBWSBuilderHe
                         }
                         if (((ObjectTableType) fType.getEnclosedType()).getEnclosedType().isComposite()) {
 	                        ObjectType nestedType = (ObjectType)((ObjectTableType) fType.getEnclosedType()).getEnclosedType();
-	                        String nestedTypeAlias = nestedType.getTypeName().toLowerCase();
+                            String nestedTypeAlias = getGeneratedAlias(nestedType.getTypeName());
 	                        String nestedTypeName = getGeneratedJavaClassName(nestedTypeAlias, dbwsBuilder.getProjectName());
 	                        buildAndAddObjectArrayMapping(ordt, lFieldName, fieldName, nestedTypeName, nestedTypeAlias.toUpperCase());
                         } else {
@@ -1170,14 +1186,14 @@ public class OracleHelper extends BaseDBWSBuilderHelper implements DBWSBuilderHe
     protected void addToOXProjectForObjectTableTypeArg(DatabaseType dbType, Project oxProject, String objectTableName, String objectTableAlias) {
         XMLDescriptor xdesc = (XMLDescriptor) oxProject.getDescriptorForAlias(objectTableAlias);
         if (xdesc == null) {
-            xdesc = buildAndAddNewXMLDescriptor(oxProject, objectTableAlias, objectTableName + COLLECTION_WRAPPER_SUFFIX, nct.generateSchemaAlias(objectTableAlias), buildCustomQName(objectTableName, dbwsBuilder).getNamespaceURI());
+            xdesc = buildAndAddNewXMLDescriptor(oxProject, objectTableAlias, objectTableName + COLLECTION_WRAPPER_SUFFIX, nct.generateSchemaAlias(dbType.getTypeName()), buildCustomQName(objectTableName, dbwsBuilder).getNamespaceURI());
         }
         boolean itemsMappingFound = xdesc.getMappingForAttributeName(ITEMS_MAPPING_ATTRIBUTE_NAME) == null ? false : true;
         if (!itemsMappingFound) {
             DatabaseType nType = ((ObjectTableType) dbType).getEnclosedType();
             if (nType.isObjectType()) {
                 ObjectType oType = (ObjectType)nType;
-                String nestedTypeAlias = oType.getTypeName().toLowerCase();
+                String nestedTypeAlias = getGeneratedAlias(oType.getTypeName());
                 String nestedTypeName = getGeneratedJavaClassName(nestedTypeAlias, dbwsBuilder.getProjectName());
                 addToOXProjectForObjectTypeArg(oType, oxProject, nestedTypeName, nestedTypeAlias);
                 // ObjectType is composite
@@ -1202,7 +1218,7 @@ public class OracleHelper extends BaseDBWSBuilderHelper implements DBWSBuilderHe
             DatabaseType nestedType = ((ObjectTableType) dbType).getEnclosedType();
             if (nestedType.isObjectType()) {
                 ObjectType oType = (ObjectType) nestedType;
-                String nestedTypeAlias = oType.getTypeName().toLowerCase();
+                String nestedTypeAlias = getGeneratedAlias(oType.getTypeName());
                 String nestedTypeName = getGeneratedJavaClassName(nestedTypeAlias, dbwsBuilder.getProjectName());
                 addToORProjectForObjectTypeArg(oType, orProject, nestedTypeName, nestedTypeAlias);
                 // ObjectType is composite
@@ -1225,7 +1241,7 @@ public class OracleHelper extends BaseDBWSBuilderHelper implements DBWSBuilderHe
 
         // check for PL/SQL cursor arg
         boolean hasCursor = hasPLSQLCursorArg(getArgumentListForProcedureType(procType));
-        hasPLSQLArgs = hasPLSQLArgs || hasCursor || (hasComplexArgs(getArgumentListForProcedureType(procType)) && opModel.isPLSQLProcedureOperation());
+        hasPLSQLArgs = hasPLSQLArgs || hasCursor || opModel.isPLSQLProcedureOperation();
         
         if (hasPLSQLArgs) {
             if (procType.isFunctionType()) {
@@ -1253,7 +1269,7 @@ public class OracleHelper extends BaseDBWSBuilderHelper implements DBWSBuilderHe
         } else {
             if (procType.isFunctionType()) {
                 String javaTypeName = returnArg.getTypeName();
-                ClassDescriptor desc = oxProject.getDescriptorForAlias(javaTypeName.toLowerCase());
+                ClassDescriptor desc = oxProject.getDescriptorForAlias(getGeneratedAlias(javaTypeName));
                 if (desc != null) {
                     javaTypeName = desc.getJavaClassName();
                 }
@@ -1267,13 +1283,25 @@ public class OracleHelper extends BaseDBWSBuilderHelper implements DBWSBuilderHe
                         call = new StoredFunctionCall(Types.STRUCT, returnArg.getTypeName(), javaTypeName);
                     }
                 } else {
+                	// scalar
                     call = new StoredFunctionCall();
                     if (returnArg.getEnclosedType().isBlobType()) {
                         // handle BLOBs
                         ((StoredFunctionCall) call).setResult(null, ClassConstants.BLOB);
                     } else {
-                        // default to OBJECT
-                        ((StoredFunctionCall) call).setResult(null, ClassConstants.OBJECT);
+                        int resultType = Util.getJDBCTypeFromTypeName(javaTypeName);
+                        // need special handling for Date types
+                        if (resultType == Types.DATE || resultType == Types.TIME || resultType == Types.TIMESTAMP) {
+                            ((StoredFunctionCall) call).setResult(null, ClassConstants.TIMESTAMP);
+                        } else if (returnArg.getEnclosedType() == ScalarDatabaseTypeEnum.XMLTYPE_TYPE) {
+                            // special handling for XMLType types
+                            ((StoredFunctionCall) call).setResult(getJDBCTypeForTypeName(XMLTYPE_STR), XMLTYPE_STR, ClassConstants.OBJECT);
+                        } else if (resultType == Types.OTHER || resultType == Types.CLOB) {
+                            // default to OBJECT for OTHER, CLOB and LONG types
+                            ((StoredFunctionCall) call).setResult(null, ClassConstants.OBJECT);
+                    	} else {
+                    		((StoredFunctionCall) call).setResult(null, resultType);
+                        }
                     }
                 }
             } else {
@@ -1315,7 +1343,7 @@ public class OracleHelper extends BaseDBWSBuilderHelper implements DBWSBuilderHe
                 databaseType = buildDatabaseTypeFromMetadataType(argType, cat);
             } else {
                 javaTypeName = argType.getTypeName();
-                ClassDescriptor desc = oxProject.getDescriptorForAlias(javaTypeName.toLowerCase());
+                ClassDescriptor desc = oxProject.getDescriptorForAlias(getGeneratedAlias(javaTypeName));
                 if (desc != null) {
                     // anything there's a descriptor for will include "packagename." in the class name
                     javaTypeName = desc.getJavaClassName();
@@ -1371,7 +1399,14 @@ public class OracleHelper extends BaseDBWSBuilderHelper implements DBWSBuilderHe
                             call.addNamedOutputArgument(arg.getArgumentName(), arg.getArgumentName(), Types.STRUCT, argType.getTypeName(), wrapperClass);
                         }
                     } else {
-                        call.addNamedOutputArgument(arg.getArgumentName(), arg.getArgumentName(), Util.getJDBCTypeFromTypeName(argType.getTypeName()));
+                        // need special handling for XMLType - we want the type code to be 'OPAQUE' (2007)
+                        if (argType == ScalarDatabaseTypeEnum.XMLTYPE_TYPE) {
+                            call.addNamedOutputArgument(arg.getArgumentName(), arg.getArgumentName(), getJDBCTypeForTypeName(XMLTYPE_STR), XMLTYPE_STR);
+                        } else if (argType == ScalarDatabaseTypeEnum.SYS_REFCURSOR_TYPE) {
+                            call.addNamedCursorOutputArgument(arg.getArgumentName());
+                        } else {
+                            call.addNamedOutputArgument(arg.getArgumentName(), arg.getArgumentName(), Util.getJDBCTypeFromTypeName(argType.getTypeName()));
+                        }
                     }
                 }
             } else {  // INOUT
@@ -1398,7 +1433,13 @@ public class OracleHelper extends BaseDBWSBuilderHelper implements DBWSBuilderHe
                             call.addNamedInOutputArgument(arg.getArgumentName(), arg.getArgumentName(), arg.getArgumentName(), Types.STRUCT, argType.getTypeName());
                         }
                     } else {
-                        call.addNamedInOutputArgument(arg.getArgumentName());
+                        // for some reason setting "java.lang.String" as the java type causes problems at runtime
+                        Class javaType = getClassFromJDBCType(argType.getTypeName(), dbwsBuilder.getDatabasePlatform());
+                        if (shouldSetJavaType(javaType.getName())) {
+                            call.addNamedInOutputArgument(arg.getArgumentName(), arg.getArgumentName(), arg.getArgumentName(), Util.getJDBCTypeFromTypeName(argType.getTypeName()), argType.getTypeName(), javaType);
+                        } else {
+                            call.addNamedInOutputArgument(arg.getArgumentName()); 
+                        }
                     }
                 }
             }
@@ -1470,8 +1511,14 @@ public class OracleHelper extends BaseDBWSBuilderHelper implements DBWSBuilderHe
     protected void addDirectMappingForFieldType(XMLDescriptor xdesc, String attributeName, FieldType fType) {
         XMLDirectMapping fieldMapping = new XMLDirectMapping();
         fieldMapping.setAttributeName(attributeName);
-        XMLField xField = new XMLField(attributeName + SLASH + TEXT);
-        xField.setRequired(true);
+        
+        XMLField xField;
+        if (nct.styleForElement(attributeName) == ElementStyle.ATTRIBUTE) {
+            xField = new XMLField(AT_SIGN + attributeName);
+        } else {
+            xField = new XMLField(attributeName + SLASH + TEXT);
+        }
+        
         QName qnameFromDatabaseType = getXMLTypeFromJDBCType(org.eclipse.persistence.tools.dbws.Util.getJDBCTypeFromTypeName(fType.getTypeName()));
         xField.setSchemaType(qnameFromDatabaseType);
         // special case to avoid Calendar problems

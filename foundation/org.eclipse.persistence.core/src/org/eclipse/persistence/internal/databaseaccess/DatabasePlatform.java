@@ -181,7 +181,7 @@ public class DatabasePlatform extends DatasourcePlatform {
     protected transient Map<String, Class> classTypes;
 
     /** Allow for case in field names to be ignored as some databases are not case sensitive and when using custom this can be an issue. */
-    protected static boolean shouldIgnoreCaseOnFieldComparisons = false;
+    public static boolean shouldIgnoreCaseOnFieldComparisons = false;
 
 
     /** Bug#3214927 The default is 32000 for DynamicSQLBatchWritingMechanism.  
@@ -1571,6 +1571,14 @@ public class DatabasePlatform extends DatasourcePlatform {
     }
     
     /**
+     * INTERNAL:
+     * Indicates whether SELECT DISTINCT lob FROM ... (where lob is BLOB or CLOB) is allowed by the platform (Oracle doesn't allow this).
+     */
+    public boolean isLobCompatibleWithDistinct() {
+        return true;
+    }
+    
+    /**
      *    Builds a table of maximum numeric values keyed on java class. This is used for type testing but
      * might also be useful to end users attempting to sanitize values.
      * <p><b>NOTE</b>: BigInteger & BigDecimal maximums are dependent upon their precision & Scale
@@ -2365,8 +2373,9 @@ public class DatabasePlatform extends DatasourcePlatform {
             if (usesStringBinding() && (((String)parameter).length() > getStringBindingSize())) {
                 CharArrayReader reader = new CharArrayReader(((String)parameter).toCharArray());
                 statement.setCharacterStream(index, reader, ((String)parameter).length());
+            } else {
+                statement.setString(index, (String) parameter);
             }
-            statement.setString(index, (String) parameter);
         } else if (parameter instanceof Number) {
             Number number = (Number) parameter;
             if (number instanceof Integer) {

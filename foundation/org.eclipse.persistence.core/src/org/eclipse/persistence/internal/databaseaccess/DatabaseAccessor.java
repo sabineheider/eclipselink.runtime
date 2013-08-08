@@ -625,6 +625,7 @@ public class DatabaseAccessor extends DatasourceAccessor {
             if (dbCall.isExecuteUpdate()) {
                 dbCall.setExecuteReturnValue(execute(dbCall, statement, session));
                 dbCall.setStatement(statement);
+                this.possibleFailure = false;
                 return dbCall;
             } else if (dbCall.isNothingReturned()) {
                 result = executeNoSelect(dbCall, statement, session);
@@ -648,11 +649,13 @@ public class DatabaseAccessor extends DatasourceAccessor {
                 if (dbCall.isCursorReturned()) {
                     dbCall.setStatement(statement);
                     dbCall.setResult(resultSet);
+                    this.possibleFailure = false;
                     return dbCall;
                 }
                 result = processResultSet(resultSet, dbCall, statement, session);
             }
             if (result instanceof ThreadCursoredList) {
+                this.possibleFailure = false;
                 return result;
             }
             // Log any warnings on finest.
@@ -708,6 +711,7 @@ public class DatabaseAccessor extends DatasourceAccessor {
             throw DatabaseException.sqlException(exception, this, session, false);
         }
 
+        this.possibleFailure = false;
         return result;
     }
 
@@ -862,6 +866,7 @@ public class DatabaseAccessor extends DatasourceAccessor {
                 }
             }
         };
+        dbCall.returnCursor();
         session.getServerPlatform().launchContainerRunnable(runnable);
 
         return results;
@@ -1382,7 +1387,7 @@ public class DatabaseAccessor extends DatasourceAccessor {
             if (value != null) return ((BigDecimal)value).toBigInteger();
         } else if (fieldType == ClassConstants.BIGDECIMAL) {
             value = resultSet.getBigDecimal(columnNumber);
-        }
+         }
         
         // PERF: Only check for null for primitives.
         if (isPrimitive && resultSet.wasNull()) {
@@ -1597,10 +1602,11 @@ public class DatabaseAccessor extends DatasourceAccessor {
      * will be returned.
      */
     public DatabaseException processExceptionForCommError(AbstractSession session, SQLException exception, Call call) {
-        if (session.getLogin().isConnectionHealthValidatedOnError((DatabaseCall)call)
+        if (session.getLogin().isConnectionHealthValidatedOnError((DatabaseCall)call, this)
                 && (getConnection() != null)
                 && session.getServerPlatform().wasFailureCommunicationBased(exception, this, session)) {
             setIsValid(false);
+            setPossibleFailure(false);
             //store exception for later as we must close the statement.
             return DatabaseException.sqlException(exception, call, this, session, true);
         } else {
@@ -1801,14 +1807,14 @@ public class DatabaseAccessor extends DatasourceAccessor {
     /**
      * Return if the JDBC type is a binary type such as blob.
      */
-    private boolean isBlob(int type) {
+    public static boolean isBlob(int type) {
         return (type == Types.BLOB) || (type == Types.LONGVARBINARY);
     }
 
     /**
      * Return if the JDBC type is a large character type such as clob.
      */
-    private boolean isClob(int type) {
+    public static boolean isClob(int type) {
         return (type == Types.CLOB) || (type == Types.LONGVARCHAR) || (type == DatabasePlatform.Types_NCLOB) || (type == Types.LONGNVARCHAR);
     }
 

@@ -17,8 +17,19 @@ import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.Reader;
 import java.io.StringWriter;
+import java.io.Writer;
 import java.net.URL;
+import java.util.ArrayList;
+import java.util.List;
 
+import javax.json.Json;
+import javax.json.JsonObject;
+import javax.json.JsonObjectBuilder;
+import javax.json.JsonReader;
+import javax.json.JsonStructure;
+import javax.json.JsonWriter;
+import javax.json.stream.JsonGenerator;
+import javax.json.stream.JsonParser;
 import javax.xml.bind.JAXBElement;
 import javax.xml.bind.Marshaller;
 import javax.xml.bind.Unmarshaller;
@@ -26,9 +37,15 @@ import javax.xml.stream.XMLStreamReader;
 import javax.xml.transform.Source;
 import javax.xml.transform.stream.StreamSource;
 
+import org.eclipse.persistence.internal.jaxb.json.schema.JsonSchemaGenerator;
+import org.eclipse.persistence.jaxb.JAXBContext;
 import org.eclipse.persistence.jaxb.MarshallerProperties;
 import org.eclipse.persistence.jaxb.UnmarshallerProperties;
 import org.eclipse.persistence.oxm.MediaType;
+import org.eclipse.persistence.oxm.json.JsonGeneratorResult;
+import org.eclipse.persistence.oxm.json.JsonObjectBuilderResult;
+import org.eclipse.persistence.oxm.json.JsonStructureSource;
+import org.eclipse.persistence.testing.jaxb.JAXBTestCases.MyStreamSchemaOutputResolver;
 import org.xml.sax.InputSource;
 
 public abstract class JAXBWithJSONTestCases extends JAXBTestCases {
@@ -207,7 +224,25 @@ public abstract class JAXBWithJSONTestCases extends JAXBTestCases {
             jsonToObjectTest(testObject);
         }
     }
-
+    
+    public void testJSONUnmarshalFromJsonStructureSource() throws Exception {
+        if(isUnmarshalTest()){
+            getJSONUnmarshaller().setProperty(UnmarshallerProperties.MEDIA_TYPE, getJSONUnmarshalMediaType());
+           InputStream inputStream = Thread.currentThread().getContextClassLoader().getResourceAsStream(controlJSONLocation);    
+           JsonReader reader = Json.createReader(inputStream);
+           JsonStructure jsonStructure = reader.read();		
+           JsonStructureSource source = new JsonStructureSource(jsonStructure);
+    		
+            Object testObject = null;
+            if(getUnmarshalClass() != null){               
+                testObject = getJSONUnmarshaller().unmarshal(source, getUnmarshalClass());
+            }else{
+                testObject = getJSONUnmarshaller().unmarshal(source);
+            }
+            jsonToObjectTest(testObject);
+        }
+    }
+    
     public void testJSONUnmarshalFromURL() throws Exception {
     	if(isUnmarshalTest()){
     		getJSONUnmarshaller().setProperty(UnmarshallerProperties.MEDIA_TYPE, getJSONUnmarshalMediaType());
@@ -228,8 +263,13 @@ public abstract class JAXBWithJSONTestCases extends JAXBTestCases {
     	getJSONMarshaller().setProperty(MarshallerProperties.MEDIA_TYPE, "application/json");
 
         ByteArrayOutputStream os = new ByteArrayOutputStream();
-        getJSONMarshaller().marshal(getWriteControlObject(), os);
-        compareStrings("testJSONMarshalToOutputStream", new String(os.toByteArray()));
+        try {
+            getJSONMarshaller().marshal(getWriteControlObject(), os);
+        } catch(Exception e) {
+            assertMarshalException(e);
+            return;
+        }
+        compareStringToControlFile("testJSONMarshalToOutputStream", new String(os.toByteArray()));
         os.close();
     }
 
@@ -238,8 +278,13 @@ public abstract class JAXBWithJSONTestCases extends JAXBTestCases {
     	getJSONMarshaller().setProperty(Marshaller.JAXB_FORMATTED_OUTPUT, true);
 
         ByteArrayOutputStream os = new ByteArrayOutputStream();
+        try {
         getJSONMarshaller().marshal(getWriteControlObject(), os);
-        compareStrings("testJSONMarshalToOutputStream_FORMATTED", new String(os.toByteArray()), getWriteControlJSONFormatted(), shouldRemoveWhitespaceFromControlDocJSON());
+        } catch(Exception e) {
+            assertMarshalException(e);
+            return;
+        }
+        compareStringToControlFile("testJSONMarshalToOutputStream_FORMATTED", new String(os.toByteArray()), getWriteControlJSONFormatted(), shouldRemoveWhitespaceFromControlDocJSON());
         os.close();
     }
 
@@ -247,9 +292,14 @@ public abstract class JAXBWithJSONTestCases extends JAXBTestCases {
     	getJSONMarshaller().setProperty(MarshallerProperties.MEDIA_TYPE, "application/json");
 
         StringWriter sw = new StringWriter();
+        try {
         getJSONMarshaller().marshal(getWriteControlObject(), sw);
+        } catch(Exception e) {
+            assertMarshalException(e);
+            return;
+        }
         log(sw.toString());
-        compareStrings("**testJSONMarshalToStringWriter**", sw.toString());
+        compareStringToControlFile("**testJSONMarshalToStringWriter**", sw.toString());
     }
 
     public void testJSONMarshalToStringWriter_FORMATTED() throws Exception{
@@ -257,20 +307,70 @@ public abstract class JAXBWithJSONTestCases extends JAXBTestCases {
     	getJSONMarshaller().setProperty(Marshaller.JAXB_FORMATTED_OUTPUT, true);
 
         StringWriter sw = new StringWriter();
+        try {
         getJSONMarshaller().marshal(getWriteControlObject(), sw);
+        } catch(Exception e) {
+            assertMarshalException(e);
+            return;
+        }
         log(sw.toString());
-        compareStrings("testJSONMarshalToStringWriter_FORMATTED", sw.toString(), getWriteControlJSONFormatted(),shouldRemoveWhitespaceFromControlDocJSON());
+        compareStringToControlFile("testJSONMarshalToStringWriter_FORMATTED", sw.toString(), getWriteControlJSONFormatted(),shouldRemoveWhitespaceFromControlDocJSON());
+    }
+    
+    public void testJSONMarshalToBuilderResult() throws Exception{
+        getJSONMarshaller().setProperty(MarshallerProperties.MEDIA_TYPE, "application/json");
+
+        JsonObjectBuilder jsonObjectBuilder = Json.createObjectBuilder();
+        JsonObjectBuilderResult result = new JsonObjectBuilderResult(jsonObjectBuilder);
+        try{
+            getJSONMarshaller().marshal(getWriteControlObject(), result);
+        } catch(Exception e) {
+            assertMarshalException(e);
+            return;
+        }
+        JsonObject jsonObject = jsonObjectBuilder.build();
+        
+        StringWriter sw = new StringWriter();
+        JsonWriter writer= Json.createWriter(sw);
+        writer.writeObject(jsonObject);
+        writer.close();
+        
+        log(sw.toString());
+        compareStringToControlFile("**testJSONMarshalToBuilderResult**", sw.toString());
     }
 
-    protected void compareStrings(String test, String testString) {
-    	compareStrings(test, testString, getWriteControlJSON());
+    public void testJSONMarshalToGeneratorResult() throws Exception{
+        getJSONMarshaller().setProperty(MarshallerProperties.MEDIA_TYPE, "application/json");
+
+        StringWriter sw = new StringWriter();
+        JsonGenerator generator= Json.createGenerator(sw);
+        JsonGeneratorResult result = new JsonGeneratorResult(generator);
+        try{
+            getJSONMarshaller().marshal(getWriteControlObject(), result);
+        } catch(Exception e) {
+            assertMarshalException(e);
+            return;
+        }
+        generator.flush();
+        log(sw.toString());
+        compareStringToControlFile("**testJSONMarshalToGeneratorResult**", sw.toString());
+    }
+
+    
+    protected void compareStringToControlFile(String test, String testString) {
+    	compareStringToControlFile(test, testString, getWriteControlJSON());
     }
     
-    protected void compareStrings(String test, String testString, String controlFileLocation) {
-    	compareStrings(test, testString, controlFileLocation, shouldRemoveEmptyTextNodesFromControlDoc());
+    protected void compareStringToControlFile(String test, String testString, String controlFileLocation) {
+    	compareStringToControlFile(test, testString, controlFileLocation, shouldRemoveEmptyTextNodesFromControlDoc());
     }
     
-    protected void compareStrings(String test, String testString, String controlFileLocation, boolean removeWhitespace) {
+    protected void compareStringToControlFile(String test, String testString, String controlFileLocation, boolean removeWhitespace) {
+        String expectedString = loadFileToString(controlFileLocation);
+        compareStrings(testString, testString, expectedString, removeWhitespace);
+    }
+    
+    protected void compareStrings(String test, String testString, String expectedString, boolean removeWhitespace) {
         log(test);
         if(removeWhitespace){
             log("Expected (With All Whitespace Removed):");
@@ -278,7 +378,6 @@ public abstract class JAXBWithJSONTestCases extends JAXBTestCases {
         	log("Expected");
         }
         
-        String expectedString = loadFileToString(controlFileLocation);
         if(removeWhitespace){
         	expectedString = expectedString.replaceAll("[ \b\t\n\r]", "");
         }
@@ -306,5 +405,36 @@ public abstract class JAXBWithJSONTestCases extends JAXBTestCases {
         
     public boolean shouldRemoveWhitespaceFromControlDocJSON(){
     	return true;
+    }
+    
+    public void generateJSONSchema(InputStream controlSchema) throws Exception {
+    	List<InputStream> controlSchemas = new ArrayList<InputStream>();
+    	controlSchemas.add(controlSchema);
+    	generateJSONSchema(controlSchemas);
+    }
+    
+    
+    public void generateJSONSchema(List<InputStream> controlSchemas) throws Exception {
+        MyStreamSchemaOutputResolver outputResolver = new MyStreamSchemaOutputResolver();
+
+        Class theClass = getWriteControlObject().getClass();
+        if(theClass == JAXBElement.class){
+        	 theClass = ((JAXBElement) getWriteControlObject()).getValue().getClass();
+        }
+        
+        ((JAXBContext)getJAXBContext()).generateJsonSchema(outputResolver, theClass);
+    	        
+        List<Writer> generatedSchemas = outputResolver.getSchemaFiles();
+        
+        
+        assertEquals("Wrong Number of Schemas Generated", controlSchemas.size(), generatedSchemas.size());
+        
+        for(int i=0; i<controlSchemas.size(); i++){
+        	InputStream controlInputstream = controlSchemas.get(i);
+        	Writer generated = generatedSchemas.get(i);
+            log(generated.toString());            
+            String controlString =  loadInputStreamToString(controlInputstream);            
+            compareStrings("generateJSONSchema", generated.toString(), controlString, true);
+        }
     }
 }

@@ -48,12 +48,15 @@ import org.eclipse.persistence.internal.oxm.mappings.InverseReferenceMapping;
 import org.eclipse.persistence.internal.oxm.mappings.Mapping;
 import org.eclipse.persistence.internal.oxm.mappings.ObjectReferenceMapping;
 import org.eclipse.persistence.internal.oxm.mappings.TransformationMapping;
+import org.eclipse.persistence.internal.oxm.mappings.VariableXPathCollectionMapping;
+import org.eclipse.persistence.internal.oxm.mappings.VariableXPathObjectMapping;
 import org.eclipse.persistence.internal.oxm.record.AbstractMarshalRecord;
 import org.eclipse.persistence.internal.oxm.record.MarshalContext;
 import org.eclipse.persistence.internal.oxm.record.MarshalRecord;
 import org.eclipse.persistence.internal.oxm.record.ObjectMarshalContext;
 import org.eclipse.persistence.internal.oxm.record.SequencedMarshalContext;
 import org.eclipse.persistence.internal.oxm.record.UnmarshalRecord;
+import org.eclipse.persistence.internal.oxm.record.UnmarshalRecordImpl;
 import org.eclipse.persistence.internal.oxm.record.XMLRecord;
 import org.eclipse.persistence.internal.security.PrivilegedAccessHelper;
 import org.eclipse.persistence.mappings.transformers.FieldTransformer;
@@ -184,7 +187,7 @@ public class XPathObjectBuilder extends CoreObjectBuilder<CoreAbstractRecord, Co
                 // Returned object might have a different descriptor
                 xmlDescriptor = (Descriptor) session.getDescriptor(object.getClass());
                 if (xmlDescriptor != null) {
-                    node = ((TreeObjectBuilder) xmlDescriptor.getObjectBuilder()).getRootXPathNode();
+                    node = ((ObjectBuilder) xmlDescriptor.getObjectBuilder()).getRootXPathNode();
                 } else {
                     node = null;
                 }
@@ -195,7 +198,7 @@ public class XPathObjectBuilder extends CoreObjectBuilder<CoreAbstractRecord, Co
                 // Write xsi:type if onCycleDetected returned an object of a type different than the one mapped
                 if (xmlDescriptor != descriptor) {
                     if (xmlDescriptor == null) {
-                        schemaType = (QName) XMLConversionManager.getDefaultJavaTypes().get(object.getClass());
+                        schemaType = record.getConversionManager().schemaType(object.getClass());
                     } else {
                         schemaType = xmlDescriptor.getSchemaReference().getSchemaContextAsQName();
                     }
@@ -254,7 +257,9 @@ public class XPathObjectBuilder extends CoreObjectBuilder<CoreAbstractRecord, Co
      */
     @Override
     public CoreAbstractRecord createRecord(CoreAbstractSession session) {
-        throw new UnsupportedOperationException();
+        UnmarshalRecordImpl record = new UnmarshalRecordImpl(this);
+        record.setSession(session);
+        return record;
     }
 
     @Override
@@ -381,6 +386,10 @@ public class XPathObjectBuilder extends CoreObjectBuilder<CoreAbstractRecord, Co
                         if (collectionMapping.getWrapperNullPolicy() != null) {
                             addChild(xmlField.getXPathFragment(), new CollectionGroupingElementNodeValue((ContainerValue) mappingNodeValue), xmlDescriptor.getNamespaceResolver());
                         }
+                    } else if (xmlMapping instanceof VariableXPathCollectionMapping) {
+                        mappingNodeValue = new XMLVariableXPathCollectionMappingNodeValue((VariableXPathCollectionMapping)xmlMapping);
+                    } else if (xmlMapping instanceof VariableXPathObjectMapping){ 
+                    	mappingNodeValue = new XMLVariableXPathObjectMappingNodeValue((VariableXPathObjectMapping)xmlMapping);
                     } else if (xmlMapping instanceof AnyObjectMapping) {
                         mappingNodeValue = new XMLAnyObjectMappingNodeValue((AnyObjectMapping)xmlMapping);
                     } else if (xmlMapping instanceof AnyCollectionMapping) {

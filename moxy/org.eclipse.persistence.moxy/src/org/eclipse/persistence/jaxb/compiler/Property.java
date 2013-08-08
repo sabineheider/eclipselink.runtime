@@ -118,8 +118,13 @@ public class Property implements Cloneable {
     // XmlAnyElement specific attributes
     private boolean lax;
     private String domHandlerClassName;
+    private String variableAttributeName;
+    private String variableClassName;
+    private boolean variableNodeAttribute;
       
-    // XmlMap specific attributes
+  
+
+	// XmlMap specific attributes
     private JavaClass keyType;
 	private JavaClass valueType;	
 	public static final String DEFAULT_KEY_NAME =  "key";
@@ -144,6 +149,8 @@ public class Property implements Cloneable {
 
     private boolean isTransientType;
     private static final String MARSHAL_METHOD_NAME = "marshal";
+    
+    private boolean isTyped;
     
     
     public Property() {}
@@ -1332,5 +1339,38 @@ public class Property implements Cloneable {
     public void setIsSuperClassProperty(boolean b) {
         this.isSuperClassProperty = b;
     }
+
+    public String getVariableAttributeName() {
+        return variableAttributeName;
+    }
+
+    public void setVariableAttributeName(String variableAttributeName) {
+        this.variableAttributeName = variableAttributeName;
+    }
+
+    public String getVariableClassName() {
+        return variableClassName;
+    }
+
+    public void setVariableClassName(String variableClassName) {
+        this.variableClassName = variableClassName;
+     }
+	
+    public boolean isVariableNodeAttribute() {
+        return variableNodeAttribute;
+    }
+
+    public void setVariableNodeAttribute(boolean variableNodeAttribute) {
+         this.variableNodeAttribute = variableNodeAttribute;
+    }
+
+    public boolean isTyped() {
+        return isTyped;
+    }
+
+    public void setTyped(boolean isTyped) {
+        this.isTyped = isTyped;
+    }
+
 
 }

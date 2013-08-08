@@ -32,6 +32,8 @@ public class AllWrapperTestCases extends TestSuite {
         suite.addTestSuite(AnyCollectionTestCases.class);
         suite.addTestSuite(ElementRefsCollectionTestCases.class);
         suite.addTestSuite(BinaryCollectionTestCases.class);
+        suite.addTestSuite(WrapperAndXmlPathTestCases.class);
+        suite.addTestSuite(WrapperNameSingleItemTestCases.class);
         return suite;
     }
 

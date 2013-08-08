@@ -14,6 +14,7 @@ package org.eclipse.persistence.oxm.record;
 
 import java.io.ByteArrayOutputStream;
 import java.io.UnsupportedEncodingException;
+
 import org.eclipse.persistence.exceptions.XMLMarshalException;
 import org.eclipse.persistence.internal.oxm.Constants;
 import org.eclipse.persistence.internal.oxm.NamespaceResolver;
@@ -48,6 +49,7 @@ import org.xml.sax.SAXException;
  */
 public class FormattedOutputStreamRecord extends OutputStreamRecord {
 
+    private byte[] cr = Constants.cr().getBytes(Constants.DEFAULT_CHARSET);
     private byte[] tab;
     private int numberOfTabs;
     private boolean complexType;
@@ -75,7 +77,7 @@ public class FormattedOutputStreamRecord extends OutputStreamRecord {
      * INTERNAL:
      */
     public void endDocument() {
-        outputStreamWrite(CR);
+        outputStreamWrite(cr);
     }
 
     /**
@@ -83,7 +85,7 @@ public class FormattedOutputStreamRecord extends OutputStreamRecord {
      */
     public void startDocument(String encoding, String version) {
         super.startDocument(encoding, version);
-        outputStreamWrite(CR);
+        outputStreamWrite(cr);
     }
 
     /**
@@ -91,7 +93,7 @@ public class FormattedOutputStreamRecord extends OutputStreamRecord {
      */
     public void writeHeader() {
         outputStreamWrite(getMarshaller().getXmlHeader().getBytes());
-        outputStreamWrite(CR);
+        outputStreamWrite(cr);
     }
 
     /**
@@ -104,13 +106,21 @@ public class FormattedOutputStreamRecord extends OutputStreamRecord {
         }
         if (!isLastEventText) {
             if (numberOfTabs > 0) {
-                outputStreamWrite(CR);
+                outputStreamWrite(cr);
             }
             outputStreamWriteTab();
         }
         isStartElementOpen = true;
         outputStreamWrite(OPEN_START_ELEMENT);
-        outputStreamWrite(getNameForFragmentBytes(xPathFragment));
+        byte[] prefixBytes = getPrefixBytes(xPathFragment);
+        if(null != prefixBytes) {
+            outputStreamWrite(prefixBytes);
+            outputStreamWrite((byte)':');
+        }
+        outputStreamWrite(xPathFragment.getLocalNameBytes());
+        if(xPathFragment.isGeneratedPrefix()){
+            namespaceDeclaration(xPathFragment.getPrefix(), xPathFragment.getNamespaceURI());
+        }
         numberOfTabs++;
         isLastEventText = false;
     }
@@ -124,7 +134,7 @@ public class FormattedOutputStreamRecord extends OutputStreamRecord {
             outputStreamWrite(CLOSE_ELEMENT);
             isStartElementOpen = false;
         }
-        outputStreamWrite(CR);
+        outputStreamWrite(cr);
         outputStreamWriteTab();
         super.element(frag);
     }
@@ -142,7 +152,7 @@ public class FormattedOutputStreamRecord extends OutputStreamRecord {
             return;
         }
         if (complexType) {
-            outputStreamWrite(CR);
+            outputStreamWrite(cr);
             outputStreamWriteTab();
         } else {
             complexType = true;
@@ -228,7 +238,7 @@ public class FormattedOutputStreamRecord extends OutputStreamRecord {
                     outputStreamWrite(CLOSE_ELEMENT);
                 }
                 if (!isLastEventText) {
-                    outputStreamWrite(CR);
+                    outputStreamWrite(cr);
                     outputStreamWriteTab();
                 }
                 outputStreamWrite(OPEN_START_ELEMENT);
@@ -256,7 +266,7 @@ public class FormattedOutputStreamRecord extends OutputStreamRecord {
                 return;
             }
             if (complexType) {
-                outputStreamWrite(CR);
+                outputStreamWrite(cr);
                 outputStreamWriteTab();
             } else {
                 complexType = true;
@@ -281,7 +291,7 @@ public class FormattedOutputStreamRecord extends OutputStreamRecord {
         public void comment(char[] ch, int start, int length) throws SAXException {
             if (isStartElementOpen) {
                 outputStreamWrite(CLOSE_ELEMENT);
-                outputStreamWrite(CR);
+                outputStreamWrite(cr);
                 isStartElementOpen = false;
             }
             writeComment(ch, start, length);

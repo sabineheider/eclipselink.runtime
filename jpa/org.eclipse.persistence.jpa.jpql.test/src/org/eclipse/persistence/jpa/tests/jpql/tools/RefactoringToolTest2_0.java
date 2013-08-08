@@ -24,7 +24,7 @@ import static org.junit.Assert.*;
  * The abstract definition of a unit-test that tests {@link org.eclipse.persistence.jpa.jpql.
  * RefactoringTool RefactoringTool} when the JPA version is 2.0.
  *
- * @version 2.5
+ * @version 2.6
  * @since 2.4
  * @author Pascal Filion
  */
@@ -37,7 +37,7 @@ public final class RefactoringToolTest2_0 extends AbstractRefactoringToolTest {
 	}
 
 	@Test
-	public void test_RenameEntityName_1() throws Exception {
+	public final void test_RenameEntityName_1() throws Exception {
 
 		// SELECT TYPE(employee) FROM Employee employee WHERE TYPE(employee) <> Exempt
 		String jpqlQuery = query_007();
@@ -49,7 +49,7 @@ public final class RefactoringToolTest2_0 extends AbstractRefactoringToolTest {
 	}
 
 	@Test
-	public void test_RenameEntityName_2() throws Exception {
+	public final void test_RenameEntityName_2() throws Exception {
 
 		// SELECT e.name,
 		//        CASE TYPE(e) WHEN Exempt THEN 'Exempt'
@@ -73,7 +73,33 @@ public final class RefactoringToolTest2_0 extends AbstractRefactoringToolTest {
 	}
 
 	@Test
-	public void test_RenameResultVariable_1() throws Exception {
+	public final void test_RenameEntityName_3() throws Exception {
+
+		// SELECT e.dept, e.empId, e.roomNumber, e.salary, UPPER(e.name) AS name_order FROM employee:Employee e WHERE e.name LIKE 'myArtifactWith%' ORDER BY name_order ASC
+		String jpqlQuery = query_017();
+		RefactoringTool refactoringTool = buildRefactoringTool(jpqlQuery);
+		refactoringTool.renameEntityName("employee:Employee", "employee_Employee_v1");
+
+		String expected = "SELECT e.dept, e.empId, e.roomNumber, e.salary, UPPER(e.name) AS name_order FROM employee_Employee_v1 e WHERE e.name LIKE 'myArtifactWith%' ORDER BY name_order ASC";
+		assertEquals(expected, refactoringTool.toActualText());
+	}
+
+	@Test
+	public final void test_RenameEntityName_4() throws Exception {
+
+		// SELECT a.name, a.UUID, a.typeUUID AS assetTypeUUID, p.name AS projectName, ap.usageType FROM Asset a, UsedAssetUsingProject ap, Project p WHERE a.UUID = ap.usedAsset AND ap.usingProject = p.UUID
+		String jpqlQuery = query_018();
+		RefactoringTool refactoringTool = buildRefactoringTool(jpqlQuery);
+		refactoringTool.renameEntityName("Asset",                 "governance_Asset_v1");
+		refactoringTool.renameEntityName("UsedAssetUsingProject", "governance_UsedAssetUsingProject_v1");
+		refactoringTool.renameEntityName("Project",               "governance_Project_v1");
+
+		String expected = "SELECT a.name, a.UUID, a.typeUUID AS assetTypeUUID, p.name AS projectName, ap.usageType FROM governance_Asset_v1 a, governance_UsedAssetUsingProject_v1 ap, governance_Project_v1 p WHERE a.UUID = ap.usedAsset AND ap.usingProject = p.UUID";
+		assertEquals(expected, refactoringTool.toActualText());
+	}
+
+	@Test
+	public final void test_RenameResultVariable_1() throws Exception {
 
 		String jpqlQuery = "SELECT NEW java.util.Vector(a.employees) AS u FROM Address A";
 		RefactoringTool refactoringTool = buildRefactoringTool(jpqlQuery);
@@ -84,7 +110,7 @@ public final class RefactoringToolTest2_0 extends AbstractRefactoringToolTest {
 	}
 
 	@Test
-	public void test_RenameResultVariable_2() throws Exception {
+	public final void test_RenameResultVariable_2() throws Exception {
 
 		String jpqlQuery = "SELECT e.name AS n FROM Employee e";
 		RefactoringTool refactoringTool = buildRefactoringTool(jpqlQuery);
@@ -94,7 +120,7 @@ public final class RefactoringToolTest2_0 extends AbstractRefactoringToolTest {
 	}
 
 	@Test
-	public void test_RenameResultVariable_3() throws Exception {
+	public final void test_RenameResultVariable_3() throws Exception {
 
 		String jpqlQuery = "SELECT e.name AS n, 2 + 2 o FROM Address A";
 		RefactoringTool refactoringTool = buildRefactoringTool(jpqlQuery);
@@ -105,7 +131,7 @@ public final class RefactoringToolTest2_0 extends AbstractRefactoringToolTest {
 	}
 
 	@Test
-	public void test_RenameResultVariable_4() throws Exception {
+	public final void test_RenameResultVariable_4() throws Exception {
 
 		String jpqlQuery = "SELECT e.name AS n, e.age a FROM Address A ORDER BY n";
 		RefactoringTool refactoringTool = buildRefactoringTool(jpqlQuery);
@@ -116,7 +142,7 @@ public final class RefactoringToolTest2_0 extends AbstractRefactoringToolTest {
 	}
 
 	@Test
-	public void test_RenameResultVariable_5() throws Exception {
+	public final void test_RenameResultVariable_5() throws Exception {
 
 		String jpqlQuery = "SELECT e.name AS n, e.age a FROM Address A ORDER BY n, a";
 		RefactoringTool refactoringTool = buildRefactoringTool(jpqlQuery);

@@ -131,7 +131,7 @@ public class SimpleTableTestSuite extends DBWSTestSuite {
 
     @Test
     public void findByPrimaryKeyTest() {
-        Invocation invocation = new Invocation("findByPrimaryKey_simpletableType");
+        Invocation invocation = new Invocation("findByPrimaryKey_SimpletableType");
         invocation.setParameter("id", 1);
         Operation op = xrService.getOperation(invocation.getName());
         Object result = op.invoke(xrService, invocation);

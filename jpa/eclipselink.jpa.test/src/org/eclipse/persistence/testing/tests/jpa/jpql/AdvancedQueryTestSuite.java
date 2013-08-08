@@ -155,6 +155,7 @@ public class AdvancedQueryTestSuite extends JUnitTestCase {
         suite.addTest(new AdvancedQueryTestSuite("testCacheIndexes"));
         suite.addTest(new AdvancedQueryTestSuite("testSQLHint"));
         suite.addTest(new AdvancedQueryTestSuite("testLoadGroup"));
+        suite.addTest(new AdvancedQueryTestSuite("testConcurrentLoadGroup"));
         if (!isJPA10()) {
             suite.addTest(new AdvancedQueryTestSuite("testQueryPESSIMISTIC_FORCE_INCREMENTLock"));
             suite.addTest(new AdvancedQueryTestSuite("testVersionChangeWithReadLock"));
@@ -247,7 +248,7 @@ public class AdvancedQueryTestSuite extends JUnitTestCase {
             query.setParameter("postalcode", "K2H8C2");
             query.getResultList();
 
-            if (((String)counter.getSqlStatements().get(0)).indexOf("/*") == -1) {
+            if ((counter.getSqlStatements().get(0)).indexOf("/*") == -1) {
                 fail("SQL hint was not used: " + counter.getSqlStatements());
             }
         } finally {
@@ -673,19 +674,29 @@ public class AdvancedQueryTestSuite extends JUnitTestCase {
      * Test that the transaction is committed for a single native query transaction.
      */
     public void testNativeQueryTransactions() {
-        EntityManager em = createEntityManager();
+        Employee emp = (Employee)getServerSession().readObject(Employee.class);
+        if (emp == null) {
+        	fail("Test problem: no Employees in the db, nothing to update");
+        }
+    	EntityManager em = createEntityManager();
         beginTransaction(em);
         try {
             em.setFlushMode(FlushModeType.COMMIT);
-            Query query = em.createNativeQuery("Update CMP3_EMPLOYEE set F_NAME = 'Bobo'");
+            Query query = em.createNativeQuery("Update CMP3_EMPLOYEE set F_NAME = 'Bobo' where EMP_ID = " + emp.getId());
             query.executeUpdate();
             commitTransaction(em);
             closeEntityManager(em);
             em = createEntityManager();
             beginTransaction(em);
-            query = em.createNativeQuery("Select * from CMP3_EMPLOYEE where F_NAME = 'Bobo'");
+            query = em.createNativeQuery("Select * from CMP3_EMPLOYEE where F_NAME = 'Bobo' AND EMP_ID = " + emp.getId());
             if (query.getResultList().size() == 0) {
                 fail("Native query did not commit transaction.");
+            } else {
+            	// clean up - bring back the original name
+                em.setFlushMode(FlushModeType.COMMIT);
+                query = em.createNativeQuery("Update CMP3_EMPLOYEE set F_NAME = '"+emp.getFirstName()+"' where EMP_ID = " + emp.getId());
+                query.executeUpdate();
+                commitTransaction(em);
             }
         } finally {
             if (isTransactionActive(em)) {
@@ -1199,7 +1210,7 @@ public class AdvancedQueryTestSuite extends JUnitTestCase {
                 } catch (javax.persistence.PessimisticLockException ex) {
                     pessimisticLockException = ex;
                 } finally {
-                    closeEntityManager(em2);
+                    closeEntityManagerAndTransaction(em2);
                 }
                 
                 commitTransaction(em);
@@ -1253,7 +1264,7 @@ public class AdvancedQueryTestSuite extends JUnitTestCase {
                 } catch (javax.persistence.PessimisticLockException ex) {
                     pessimisticLockException = ex;
                 } finally {
-                    closeEntityManager(em2);
+                    closeEntityManagerAndTransaction(em2);
                 }
                 
                 commitTransaction(em);
@@ -1387,7 +1398,7 @@ public class AdvancedQueryTestSuite extends JUnitTestCase {
                         throw ex;
                     } 
                 } finally {
-                    closeEntityManager(em2);
+                    closeEntityManagerAndTransaction(em2);
                 }
                 
                 commitTransaction(em);
@@ -1450,7 +1461,7 @@ public class AdvancedQueryTestSuite extends JUnitTestCase {
                         throw ex;
                     } 
                 } finally {
-                    closeEntityManager(em2);
+                    closeEntityManagerAndTransaction(em2);
                 }
                 
                 commitTransaction(em);
@@ -1503,7 +1514,7 @@ public class AdvancedQueryTestSuite extends JUnitTestCase {
                 } catch (PessimisticLockException ex) {
                         pessimisticLockException = ex;
                 } finally {
-                    closeEntityManager(em2);
+                    closeEntityManagerAndTransaction(em2);
                 }
                 
                 commitTransaction(em);
@@ -1729,6 +1740,13 @@ public class AdvancedQueryTestSuite extends JUnitTestCase {
             }
             if (isWeavingEnabled() && counter.getSqlStatements().size() > queries) {
                 fail("Should have been " + queries + " queries but was: " + counter.getSqlStatements().size());
+            }
+            if (type != BatchFetchType.JOIN) {
+                for (String sql : counter.getSqlStatements()) {
+                    if ((sql.indexOf("DISTINCT") != -1) && (sql.indexOf("PROJ_TYPE") == -1)) {
+                        fail("SQL should not contain DISTINCT: " + sql);
+                    }
+                }
             }
             clearCache();
             for (Employee employee : results) {
@@ -2039,7 +2057,7 @@ public class AdvancedQueryTestSuite extends JUnitTestCase {
     }
 
     /**
-     * Test batch fetching of maps.
+     * Test load groups.
      */
     public void testLoadGroup() {
         clearCache();
@@ -2069,6 +2087,43 @@ public class AdvancedQueryTestSuite extends JUnitTestCase {
             if (counter != null) {
                 counter.remove();
             }
+        }
+    }
+
+    /**
+     * Test concurrent load groups.
+     */
+    public void testConcurrentLoadGroup() {
+        clearCache();
+        boolean concurrent = getDatabaseSession().isConcurrent();
+        getDatabaseSession().setIsConcurrent(true);
+        EntityManager em = createEntityManager();
+        beginTransaction(em);
+        // Count SQL.
+        QuerySQLTracker counter = new QuerySQLTracker(getServerSession());
+        try {
+            Query query = em.createQuery("Select c from Customer c");
+            query.setHint(QueryHints.LOAD_GROUP_ATTRIBUTE, "CSInteractions");
+            query.setHint(QueryHints.LOAD_GROUP_ATTRIBUTE, "CCustomers");
+            List<Customer> results = query.getResultList();
+            counter.getSqlStatements().clear();
+            for (Customer customer : results) {
+                customer.getCSInteractions().size();
+            }
+            if (counter.getSqlStatements().size() > 0) {
+                fail("Load group should have loaded attributes.");
+            }
+            clearCache();
+            for (Customer customer : results) {
+                verifyObject(customer);
+            }
+        } finally {
+            rollbackTransaction(em);
+            closeEntityManager(em);
+            if (counter != null) {
+                counter.remove();
+            }
+            getDatabaseSession().setIsConcurrent(concurrent);
         }
     }
 
@@ -2251,8 +2306,13 @@ public class AdvancedQueryTestSuite extends JUnitTestCase {
             query.setFirstResult(5);
             query.setMaxResults(5);
             List<Employee> results = query.getResultList();
-            if (isWeavingEnabled() && counter.getSqlStatements().size() != 3) {
-                fail("Should have been 3 query but was: " + counter.getSqlStatements().size());
+            int nExpectedStatements = 3;
+            if (usesSOP()) {
+            	// In SOP case there are no sql to read PhoneNumbers - they are read from sopObject instead.
+            	nExpectedStatements = 1;
+            }
+            if (isWeavingEnabled() && counter.getSqlStatements().size() != nExpectedStatements) {
+                fail("Should have been " + nExpectedStatements + " query but was: " + counter.getSqlStatements().size());
             }
             if (results.size() > 5) {
                 fail("Should have only returned 5 objects but was: " + results.size());
@@ -2260,8 +2320,8 @@ public class AdvancedQueryTestSuite extends JUnitTestCase {
             for (Employee employee : results) {
                 employee.getAddress();
             }
-            if (isWeavingEnabled() && counter.getSqlStatements().size() > 3) {
-                fail("Should have been 3 queries but was: " + counter.getSqlStatements().size());
+            if (isWeavingEnabled() && counter.getSqlStatements().size() > nExpectedStatements) {
+                fail("Should have been " + nExpectedStatements + " queries but was: " + counter.getSqlStatements().size());
             }
             clearCache();
             counter.remove();

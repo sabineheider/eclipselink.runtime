@@ -220,6 +220,8 @@ import org.eclipse.persistence.sessions.remote.RemoteSession;
 import org.eclipse.persistence.sessions.remote.rmi.RMIConnection;
 import org.eclipse.persistence.sessions.remote.rmi.RMIServerSessionManager;
 import org.eclipse.persistence.sessions.remote.rmi.RMIServerSessionManagerDispatcher;
+import org.eclipse.persistence.sessions.serializers.JavaSerializer;
+import org.eclipse.persistence.sessions.serializers.Serializer;
 import org.eclipse.persistence.sessions.server.ConnectionPolicy;
 import org.eclipse.persistence.sessions.server.ConnectionPool;
 import org.eclipse.persistence.sessions.server.ExternalConnectionPool;
@@ -2027,7 +2029,18 @@ public class EntityManagerSetupImpl implements MetadataRefreshListener {
         try {
             if (protocol != null) {
                 RemoteCommandManager rcm = new RemoteCommandManager(this.session);        
-                if (protocol.equalsIgnoreCase(CacheCoordinationProtocol.JMS) || protocol.equalsIgnoreCase(CacheCoordinationProtocol.JMSPublishing)) {
+                if (protocol.equalsIgnoreCase(CacheCoordinationProtocol.JGROUPS)) {
+                    property = PersistenceUnitProperties.COORDINATION_PROTOCOL;                    
+                    value = "org.eclipse.persistence.sessions.coordination.jgroups.JGroupsTransportManager";
+                    // Avoid compile and runtime dependency.
+                    Class transportClass = findClassForProperty(value, PersistenceUnitProperties.COORDINATION_PROTOCOL, loader);
+                    TransportManager transport = (TransportManager)transportClass.newInstance();
+                    rcm.setTransportManager(transport);                    
+                    String config = getConfigPropertyAsStringLogDebug(PersistenceUnitProperties.COORDINATION_JGROUPS_CONFIG, m, this.session);
+                    if (config != null) {
+                        transport.setConfig(config);
+                    }                    
+                } else if (protocol.equalsIgnoreCase(CacheCoordinationProtocol.JMS) || protocol.equalsIgnoreCase(CacheCoordinationProtocol.JMSPublishing)) {
                     JMSPublishingTransportManager transport = null;
                     if (protocol.equalsIgnoreCase(CacheCoordinationProtocol.JMS)) {
                          transport = new JMSTopicTransportManager(rcm);
@@ -2091,6 +2104,14 @@ public class EntityManagerSetupImpl implements MetadataRefreshListener {
                     Class transportClass = findClassForProperty(protocol, PersistenceUnitProperties.COORDINATION_PROTOCOL, loader);
                     rcm.setTransportManager((TransportManager)transportClass.newInstance());
                 }
+                String serializer = getConfigPropertyAsStringLogDebug(PersistenceUnitProperties.COORDINATION_SERIALIZER, m, this.session);
+                if (serializer != null) {
+                    property = PersistenceUnitProperties.COORDINATION_SERIALIZER;
+                    value = serializer;
+                    Class transportClass = findClassForProperty(serializer, PersistenceUnitProperties.COORDINATION_SERIALIZER, loader);
+                    rcm.setSerializer((Serializer)transportClass.newInstance());
+                }
+                
                 String naming = getConfigPropertyAsStringLogDebug(PersistenceUnitProperties.COORDINATION_NAMING_SERVICE, m, this.session);
                 if (naming != null) {
                     if (naming.equalsIgnoreCase("jndi")) {
@@ -2137,6 +2158,35 @@ public class EntityManagerSetupImpl implements MetadataRefreshListener {
         }
     }
         
+    /**
+     * Update session serializer.
+     */
+    protected void updateSerializer(Map m, ClassLoader loader) {
+	    String serializer = getConfigPropertyAsStringLogDebug(PersistenceUnitProperties.SERIALIZER, m, this.session);
+	    if (serializer != null) {
+	    	if (serializer.length() > 0) {
+		        try {
+		        	Class transportClass = findClassForProperty(serializer, PersistenceUnitProperties.SERIALIZER, loader);
+		        	this.session.setSerializer((Serializer)transportClass.newInstance());
+		        } catch (Exception exception) {
+		            this.session.handleException(ValidationException.invalidValueForProperty(serializer, PersistenceUnitProperties.SERIALIZER, exception));
+		        }
+	    	} else {
+	    		this.session.setSerializer(JavaSerializer.instance);
+	    	}
+	    }
+    }
+
+    /**
+     * Update whether session ShouldOptimizeResultSetAccess.
+     */
+    protected void updateShouldOptimizeResultSetAccess(Map m) {
+	    String resultSetAccessOptimization = PropertiesHandler.getPropertyValueLogDebug(PersistenceUnitProperties.JDBC_RESULT_SET_ACCESS_OPTIMIZATION, m, this.session);
+	    if (resultSetAccessOptimization != null) {
+	    	this.session.setShouldOptimizeResultSetAccess(resultSetAccessOptimization.equals("true"));
+	    }
+    }
+    
     /**
      * Override the default login creation method.
      * If persistenceInfo is available, use the information from it to setup the login
@@ -2283,7 +2333,10 @@ public class EntityManagerSetupImpl implements MetadataRefreshListener {
                 jndiConnector = new JNDIConnector(mainDatasource);                                
             }
             login.setConnector(jndiConnector);
-            login.setUsesExternalConnectionPooling(true);
+            String useInternalConnectionPool = getConfigPropertyAsStringLogDebug(PersistenceUnitProperties.CONNECTION_POOL_INTERNALLY_POOL_DATASOURCE, m, this.session);
+            if (!"true".equalsIgnoreCase(useInternalConnectionPool)){
+                login.setUsesExternalConnectionPooling(true);
+            }
         }
 
         if (this.session.isServerSession()) {
@@ -2591,6 +2644,8 @@ public class EntityManagerSetupImpl implements MetadataRefreshListener {
             }
             updatePartitioning(m, loader);
             updateDatabaseEventListener(m, loader);
+            updateSerializer(m, loader);
+            updateShouldOptimizeResultSetAccess(m);
             
             // Customizers should be processed last
             processDescriptorCustomizers(m, loader);

@@ -24,7 +24,6 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
@@ -129,6 +128,7 @@ import org.eclipse.persistence.oxm.annotations.XmlDiscriminatorNode;
 import org.eclipse.persistence.oxm.annotations.XmlDiscriminatorValue;
 import org.eclipse.persistence.oxm.annotations.XmlElementsJoinNodes;
 import org.eclipse.persistence.oxm.annotations.XmlLocation;
+import org.eclipse.persistence.oxm.annotations.XmlVariableNode;
 import org.eclipse.persistence.oxm.annotations.XmlVirtualAccessMethods;
 import org.eclipse.persistence.oxm.annotations.XmlInverseReference;
 import org.eclipse.persistence.oxm.annotations.XmlIsSetNullPolicy;
@@ -909,6 +909,10 @@ public class AnnotationsProcessor {
             List<Property> anyElementProperties = new ArrayList<Property>();
             
             for (Property property : tInfo.getPropertyList()) {
+                // Check that @XmlAttribute references a Java type that maps to text in XML
+                if (property.isAttribute()) {
+                    validateXmlAttributeFieldOrProperty(tInfo, property);
+                }
             	JavaClass typeClass = property.getActualType();
             
             	if(property.isChoice()){
@@ -1041,7 +1045,7 @@ public class AnnotationsProcessor {
             // all types is completed
             processXmlIDREF(property);
 
-            if (property.isMap()) {
+            if (property.isMap()){
                 JavaClass keyType = property.getKeyType();
                 if (shouldGenerateTypeInfo(keyType)) {
                     JavaClass[] jClassArray = new JavaClass[] { keyType };
@@ -1675,7 +1679,13 @@ public class AnnotationsProcessor {
                 if (helper.isCollectionType(property.getType()) || property.getType().isArray()) {
                     property.setGenericType(helper.getJavaClass(element.type()));
                 } else {
-                    property.setType(helper.getJavaClass(element.type()));
+                	JavaClass originalType = property.getType();
+                	JavaClass newType =helper.getJavaClass(element.type());
+                	if(!originalType.getName().equals(newType.getName())){
+                		property.setTyped(true);
+                		property.setSchemaType((QName) helper.getXMLToJavaTypeMap().get(newType.getName()));
+                	}                		
+                    property.setType(newType);
                 }
                 property.setHasXmlElementType(true);
             }
@@ -1871,8 +1881,14 @@ public class AnnotationsProcessor {
             if (!Modifier.isTransient(modifiers) && ((Modifier.isPublic(nextField.getModifiers()) && onlyPublic) || !onlyPublic ||hasJAXBAnnotations(nextField))) {
                 if (!Modifier.isStatic(modifiers)) {
                     if ((onlyExplicit && hasJAXBAnnotations(nextField)) || !onlyExplicit) {
-                         property = buildNewProperty(info, cls, nextField, nextField.getName(), nextField.getResolvedType());
-                         properties.add(property);
+                        try {
+                            property = buildNewProperty(info, cls, nextField, nextField.getName(), nextField.getResolvedType());
+                            properties.add(property);
+                        } catch(JAXBException ex) {
+                            if(ex.getErrorCode() != JAXBException.INVALID_INTERFACE || !helper.isAnnotationPresent(nextField, XmlTransient.class)) {
+                                throw ex;
+                            }
+                        }
                     }
                 } else {
                     try {
@@ -1893,6 +1909,10 @@ public class AnnotationsProcessor {
                         // do Nothing
                     } catch (IllegalAccessException e) {
                         // do Nothing
+                    } catch(JAXBException ex) {
+                        if(ex.getErrorCode() != JAXBException.INVALID_INTERFACE || !helper.isAnnotationPresent(nextField, XmlTransient.class)) {
+                            throw ex;
+                        }
                     }
                 }
             }
@@ -1959,6 +1979,28 @@ public class AnnotationsProcessor {
         }else{
             updatePropertyType(property, ptype, ptype);
         }
+    	
+        if(helper.isAnnotationPresent(javaHasAnnotations, XmlVariableNode.class)){
+            XmlVariableNode variableNode = (XmlVariableNode) helper.getAnnotation(javaHasAnnotations, XmlVariableNode.class);
+            if(variableNode.type() != XmlVariableNode.DEFAULT.class){
+            	property.setVariableClassName(variableNode.type().getName());            	
+                            	
+            	JavaClass componentType = helper.getJavaClass(variableNode.type());
+            	
+            	if(helper.isCollectionType(ptype)){
+            		property.setGenericType(componentType);
+            	}else{
+            		property.setType(componentType);
+            	}
+            	
+            }
+            if(!variableNode.value().equals("##default")){
+            	property.setVariableAttributeName(variableNode.value());	
+            }
+            property.setVariableNodeAttribute(variableNode.attribute());
+        }
+        
+        
         if((ptype.isArray()  && !areEquals(ptype, byte[].class))  || (helper.isCollectionType(ptype) && !helper.isAnnotationPresent(javaHasAnnotations, XmlList.class)) ){
         	property.setNillable(true);
         }
@@ -2984,10 +3026,9 @@ public class AnnotationsProcessor {
             }
 
             if (!propertyNames.contains(propertyName)) {
-                propertyNames.add(propertyName);
-
+               try {
                 Property property = buildNewProperty(info, cls, propertyMethod, propertyName, ptype);
-
+                propertyNames.add(propertyName);
                 property.setTransient(isPropertyTransient);
 
                 if (getMethod != null) {
@@ -3011,6 +3052,11 @@ public class AnnotationsProcessor {
                 //if (!isTransient || (isTransient && isLocation)) {
                 properties.add(property);
                 //}
+               } catch(JAXBException ex) {
+                   if(ex.getErrorCode() != JAXBException.INVALID_INTERFACE || !isPropertyTransient) {
+                       throw ex;
+                   }                   
+               }
             }
         }
 
@@ -3035,7 +3081,7 @@ public class AnnotationsProcessor {
             if (superClassInfo != null && !superClassInfo.isTransient()) {
                 for (Property prop : properties) {
                     for (Property superProp : superClassInfo.getProperties().values()) {
-                        if (superProp.getGetMethodName() != null && superProp.getGetMethodName().equals(prop.getGetMethodName())) {
+                        if (superProp.getGetMethodName() != null && superProp.getGetMethodName().equals(prop.getGetMethodName()) && !superProp.isTransient()) {
                             revisedProperties.remove(prop);
                         }
                     }
@@ -3955,6 +4001,57 @@ public class AnnotationsProcessor {
         return false;
     }
 
+    private void validateXmlAttributeFieldOrProperty(TypeInfo tInfo, Property property) {
+        // Check that @XmlAttribute references a Java type that maps to text in XML
+        JavaClass ptype = property.getActualType();
+        TypeInfo refInfo = typeInfo.get(ptype.getQualifiedName());
+        if (refInfo != null) {
+            if (!refInfo.isPostBuilt()) {
+                postBuildTypeInfo(new JavaClass[] { ptype });
+            }
+            if (!refInfo.isEnumerationType()) {
+                JavaClass parent = ptype.getSuperclass();
+                boolean hasMapped = false;
+                while (parent != null) {
+                    hasMapped = hasTextMapping(refInfo);
+                    if (hasMapped || parent.getQualifiedName().equals(JAVA_LANG_OBJECT)) {
+                        break;
+                    }
+                    refInfo = typeInfo.get(parent.getQualifiedName());
+                    parent = parent.getSuperclass();
+                }
+                if (!hasMapped) {
+                    String propName = property.getPropertyName();
+                    String typeName = tInfo.getJavaClassName();
+                    String refTypeName = refInfo.getJavaClassName();
+                    throw org.eclipse.persistence.exceptions.JAXBException.mustMapToText(propName, typeName, refTypeName);
+                }
+            }
+        }
+    }
+
+    private boolean hasTextMapping(TypeInfo tInfo) {
+        Collection<Property> props = tInfo.getProperties().values();
+        for (Property property : props) {
+            if (property.isAttribute()) {
+                JavaClass ptype = property.getActualType();
+                TypeInfo refInfo = typeInfo.get(ptype.getQualifiedName());
+                if (refInfo != null) {
+                    return hasTextMapping(refInfo);
+                }
+            }
+        }
+
+        boolean hasXmlId = (tInfo.getIDProperty() != null && !tInfo.getIDProperty().isTransient());
+        boolean hasXmlValue = (tInfo.getXmlValueProperty() != null && !tInfo.getXmlValueProperty().isTransient());
+        if (hasXmlValue) {
+            // Ensure there is an @XmlValue property and nothing else
+            hasXmlValue = CompilerHelper.isSimpleType(tInfo);            
+        }
+
+        return (hasXmlValue || hasXmlId);
+    }
+    
     private Class generateWrapperForMapClass(JavaClass mapClass, JavaClass keyClass, JavaClass valueClass, TypeMappingInfo typeMappingInfo) {
         String packageName = JAXB_DEV;
         NamespaceResolver combinedNamespaceResolver = new NamespaceResolver();

@@ -513,7 +513,7 @@ public class XMLChoiceCollectionMapping extends DatabaseMapping implements Choic
             }
             if(nextMapping.isAbstractCompositeDirectCollectionMapping()){
                 XMLConversionManager xmlConversionManager = (XMLConversionManager) session.getDatasourcePlatform().getConversionManager();                   
-                QName schemaType = (QName)xmlConversionManager.getDefaultJavaTypes().get(((AbstractCompositeDirectCollectionMapping)nextMapping).getAttributeElementClass());
+                QName schemaType = xmlConversionManager.schemaType(((AbstractCompositeDirectCollectionMapping)nextMapping).getAttributeElementClass());
                 if(schemaType != null) {
                  ((XMLField)nextMapping.getField()).setSchemaType(schemaType);
                 }   
@@ -706,7 +706,7 @@ public class XMLChoiceCollectionMapping extends DatabaseMapping implements Choic
     public void setChoiceFieldToClassAssociations(ArrayList associations) {
         if(associations.size() > 0) {
             for(Object next:associations) {
-                XMLChoiceFieldToClassAssociation<XMLField> association = (XMLChoiceFieldToClassAssociation)next;
+                XMLChoiceFieldToClassAssociation<Converter, XMLField> association = (XMLChoiceFieldToClassAssociation)next;
                 this.addChoiceElement(association.getXmlField(), association.getClassName());
                 if(association.getConverter() != null) {
                     this.addConverter(association.getXmlField(), association.getConverter());
@@ -730,7 +730,6 @@ public class XMLChoiceCollectionMapping extends DatabaseMapping implements Choic
                  xmlMapping.setAttributeAccessor(temporaryAccessor);
                  Class theClass = XMLConversionManager.getDefaultXMLManager().convertClassNameToClass(className);
                  xmlMapping.setAttributeElementClass(theClass);
-                 this.fieldsToConverters.put(xmlField, xmlMapping.getValueConverter());
                  this.choiceElementMappings.put(xmlField, xmlMapping);
                  this.choiceElementMappingsByClassName.put(className, xmlMapping);
              } else {

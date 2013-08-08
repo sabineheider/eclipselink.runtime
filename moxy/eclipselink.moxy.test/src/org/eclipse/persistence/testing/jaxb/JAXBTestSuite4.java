@@ -17,6 +17,8 @@ import org.eclipse.persistence.testing.jaxb.defaultvalue.DefaultValueTestSuite;
 import org.eclipse.persistence.testing.jaxb.employee.JAXBEmployeeNSTestCases;
 import org.eclipse.persistence.testing.jaxb.employee.JAXBEmployeeNoWrapperTestCases;
 import org.eclipse.persistence.testing.jaxb.employee.JAXBEmployeeTestCases;
+import org.eclipse.persistence.testing.jaxb.inheritance.override.InheritanceOverrideTestCases;
+import org.eclipse.persistence.testing.jaxb.inheritance.typeElem.InheritanceTypeElementTestCases;
 import org.eclipse.persistence.testing.jaxb.jaxbfragment.JAXBFragmentTestCases;
 import org.eclipse.persistence.testing.jaxb.map.MapElementWrapperExternalTestCases;
 import org.eclipse.persistence.testing.jaxb.map.MapElementWrapperTestCases;
@@ -33,6 +35,7 @@ import org.eclipse.persistence.testing.jaxb.xmlelementrefs.adapter.XmlElementRef
 import org.eclipse.persistence.testing.jaxb.xmlgregoriancalendar.XMLGregorianCalendarObjectTestCases;
 import org.eclipse.persistence.testing.jaxb.xmlinverseref.XmlInverseRefBidirectionalTestSuite;
 import org.eclipse.persistence.testing.jaxb.xmlschematype.XSDSchemaTypesTestCases;
+import org.eclipse.persistence.testing.jaxb.xmlvariablenode.AllVariableElementTestCases;
 
 import junit.framework.Test;
 import junit.framework.TestSuite;
@@ -67,6 +70,9 @@ public class JAXBTestSuite4 {
         suite.addTestSuite(ObjectGraphRefSubTestCases.class);
         suite.addTestSuite(ObjectGraphInheritanceTestCases.class);
         suite.addTestSuite(XmlElementRefsAdapterTestCases.class);
+        suite.addTest(AllVariableElementTestCases.suite());
+        suite.addTestSuite(InheritanceOverrideTestCases.class);
+        suite.addTestSuite(InheritanceTypeElementTestCases.class);
 	    
 	    return suite;
 	}

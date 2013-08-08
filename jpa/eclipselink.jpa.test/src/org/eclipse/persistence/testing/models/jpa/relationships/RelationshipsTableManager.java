@@ -18,6 +18,7 @@ package org.eclipse.persistence.testing.models.jpa.relationships;
 
 import org.eclipse.persistence.testing.framework.TogglingFastTableCreator;
 import org.eclipse.persistence.tools.schemaframework.FieldDefinition;
+import org.eclipse.persistence.tools.schemaframework.ForeignKeyConstraint;
 import org.eclipse.persistence.tools.schemaframework.TableCreator;
 import org.eclipse.persistence.tools.schemaframework.TableDefinition;
 
@@ -39,6 +40,7 @@ public class RelationshipsTableManager extends TogglingFastTableCreator {
         addTableDefinition(buildORDER_ORDERLABELTable());
         addTableDefinition(buildCMP3_SALESPERSONTable());
         addTableDefinition(buildCUSTOMER_CUSTOMERTable());
+        addTableDefinition(buildCUSTOMER_CUSTOMER2Table());
         addTableDefinition(buildCMP3_ENTITYATable());
         addTableDefinition(buildCMP3_ENTITYBTable());
         addTableDefinition(buildCMP3_ENTITYA_ENTITYBTable());
@@ -579,6 +581,39 @@ public class RelationshipsTableManager extends TogglingFastTableCreator {
         field1.setForeignKeyFieldName("CMP3_CUSTOMER.CUST_ID");
         table.addField(field1);
 
+        return table;
+    }
+    
+    public static TableDefinition buildCUSTOMER_CUSTOMER2Table() {
+        TableDefinition table = new TableDefinition();
+
+        table.setName("CMP3_CUSTOMER_CUSTOMER2");
+
+        // SECTION: FIELD
+        FieldDefinition field = new FieldDefinition();
+        field.setName("Customer_CUST_ID");
+        field.setTypeName("NUMERIC");
+        field.setSize(15);
+        field.setShouldAllowNull(false);
+        field.setIsPrimaryKey(true);
+        field.setUnique(false);
+        field.setIsIdentity(false);
+        table.addField(field);
+    
+        // SECTION: FIELD
+        FieldDefinition field1 = new FieldDefinition();
+        field1.setName("CCustomers2_CUST_ID");
+        field1.setTypeName("NUMERIC");
+        field1.setSize(15);
+        field1.setShouldAllowNull(false);
+        field1.setIsPrimaryKey(true);
+        field1.setUnique(false);
+        field1.setIsIdentity(false);
+        table.addField(field1);
+
+        table.addForeignKeyConstraint(new ForeignKeyConstraint("CMP3CUST2_CID", "Customer_CUST_ID", "CUST_ID", "CMP3_CUSTOMER"));
+        table.addForeignKeyConstraint(new ForeignKeyConstraint("CMP3CCUST2_CID", "CCustomers2_CUST_ID", "CUST_ID", "CMP3_CUSTOMER"));
+        
         return table;
     }
 

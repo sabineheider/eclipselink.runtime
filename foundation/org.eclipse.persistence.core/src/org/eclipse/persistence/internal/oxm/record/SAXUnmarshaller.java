@@ -41,11 +41,11 @@ import org.eclipse.persistence.internal.core.helper.CoreClassConstants;
 import org.eclipse.persistence.internal.core.sessions.CoreAbstractSession;
 import org.eclipse.persistence.internal.oxm.Constants;
 import org.eclipse.persistence.internal.oxm.Context;
+import org.eclipse.persistence.internal.oxm.ConversionManager;
 import org.eclipse.persistence.internal.oxm.MediaType;
 import org.eclipse.persistence.internal.oxm.Root;
 import org.eclipse.persistence.internal.oxm.Unmarshaller;
 import org.eclipse.persistence.internal.oxm.UnmarshallerHandler;
-import org.eclipse.persistence.internal.oxm.XMLConversionManager;
 import org.eclipse.persistence.internal.oxm.mappings.Descriptor;
 import org.eclipse.persistence.internal.oxm.mappings.UnmarshalKeepAsElementPolicy;
 import org.eclipse.persistence.internal.oxm.record.json.JSONReader;
@@ -196,7 +196,7 @@ public class SAXUnmarshaller implements PlatformUnmarshaller {
     
     private XMLReader getNewXMLReader(Class clazz, MediaType mediaType) {
               	
-        	if(mediaType.isApplicationJSON()){        	
+        	if(null != mediaType && mediaType.isApplicationJSON()){        	
         	 	return new JSONReader(xmlUnmarshaller.getAttributePrefix(), xmlUnmarshaller.getNamespaceResolver(), xmlUnmarshaller.getNamespaceResolver() != null, xmlUnmarshaller.isIncludeRoot(), xmlUnmarshaller.getNamespaceSeparator(), xmlUnmarshaller.getErrorHandler(), xmlUnmarshaller.getValueWrapper(), clazz);        	 	
         	}
             try {
@@ -665,6 +665,9 @@ if(clazz == CoreClassConstants.OBJECT) {
 	            } else {
 	                return unmarshal(streamSource.getSystemId());
 	            }
+	        } else if (source instanceof ExtendedSource){
+	        	ExtendedSource extendedSource = (ExtendedSource)source;
+	        	return unmarshal(null, extendedSource.createReader(xmlUnmarshaller));
 	        } else {
 	        	UnmarshallerHandler handler = this.xmlUnmarshaller.getUnmarshallerHandler();
 	        	XMLTransformer transformer = XMLPlatformFactory.getInstance().getXMLPlatform().newXMLTransformer();
@@ -706,6 +709,9 @@ if(clazz == CoreClassConstants.OBJECT) {
             } else {
             	return unmarshal(streamSource.getSystemId(), clazz);
             }
+        } else if(source instanceof ExtendedSource){
+            ExtendedSource extendedSource = (ExtendedSource)source;
+            return unmarshal(null, clazz, extendedSource.createReader(xmlUnmarshaller, clazz));     
         } else {
         	DOMResult result = new DOMResult();
         	XMLTransformer transformer = XMLPlatformFactory.getInstance().getXMLPlatform().newXMLTransformer();
@@ -910,7 +916,7 @@ if(clazz == CoreClassConstants.OBJECT) {
         try {
             Context xmlContext = xmlUnmarshaller.getContext();
 
-            if (xmlContext.hasDocumentPreservation() || (Node.class.isAssignableFrom(clazz) && xmlUnmarshaller.getMediaType().isApplicationXML())) {
+            if (xmlContext.hasDocumentPreservation() || (Node.class.isAssignableFrom(clazz) && xmlUnmarshaller.isApplicationXML())) {
                 SAXDocumentBuilder saxDocumentBuilder = new SAXDocumentBuilder();
                 xmlReader.setContentHandler(saxDocumentBuilder);
                 xmlReader.parse(inputSource);
@@ -1008,7 +1014,7 @@ if(clazz == CoreClassConstants.OBJECT) {
     }
     
     private boolean isPrimitiveWrapper(Class clazz){
-	    return  XMLConversionManager.getDefaultJavaTypes().get(clazz) != null    
+	    return ((ConversionManager) xmlUnmarshaller.getContext().getSession().getDatasourcePlatform().getConversionManager()).schemaType(clazz) != null    
 	    ||CoreClassConstants.XML_GREGORIAN_CALENDAR.isAssignableFrom(clazz)
 	    ||CoreClassConstants.DURATION.isAssignableFrom(clazz);
     }

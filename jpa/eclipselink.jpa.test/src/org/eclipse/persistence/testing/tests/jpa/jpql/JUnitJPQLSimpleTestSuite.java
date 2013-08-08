@@ -30,6 +30,7 @@ import javax.persistence.Query;
 import junit.framework.Assert;
 import junit.framework.Test;
 import junit.framework.TestSuite;
+import org.eclipse.persistence.config.QueryHints;
 import org.eclipse.persistence.exceptions.JPQLException;
 import org.eclipse.persistence.expressions.Expression;
 import org.eclipse.persistence.expressions.ExpressionBuilder;
@@ -172,6 +173,12 @@ public class JUnitJPQLSimpleTestSuite extends JUnitTestCase {
         suite.addTest(new JUnitJPQLSimpleTestSuite("simpleTypeTest"));
         suite.addTest(new JUnitJPQLSimpleTestSuite("simpleAsOrderByTest"));
         suite.addTest(new JUnitJPQLSimpleTestSuite("simpleLiteralDateTest"));
+        suite.addTest(new JUnitJPQLSimpleTestSuite("simpleLiteralLongTest_Long1"));
+        suite.addTest(new JUnitJPQLSimpleTestSuite("simpleLiteralLongTest_Long2"));
+        suite.addTest(new JUnitJPQLSimpleTestSuite("simpleLiteralLongTest_Float1"));
+        suite.addTest(new JUnitJPQLSimpleTestSuite("simpleLiteralLongTest_Float2"));
+        suite.addTest(new JUnitJPQLSimpleTestSuite("simpleLiteralLongTest_Double1"));
+        suite.addTest(new JUnitJPQLSimpleTestSuite("simpleLiteralLongTest_Double2"));
         suite.addTest(new JUnitJPQLSimpleTestSuite("simpleSingleArgSubstringTest"));
         suite.addTest(new JUnitJPQLSimpleTestSuite("elementCollectionIsNotEmptyTest"));
         suite.addTest(new JUnitJPQLSimpleTestSuite("relationshipElementCollectionIsNotEmptyTest"));
@@ -1769,6 +1776,10 @@ public class JUnitJPQLSimpleTestSuite extends JUnitTestCase {
         ExpressionBuilder employeeBuilder = new ExpressionBuilder(Employee.class);
         Expression selectionCriteria = new ExpressionBuilder(Address.class).equal(employeeBuilder.get("address")).and(employeeBuilder.get("lastName").like("%Way%"));
         query.setSelectionCriteria(selectionCriteria);
+        if (usesSOP() && getServerSession().getPlatform().isOracle()) {
+        	// distinct is incompatible with blob in selection clause on Oracle
+        	query.setShouldUseSerializedObjectPolicy(false);
+        }
         Vector expectedResult = (Vector)getServerSession().executeQuery(query);
 
         clearCache();
@@ -1866,6 +1877,10 @@ public class JUnitJPQLSimpleTestSuite extends JUnitTestCase {
         Expression selectionCriteria = employeeBuilder.anyOf("phoneNumbers").get("number").equal(employeeBuilder.all(subQuery));
         query.setSelectionCriteria(selectionCriteria);
         query.setReferenceClass(Employee.class);
+        if (usesSOP() && getServerSession().getPlatform().isOracle()) {
+        	// distinct is incompatible with blob in selection clause on Oracle
+        	query.dontUseDistinct();
+        }
 
         Vector expectedResult = (Vector)getServerSession().executeQuery(query);
 
@@ -1877,6 +1892,10 @@ public class JUnitJPQLSimpleTestSuite extends JUnitTestCase {
 
         Query jpqlQuery = em.createQuery(ejbqlString);
         jpqlQuery.setMaxResults(10);
+        if (usesSOP() && getServerSession().getPlatform().isOracle()) {
+        	// distinct is incompatible with blob in selection clause on Oracle
+        	jpqlQuery.setHint(QueryHints.SERIALIZED_OBJECT, "false");
+        }
         List result = jpqlQuery.getResultList();
 
         Assert.assertTrue("Simple select Phonenumber Declared In IN Clause test failed", comparer.compareObjects(result, expectedResult));
@@ -1922,27 +1941,40 @@ public class JUnitJPQLSimpleTestSuite extends JUnitTestCase {
     public void selectSimpleNotMemberOfWithParameterTest() {
         EntityManager em = createEntityManager();
 
-        Vector expectedResult = getServerSession().readAllObjects(Employee.class);
+        Vector<Employee> expectedResult = getServerSession().readAllObjects(Employee.class);
 
         clearCache();
 
         Employee emp = (Employee)expectedResult.get(0);
         expectedResult.remove(0);
 
-        PhoneNumber phone = new PhoneNumber();
-        phone.setAreaCode("613");
-        phone.setNumber("1234567");
-        phone.setType("cell");
-
-
-        Server serverSession = JUnitTestCase.getServerSession();
-        Session clientSession = serverSession.acquireClientSession();
-        UnitOfWork uow = clientSession.acquireUnitOfWork();
-        emp = (Employee)uow.readObject(emp);
-        PhoneNumber phoneClone = (PhoneNumber)uow.registerObject(phone);
-        phoneClone.setOwner(emp);
-        emp.addPhoneNumber(phoneClone);
-        uow.commit();
+        boolean shouldCleanUp = false;
+        PhoneNumber phone;
+        if (emp.getPhoneNumbers().isEmpty()) {        
+            phone = new PhoneNumber();
+            phone.setAreaCode("613");
+            phone.setNumber("1234567");
+            phone.setType("cell");    
+    
+            Server serverSession = JUnitTestCase.getServerSession();
+            Session clientSession = serverSession.acquireClientSession();
+            UnitOfWork uow = clientSession.acquireUnitOfWork();
+            emp = (Employee)uow.readObject(emp);
+            PhoneNumber phoneClone = (PhoneNumber)uow.registerObject(phone);
+            emp.addPhoneNumber(phoneClone);
+	        if (usesSOP()) {
+	        	// In SOP is used then the phone is never read back (it's saved in sopObject), 
+	        	// therefore its ownerId (mapped as read only) is never set.
+	        	// If phone.ownerId is not set, then the next query (that takes phone as a parameter) would return all the employees,
+	        	// it supposed to return all the employees minus emp.
+	        	phoneClone.setId(emp.getId());
+	        }
+            uow.commit();
+            phone = emp.getPhoneNumbers().iterator().next();
+            shouldCleanUp = true;
+        } else {
+            phone = emp.getPhoneNumbers().iterator().next();
+        }
 
 
         String ejbqlString = "SELECT OBJECT(emp) FROM Employee emp " + "WHERE ?1 NOT MEMBER OF emp.phoneNumbers";
@@ -1952,11 +1984,20 @@ public class JUnitJPQLSimpleTestSuite extends JUnitTestCase {
 
         List result = em.createQuery(ejbqlString).setParameter(1, phone).getResultList();
 
-        uow = clientSession.acquireUnitOfWork();
-        uow.deleteObject(phone);
-        uow.commit();
-
-        Assert.assertTrue("Select simple Not member of with parameter test failed", comparer.compareObjects(result, expectedResult));
+        boolean ok = comparer.compareObjects(result, expectedResult);
+        if (shouldCleanUp) {
+            Server serverSession = JUnitTestCase.getServerSession();
+            Session clientSession = serverSession.acquireClientSession();
+            UnitOfWork uow = clientSession.acquireUnitOfWork();
+            emp = (Employee)uow.readObject(emp);
+            PhoneNumber phoneToRemove = emp.getPhoneNumbers().iterator().next();
+            emp.removePhoneNumber(phoneToRemove);
+            uow.deleteObject(phoneToRemove);
+            uow.commit();
+        }
+        if (!ok) {
+            fail("unexpected query result");
+        }
     }
 
     public void selectSimpleNotMemberOfWithParameterNestedTest() {
@@ -2193,6 +2234,41 @@ public class JUnitJPQLSimpleTestSuite extends JUnitTestCase {
         List result = em.createQuery(ejbqlString).getResultList();
 
         Assert.assertTrue("simpleLiteralDateTest", comparer.compareObjects(result, expectedResult));
+    }
+
+    private void simpleLiteralLongTest(String numericalLiteral) {
+
+        EntityManager em = createEntityManager();
+        Query query = em.createQuery("SELECT e FROM Employee e WHERE e.salary = 500000" + numericalLiteral);
+        List<Employee> results  = query.getResultList();
+        assertFalse(results.isEmpty());
+        for (Employee employee : results) {
+            assertEquals(500000, employee.getSalary());
+        }
+    }
+
+    public void simpleLiteralLongTest_Long1() {
+        simpleLiteralLongTest("l");
+    }
+
+    public void simpleLiteralLongTest_Long2() {
+        simpleLiteralLongTest("L");
+    }
+
+    public void simpleLiteralLongTest_Float1() {
+        simpleLiteralLongTest("f");
+    }
+
+    public void simpleLiteralLongTest_Float2() {
+        simpleLiteralLongTest("F");
+    }
+
+    public void simpleLiteralLongTest_Double1() {
+        simpleLiteralLongTest("d");
+    }
+
+    public void simpleLiteralLongTest_Double2() {
+        simpleLiteralLongTest("D");
     }
 
     public void simpleSingleArgSubstringTest(){

@@ -87,6 +87,8 @@
  *       - 389090: JPA 2.1 DDL Generation Support (foreign key metadata support)
  *     02/20/2013-2.5 Guy Pelletier 
  *       - 389090: JPA 2.1 DDL Generation Support (foreign key metadata support)
+ *     07/16/2013-2.5.1 Guy Pelletier 
+ *       - 412384: Applying Converter for parameterized basic-type for joda-time's DateTime does not work
  ******************************************************************************/
 package org.eclipse.persistence.internal.jpa.metadata.accessors.mappings;
 
@@ -97,6 +99,7 @@ import java.util.Map;
 import java.util.Set;
 
 import org.eclipse.persistence.annotations.BatchFetchType;
+import org.eclipse.persistence.annotations.Convert;
 import org.eclipse.persistence.annotations.JoinFetchType;
 import org.eclipse.persistence.annotations.Properties;
 import org.eclipse.persistence.annotations.Property;
@@ -108,7 +111,9 @@ import org.eclipse.persistence.internal.descriptors.VirtualAttributeAccessor;
 import org.eclipse.persistence.internal.helper.ClassConstants;
 import org.eclipse.persistence.internal.helper.DatabaseField;
 import org.eclipse.persistence.internal.helper.DatabaseTable;
+import org.eclipse.persistence.internal.helper.Helper;
 import org.eclipse.persistence.internal.indirection.TransparentIndirectionPolicy;
+import org.eclipse.persistence.internal.indirection.WeavedObjectBasicIndirectionPolicy;
 import org.eclipse.persistence.internal.jpa.metadata.MetadataDescriptor;
 import org.eclipse.persistence.internal.jpa.metadata.MetadataHelper;
 import org.eclipse.persistence.internal.jpa.metadata.MetadataLogger;
@@ -131,9 +136,12 @@ import org.eclipse.persistence.internal.jpa.metadata.converters.AbstractConverte
 import org.eclipse.persistence.internal.jpa.metadata.converters.ClassInstanceMetadata;
 import org.eclipse.persistence.internal.jpa.metadata.converters.ConvertMetadata;
 import org.eclipse.persistence.internal.jpa.metadata.converters.EnumeratedMetadata;
+import org.eclipse.persistence.internal.jpa.metadata.converters.JSONMetadata;
+import org.eclipse.persistence.internal.jpa.metadata.converters.KryoMetadata;
 import org.eclipse.persistence.internal.jpa.metadata.converters.LobMetadata;
 import org.eclipse.persistence.internal.jpa.metadata.converters.SerializedMetadata;
 import org.eclipse.persistence.internal.jpa.metadata.converters.TemporalMetadata;
+import org.eclipse.persistence.internal.jpa.metadata.converters.XMLMetadata;
 import org.eclipse.persistence.internal.jpa.metadata.mappings.MapKeyMetadata;
 import org.eclipse.persistence.internal.jpa.metadata.xml.XMLEntityMappings;
 import org.eclipse.persistence.internal.queries.CollectionContainerPolicy;
@@ -176,10 +184,6 @@ import static org.eclipse.persistence.internal.jpa.metadata.MetadataConstants.JP
  * @since EclipseLink 1.0
  */
 public abstract class MappingAccessor extends MetadataAccessor {
-    // Reserved converter names
-    private static final String CONVERT_NONE = "none";
-    private static final String CONVERT_SERIALIZED = "serialized";
-    private static final String CONVERT_CLASS_INSTANCE = "class-instance";
 
     // Used for looking up attribute overrides for a map accessor. 
     protected static final String KEY_DOT_NOTATION = "key.";
@@ -891,6 +895,22 @@ public abstract class MappingAccessor extends MetadataAccessor {
     
     /**
      * INTERNAL:
+     * Return the map key reference class for this accessor if applicable. It 
+     * will try to extract a reference class from a generic specification.  
+     * If no generics are used, then it will return void.class. This avoids NPE's 
+     * when processing JPA converters that can default (Enumerated and Temporal) 
+     * based on the reference class.
+     * 
+     * Future: this method is where we would provide a more explicit reference
+     * class to support an auto-apply jpa converter. Per the spec auto-apply
+     * converters are applied against basics only.
+     */
+    public MetadataClass getMapKeyReferenceClassWithGenerics() {
+        return getMapKeyReferenceClass();
+    }
+    
+    /**
+     * INTERNAL:
      * Return the raw class for this accessor. 
      * E.g. For an accessor with a type of java.util.Collection<Employee>, this 
      * method will return java.util.Collection. To check for the attribute
@@ -905,6 +925,25 @@ public abstract class MappingAccessor extends MetadataAccessor {
             return getMetadataClass(getAttributeType());
         } else {
             return getAccessibleObject().getRawClass(getDescriptor());
+        }
+    }
+    
+    /**
+     * INTERNAL:
+     * Return the raw class with any generic specifications for this accessor. 
+     * E.g. For an accessor with a type of java.util.Collection<Employee>, this 
+     * method will return java.util.CollectionEmployee. To check for the 
+     * attribute type we must go through the method calls since some accessors 
+     * define the attribute type through a target entity specification. Do not 
+     * access the m_attributeType variable directly in this method.
+     */
+    public MetadataClass getRawClassWithGenerics() {
+        if (hasAttributeType()) {
+            // If the class doesn't exist the factory we'll just return a
+            // generic MetadataClass
+            return getMetadataClass(getAttributeType());
+        } else {
+            return getAccessibleObject().getRawClassWithGenerics(getDescriptor());
         }
     }
     
@@ -925,6 +964,17 @@ public abstract class MappingAccessor extends MetadataAccessor {
      */
     public MetadataClass getReferenceClass() {
         return getRawClass();
+    }
+    
+    /**
+     * INTERNAL: 
+     * Return the reference class for this accessor. By default the reference
+     * class is the raw class. Some accessors may need to override this
+     * method to drill down further. That is, try to extract a reference class
+     * from generics.
+     */
+    public MetadataClass getReferenceClassWithGenerics() {
+        return getRawClassWithGenerics();
     }
     
     /**
@@ -1485,10 +1535,16 @@ public abstract class MappingAccessor extends MetadataAccessor {
      * to the given mapping.
      */
     protected void processConvert(DatabaseMapping mapping, String converterName, MetadataClass referenceClass, boolean isForMapKey, boolean hasConverts) {
-        if (converterName.equals(CONVERT_SERIALIZED)) {
+        if (converterName.equals(Convert.SERIALIZED)) {
             processSerialized(mapping, referenceClass, isForMapKey);
-        } else if (converterName.equals(CONVERT_CLASS_INSTANCE)){
+        } else if (converterName.equals(Convert.CLASS_INSTANCE)){
             new ClassInstanceMetadata().process(mapping, this, referenceClass, isForMapKey);
+        } else if (converterName.equals(Convert.XML)){
+            new XMLMetadata().process(mapping, this, referenceClass, isForMapKey);
+        } else if (converterName.equals(Convert.JSON)){
+            new JSONMetadata().process(mapping, this, referenceClass, isForMapKey);
+        } else if (converterName.equals(Convert.KRYO)){
+            new KryoMetadata().process(mapping, this, referenceClass, isForMapKey);
         } else {
             AbstractConverterMetadata converter = getProject().getConverter(converterName);
                 
@@ -1557,7 +1613,7 @@ public abstract class MappingAccessor extends MetadataAccessor {
         keyMapping.setDescriptor(getDescriptor().getClassDescriptor());
         
         // Process a convert key or jpa converter for the map key if specified.
-        processMappingKeyConverter(keyMapping, mappedKeyMapAccessor.getMapKeyConvert(), mappedKeyMapAccessor.getMapKeyConverts(), mappedKeyMapAccessor.getMapKeyClass());
+        processMappingKeyConverter(keyMapping, mappedKeyMapAccessor.getMapKeyConvert(), mappedKeyMapAccessor.getMapKeyConverts(), mappedKeyMapAccessor.getMapKeyClass(), mappedKeyMapAccessor.getMapKeyClassWithGenerics());
         
         return keyMapping;
     }
@@ -1649,6 +1705,29 @@ public abstract class MappingAccessor extends MetadataAccessor {
     
     /**
      * INTERNAL:
+     * Process the indirection (aka fetch type)
+     */
+    protected void processIndirection(ForeignReferenceMapping mapping) {
+        boolean usesIndirection = usesIndirection();
+        
+        // Lazy is not disabled until descriptor initialization (OneToOneMapping preInitialize),
+        // as it cannot be known if weaving occurred until then.
+        String actualAttributeType = getAttributeType();
+        if (getAccessibleObject() != null){
+            actualAttributeType = getAccessibleObject().getType();
+        }
+        
+        if (usesIndirection && usesPropertyAccess()) {
+            mapping.setIndirectionPolicy(new WeavedObjectBasicIndirectionPolicy(getGetMethodName(), getSetMethodName(), actualAttributeType, true));
+        } else if (usesIndirection && usesFieldAccess()) {
+            mapping.setIndirectionPolicy(new WeavedObjectBasicIndirectionPolicy(Helper.getWeavedGetMethodName(mapping.getAttributeName()), Helper.getWeavedSetMethodName(mapping.getAttributeName()), actualAttributeType, false));
+        } else {
+            mapping.setUsesIndirection(usesIndirection);
+        }
+    }
+    
+    /**
+     * INTERNAL:
      * Return the mapping join fetch type.
      */
     protected void processJoinFetch(String joinFetch, ForeignReferenceMapping mapping) {
@@ -1710,20 +1789,20 @@ public abstract class MappingAccessor extends MetadataAccessor {
      * Process a convert value which specifies the name of an EclipseLink
      * converter to process with this accessor's mapping.     
      */
-    protected void processMappingConverter(DatabaseMapping mapping, String convertValue, List<ConvertMetadata> converts, MetadataClass referenceClass, boolean isForMapKey) {
+    protected void processMappingConverter(DatabaseMapping mapping, String convertValue, List<ConvertMetadata> converts, MetadataClass referenceClass, MetadataClass referenceClassWithGenerics, boolean isForMapKey) {
         boolean hasConverts = (converts != null && ! converts.isEmpty());
         
         // A convert value is an EclipseLink extension and it takes precedence
         // over all JPA converters so check for it first.
-        if (convertValue != null && ! convertValue.equals(CONVERT_NONE)) {
+        if (convertValue != null && ! convertValue.equals(Convert.NONE)) {
             processConvert(mapping, convertValue, referenceClass, isForMapKey, hasConverts);
         } else if (hasConverts) {
             // If we have JPA converts, apply them.
             processConverts(converts, mapping, referenceClass, isForMapKey);
-        } else if (getProject().hasAutoApplyConverter(referenceClass)) {
+        } else if (getProject().hasAutoApplyConverter(referenceClassWithGenerics)) {
             // If no convert is specified and there exist an auto-apply
             // converter for the reference class, apply it.
-            getProject().getAutoApplyConverter(referenceClass).process(mapping, isForMapKey, null);
+            getProject().getAutoApplyConverter(referenceClassWithGenerics).process(mapping, isForMapKey, null);
         } else {
             // Check for original JPA converters. Check for an enum first since 
             // it will fall into a serializable mapping otherwise since enums 
@@ -1746,8 +1825,8 @@ public abstract class MappingAccessor extends MetadataAccessor {
      * specification or a JPA converter specification (map-key-convert, 
      * map-key-temporal, map-key-enumerated) to be applied to the given mapping.
      */
-    protected void processMappingKeyConverter(DatabaseMapping mapping, String convertValue, List<ConvertMetadata> converts, MetadataClass referenceClass) {
-        processMappingConverter(mapping, convertValue, getMapKeyConverts(converts), referenceClass, true);
+    protected void processMappingKeyConverter(DatabaseMapping mapping, String convertValue, List<ConvertMetadata> converts, MetadataClass referenceClass, MetadataClass referenceClassWithGenerics) {
+        processMappingConverter(mapping, convertValue, getMapKeyConverts(converts), referenceClass, referenceClassWithGenerics, true);
     }
     
     /**
@@ -1755,8 +1834,8 @@ public abstract class MappingAccessor extends MetadataAccessor {
      * Process a convert value which specifies the name of an EclipseLink
      * converter to process with this accessor's mapping.
      */
-    protected void processMappingValueConverter(DatabaseMapping mapping, String convertValue, List<ConvertMetadata> converts, MetadataClass referenceClass) {
-        processMappingConverter(mapping, convertValue, getConverts(converts), referenceClass, false);
+    protected void processMappingValueConverter(DatabaseMapping mapping, String convertValue, List<ConvertMetadata> converts, MetadataClass referenceClass, MetadataClass referenceClassWithGenerics) {
+        processMappingConverter(mapping, convertValue, getConverts(converts), referenceClass, referenceClassWithGenerics, false);
     }
     
     /**
@@ -1983,8 +2062,9 @@ public abstract class MappingAccessor extends MetadataAccessor {
      */
     protected void setIndirectionPolicy(ContainerMapping mapping, String mapKey, boolean usesIndirection) {
         MetadataClass rawClass = getRawClass();
-        
+        boolean containerPolicySet = false;
         if (usesIndirection && (mapping instanceof ForeignReferenceMapping)) {
+            containerPolicySet = true;
             CollectionMapping collectionMapping = (CollectionMapping)mapping;
             if (rawClass.equals(Map.class)) {
                 if (collectionMapping.isDirectMapMapping()) {
@@ -1999,14 +2079,16 @@ public abstract class MappingAccessor extends MetadataAccessor {
             } else if (rawClass.equals(Set.class)) {
                 collectionMapping.useTransparentSet();
             } else {
-                //bug221577: This should be supported when a transparent indirection class can be set through eclipseLink_orm.xml, or basic indirection is used
                 getLogger().logWarningMessage(MetadataLogger.WARNING_INVALID_COLLECTION_USED_ON_LAZY_RELATION, getJavaClass(), getAnnotatedElement(), rawClass);
+                processIndirection((ForeignReferenceMapping)mapping);
+                containerPolicySet = false;
             }
         } else {
             if (mapping instanceof CollectionMapping) {
                 ((CollectionMapping)mapping).dontUseIndirection();
             }
-            
+        }
+        if (!containerPolicySet) {            
             if (rawClass.equals(Map.class)) {
                 if (mapping instanceof DirectMapMapping) {
                     ((DirectMapMapping) mapping).useMapClass(java.util.Hashtable.class);

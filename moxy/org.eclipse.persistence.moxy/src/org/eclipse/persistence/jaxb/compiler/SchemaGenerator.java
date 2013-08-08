@@ -214,7 +214,7 @@ public class SchemaGenerator {
 
        
         
-        if (isSimpleType(info)){
+        if (CompilerHelper.isSimpleType(info)){
        
             SimpleType type = new SimpleType();
             //simple type case, we just need the name and namespace info
@@ -347,23 +347,6 @@ public class SchemaGenerator {
         }
     }
 
-    private boolean isSimpleType(TypeInfo info){
-    	if(info.isEnumerationType()){
-    		return true;
-    	}
-        Property xmlValueProperty = info.getXmlValueProperty();
-        
-        boolean hasMappedAttributes = false;
-        
-        for(Property nextProp: info.getPropertyList()){
-        	if(nextProp.isAttribute() && !nextProp.isTransient()){
-        		hasMappedAttributes = true;
-        	}
-        }
-        hasMappedAttributes = hasMappedAttributes || info.hasPredicateProperties();
-
-        return(xmlValueProperty !=null && !hasMappedAttributes);        
-      }
     private ComplexType createComplexTypeForClass(JavaClass myClass, TypeInfo info) {
 
         Schema schema = getSchemaForNamespace(info.getClassNamespace());
@@ -388,7 +371,7 @@ public class SchemaGenerator {
                     extension.setBaseType(parentTypeInfo.getSchemaTypeName());
                 }
                 
-                if(isSimpleType(parentTypeInfo)){
+                if(CompilerHelper.isSimpleType(parentTypeInfo)){
                 	SimpleContent content = new SimpleContent();
                     content.setExtension(extension);
                     type.setSimpleContent(content);	
@@ -536,7 +519,7 @@ public class SchemaGenerator {
                 } else if (next.isReference()) {
                     addReferenceToSchema(next, currentSchema, parentCompositor);
                 // handle any
-                } else if (next.isAny()) {
+                } else if (next.isAny() || next.getVariableAttributeName() !=null) {
                     addAnyToSchema(next, parentCompositor);
                 // add an element
                 } else if (!(ownerTypeInfo.getXmlValueProperty() != null && ownerTypeInfo.getXmlValueProperty() == next)) {
@@ -2275,13 +2258,16 @@ public class SchemaGenerator {
                 }
                 if (typeName == null) {
                     // need to add complex-type locally, or reference global element
-                    if (!info.hasRootElement()) {
-                        if (isElement && info.isComplexType()) {
-                            ((Element)sc).setComplexType(info.getComplexType());
-                        } else {
+                	if(isElement && info.hasRootElement() && info.getXmlRootElement().getName().equals(sc.getName())){
+                		String refName = info.getXmlRootElement().getName();
+                		((Element)sc).setRef(refName);
+                	}else{
+                            if (isElement && info.isComplexType()) {
+                                ((Element)sc).setComplexType(info.getComplexType());
+                            } else {
                         	sc.setSimpleType(info.getSimpleType());
-                        }
-                    }
+                            }
+                	}
                 } else {
                     // check to see if we need to add an import
                     if (addImportIfRequired(schema, info.getSchema(), info.getClassNamespace())) {

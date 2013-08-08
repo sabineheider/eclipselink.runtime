@@ -15,8 +15,7 @@ package org.eclipse.persistence.internal.oxm;
 import java.util.Properties;
 import java.util.Map.Entry;
 
-import org.eclipse.persistence.oxm.CharacterEscapeHandler;
-import org.eclipse.persistence.oxm.XMLMarshalListener;
+import org.eclipse.persistence.internal.oxm.CharacterEscapeHandler;
 import org.eclipse.persistence.oxm.attachment.XMLAttachmentMarshaller;
 import org.eclipse.persistence.platform.xml.XMLTransformer;
 import org.xml.sax.ErrorHandler;
@@ -25,13 +24,15 @@ import org.xml.sax.ErrorHandler;
  *
  */
 public abstract class Marshaller<
+    CHARACTER_ESCAPE_HANDLER extends CharacterEscapeHandler,
     CONTEXT extends Context,
+    MARSHALLER_LISTENER extends Marshaller.Listener,
     MEDIA_TYPE extends MediaType,
     NAMESPACE_PREFIX_MAPPER extends NamespacePrefixMapper> {
 
     private static String DEFAULT_INDENT = "   "; // default indent is three spaces;
 
-    private CharacterEscapeHandler charEscapeHandler;
+    private CHARACTER_ESCAPE_HANDLER charEscapeHandler;
     protected CONTEXT context;
     private String encoding;
     private boolean equalUsingIdenity;
@@ -39,7 +40,7 @@ public abstract class Marshaller<
     private boolean formattedOutput;
     private String indentString;
     protected NAMESPACE_PREFIX_MAPPER mapper;
-    private XMLMarshalListener marshalListener;
+    private MARSHALLER_LISTENER marshalListener;
     protected Properties marshalProperties;
 
     public Marshaller(CONTEXT context) {
@@ -54,7 +55,7 @@ public abstract class Marshaller<
      * Copy constructor
      */
     protected Marshaller(Marshaller marshaller) {
-        this.charEscapeHandler = marshaller.getCharacterEscapeHandler();
+        this.charEscapeHandler = (CHARACTER_ESCAPE_HANDLER) marshaller.getCharacterEscapeHandler();
         this.context = (CONTEXT) marshaller.getContext();
         this.encoding = marshaller.getEncoding();
         this.equalUsingIdenity = marshaller.isEqualUsingIdenity();
@@ -62,7 +63,7 @@ public abstract class Marshaller<
         this.formattedOutput = marshaller.isFormattedOutput();
         this.indentString = marshaller.getIndentString();
         this.mapper = (NAMESPACE_PREFIX_MAPPER) marshaller.getNamespacePrefixMapper();
-        this.marshalListener = marshaller.getMarshalListener();
+        this.marshalListener = (MARSHALLER_LISTENER) marshaller.getMarshalListener();
         if(marshaller.marshalProperties != null) {
             marshalProperties = new Properties();
             for(Entry entry : marshalProperties.entrySet()) {
@@ -77,7 +78,7 @@ public abstract class Marshaller<
      * Return this Marshaller's CharacterEscapeHandler.
      * @since 2.3.3
      */
-    public CharacterEscapeHandler getCharacterEscapeHandler() {
+    public CHARACTER_ESCAPE_HANDLER getCharacterEscapeHandler() {
         return this.charEscapeHandler;
     }
 
@@ -109,14 +110,9 @@ public abstract class Marshaller<
         return indentString;
     }
 
-    public XMLMarshalListener getMarshalListener() {
+    public MARSHALLER_LISTENER getMarshalListener() {
         return this.marshalListener;
     }
-
-    /**
-     * Get the media type for this Marshaller.
-     */
-    public abstract MEDIA_TYPE getMediaType();
 
     /**
      * NamespacePrefixMapper that can be used during marshal (instead of those set in the project meta data)
@@ -140,6 +136,20 @@ public abstract class Marshaller<
      * @return the transformer instance for this Marshaller
      */
     public abstract XMLTransformer getTransformer();
+
+    /**
+     * INTERNAL
+     * @return true if the media type is application/json, else false.
+     * @since EclipseLink 2.6.0
+     */
+    public abstract boolean isApplicationJSON();
+
+    /**
+     * INTERNAL
+     * @return true if the media type is application/xml, else false.
+     * @since EclipseLink 2.6.0
+     */
+    public abstract boolean isApplicationXML();
 
     /**
      * INTERNAL
@@ -175,7 +185,7 @@ public abstract class Marshaller<
      * Set this Marshaller's CharacterEscapeHandler.
      * @since 2.3.3
      */
-    public void setCharacterEscapeHandler(CharacterEscapeHandler c) {
+    public void setCharacterEscapeHandler(CHARACTER_ESCAPE_HANDLER c) {
         this.charEscapeHandler = c;
     }
 
@@ -217,7 +227,7 @@ public abstract class Marshaller<
         this.indentString = s;
     }
 
-    public void setMarshalListener(XMLMarshalListener listener) {
+    public void setMarshalListener(MARSHALLER_LISTENER listener) {
         this.marshalListener = listener;
     }
 
@@ -227,6 +237,28 @@ public abstract class Marshaller<
      */
     public void setNamespacePrefixMapper(NAMESPACE_PREFIX_MAPPER mapper) {
         this.mapper = mapper;
+    }
+
+    /**
+     * <p>An implementation of Marshaller.Listener can be set on an Marshaller 
+     * to provide additional behaviour during marshal operations.</p>
+     */
+    public static interface Listener {
+
+        /**
+         * This event  will be called after an object is marshalled.
+         *
+         * @param target The object that was marshalled.
+         */
+        public void afterMarshal(Object target);
+        
+        /**
+         * This event will be called before an object is marshalled.
+         *
+         * @param target The object that will be marshalled.
+         */
+        public void beforeMarshal(Object target);
+
     }
 
 }

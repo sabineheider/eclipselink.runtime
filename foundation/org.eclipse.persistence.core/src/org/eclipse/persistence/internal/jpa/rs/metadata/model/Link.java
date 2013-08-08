@@ -15,6 +15,9 @@ package org.eclipse.persistence.internal.jpa.rs.metadata.model;
 import org.eclipse.persistence.oxm.annotations.XmlPath;
 
 public class Link {
+    private String rel;
+    private String method;
+    private String href;
 
     public Link() {
     }
@@ -24,10 +27,6 @@ public class Link {
         this.method = method;
         this.href = href;
     }
-
-    private String rel;
-    private String method;
-    private String href;
 
     @XmlPath("_link/@rel")
     public String getRel() {

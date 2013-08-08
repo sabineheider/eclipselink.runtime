@@ -224,7 +224,7 @@ public abstract class AbstractSession extends CoreAbstractSession<ClassDescripto
     protected boolean isLoggingOff;
 
     /** PERF: Allow for finalizers to be enabled, currently enables client-session finalize. */
-    protected boolean isFinalizersEnabled = false;
+    protected boolean isFinalizersEnabled;
 
     /** List of active command threads. */
     transient protected ExposedNodeLinkedList activeCommandThreads;
@@ -241,7 +241,7 @@ public abstract class AbstractSession extends CoreAbstractSession<ClassDescripto
      *  managed objects.
      *  @see org.eclipse.persistence.config.ReferenceMode
      */
-    protected ReferenceMode defaultReferenceMode = null;
+    protected ReferenceMode defaultReferenceMode;
 
     /**
      * Default pessimistic lock timeout value.
@@ -251,7 +251,7 @@ public abstract class AbstractSession extends CoreAbstractSession<ClassDescripto
     protected int queryTimeoutDefault;
     
     /** Allow a session to enable concurrent processing. */
-    protected boolean isConcurrent = false;
+    protected boolean isConcurrent;
     
     /**
      * This map will hold onto class to static metamodel class references from JPA.
@@ -264,7 +264,7 @@ public abstract class AbstractSession extends CoreAbstractSession<ClassDescripto
     protected List<DescriptorEvent> deferredEvents;
     
     /** records that the UOW is executing deferred events.  Events could cause operations to occur that may attempt to restart the event execution.  This must be avoided*/
-    protected boolean isExecutingEvents = false;
+    protected boolean isExecutingEvents;
 
     /** Allow queries to be targeted at specific connection pools. */
     protected PartitioningPolicy partitioningPolicy;
@@ -284,11 +284,11 @@ public abstract class AbstractSession extends CoreAbstractSession<ClassDescripto
     /** Allow CDI injection of entity listeners **/
     transient protected EntityListenerInjectionManager entityListenerInjectionManager;
     
-    /** Indicates whether ObjectLevelReadQuery should by default use ResultSet Access optimization. 
-     * If not set then parent's flag is used, is none set then ObjectLevelReadQuery.isResultSetAccessOptimizedQueryDefault is used.
-     * If the optimization specified by the session is ignored if incompatible with other query settings. 
+    /**
+     * Indicates whether ObjectLevelReadQuery should by default use ResultSet Access optimization. 
+    * Optimization specified by the session is ignored if incompatible with other query settings. 
      */
-    protected Boolean shouldOptimizeResultSetAccess; 
+    protected boolean shouldOptimizeResultSetAccess; 
     
     /**
      * INTERNAL:
@@ -301,9 +301,6 @@ public abstract class AbstractSession extends CoreAbstractSession<ClassDescripto
         this.name = "";
         initializeIdentityMapAccessor();
         // PERF - move to lazy init (3286091)
-        this.numberOfActiveUnitsOfWork = 0;
-        this.isInBroker = false;
-        this.isSynchronized = false;
     }
 
     /**
@@ -350,9 +347,6 @@ public abstract class AbstractSession extends CoreAbstractSession<ClassDescripto
      * Return the Serializer to use by default for serialization.
      */
     public Serializer getSerializer() {
-        if ((this.serializer == null) && (getParent() != null)) {
-            return getParent().getSerializer();
-        }
         return serializer;
     }
 
@@ -1363,7 +1357,7 @@ public abstract class AbstractSession extends CoreAbstractSession<ClassDescripto
      */
     public void updateTablePerTenantDescriptors(String property, Object value) {
         // When all the table per tenant descriptors are set, we should initialize them.
-        boolean shouldInitializeDescriptors = true;
+        boolean shouldInitializeDescriptors = hasTablePerTenantDescriptors();
         
         for (ClassDescriptor descriptor : getTablePerTenantDescriptors()) {
             TablePerMultitenantPolicy policy = (TablePerMultitenantPolicy) descriptor.getMultitenantPolicy();
@@ -5079,12 +5073,39 @@ public abstract class AbstractSession extends CoreAbstractSession<ClassDescripto
        if (objectOrCollection instanceof Collection) {
            Iterator iterator = ((Collection)objectOrCollection).iterator();
            while (iterator.hasNext()) {
-               load(iterator.next(), group);
+               Object object = iterator.next();
+               load(object, group, getClassDescriptor(object.getClass()), false);
            }
        } else {
-           ClassDescriptor concreteDescriptor = getDescriptor(objectOrCollection);
+           ClassDescriptor concreteDescriptor =  getClassDescriptor(objectOrCollection.getClass());
+           load(objectOrCollection, group, concreteDescriptor, false);
+       }
+   }
+
+   /**
+    * This method will load the passed object or collection of objects using the passed AttributeGroup.
+    * In case of collection all members should be either objects of the same mapped type
+    * or have a common inheritance hierarchy mapped root class.
+    * The AttributeGroup should correspond to the object type. 
+    * 
+    * @param objectOrCollection
+    */
+   public void load(Object objectOrCollection, AttributeGroup group, ClassDescriptor referenceDescriptor, boolean fromFetchGroup) {
+       if (objectOrCollection == null || group == null) {
+           return;
+       }       
+       if (objectOrCollection instanceof Collection) {
+           Iterator iterator = ((Collection)objectOrCollection).iterator();
+           while (iterator.hasNext()) {
+               load(iterator.next(), group, referenceDescriptor, fromFetchGroup);
+           }
+       } else {
+           ClassDescriptor concreteDescriptor = referenceDescriptor;
+           if (concreteDescriptor.hasInheritance() && !objectOrCollection.getClass().equals(concreteDescriptor.getJavaClass())){
+               concreteDescriptor = concreteDescriptor.getInheritancePolicy().getDescriptor(objectOrCollection.getClass());
+           }
            AttributeGroup concreteGroup = group.findGroup(concreteDescriptor);
-           concreteDescriptor.getObjectBuilder().load(objectOrCollection, concreteGroup, this);
+           concreteDescriptor.getObjectBuilder().load(objectOrCollection, concreteGroup, this, fromFetchGroup);
        }
    }
 
@@ -5095,7 +5116,7 @@ public abstract class AbstractSession extends CoreAbstractSession<ClassDescripto
        // PERF: Only use deferred locking if required.
        // CR#3876308 If joining is used, deferred locks are still required.
        if (query.requiresDeferredLocks()) {
-           cacheKey = this.getIdentityMapAccessorInstance().acquireDeferredLock(primaryKey, concreteDescriptor.getJavaClass(), concreteDescriptor, query.isCacheCheckComplete());
+           cacheKey = this.getIdentityMapAccessorInstance().acquireDeferredLock(primaryKey, concreteDescriptor.getJavaClass(), concreteDescriptor, query.isCacheCheckComplete() || query.shouldRetrieveBypassCache());
 
            if (cacheKey.getActiveThread() != Thread.currentThread()) {
                int counter = 0;
@@ -5110,7 +5131,7 @@ public abstract class AbstractSession extends CoreAbstractSession<ClassDescripto
                        Thread.sleep(10);
                    } catch (InterruptedException exception) {
                    }
-                   cacheKey = this.getIdentityMapAccessorInstance().acquireDeferredLock(primaryKey, concreteDescriptor.getJavaClass(), concreteDescriptor, query.isCacheCheckComplete());
+                   cacheKey = this.getIdentityMapAccessorInstance().acquireDeferredLock(primaryKey, concreteDescriptor.getJavaClass(), concreteDescriptor, query.isCacheCheckComplete() || query.shouldRetrieveBypassCache());
                    if (cacheKey.getActiveThread() == Thread.currentThread()) {
                        break;
                    }
@@ -5121,7 +5142,7 @@ public abstract class AbstractSession extends CoreAbstractSession<ClassDescripto
                }
            }
        } else {
-           cacheKey = this.getIdentityMapAccessorInstance().acquireLock(primaryKey, concreteDescriptor.getJavaClass(), concreteDescriptor, query.isCacheCheckComplete());
+           cacheKey = this.getIdentityMapAccessorInstance().acquireLock(primaryKey, concreteDescriptor.getJavaClass(), concreteDescriptor, query.isCacheCheckComplete() || query.shouldRetrieveBypassCache());
        }
        return  cacheKey;
    }
@@ -5193,18 +5214,9 @@ public abstract class AbstractSession extends CoreAbstractSession<ClassDescripto
    /**
     * ADVANCED:
     * Indicates whether ObjectLevelReadQuery should by default use ResultSet Access optimization. 
-    * If not set then parent's flag is used, is none set then ObjectLevelReadQuery.isResultSetAccessOptimizedQueryDefault is used.
-    * If the optimization specified by the session is ignored if incompatible with other query settings. 
+    * Optimization specified by the session is ignored if incompatible with other query settings. 
     */
    public boolean shouldOptimizeResultSetAccess() {
-       if (this.shouldOptimizeResultSetAccess != null) {
-           return this.shouldOptimizeResultSetAccess.booleanValue();
-       } else {
-           if (getParent() != null) {
-               return getParent().shouldOptimizeResultSetAccess();
-           } else {
-               return ObjectLevelReadQuery.isResultSetAccessOptimizedQueryDefault;
-           }
-       }
+       return this.shouldOptimizeResultSetAccess;
    }   
 }

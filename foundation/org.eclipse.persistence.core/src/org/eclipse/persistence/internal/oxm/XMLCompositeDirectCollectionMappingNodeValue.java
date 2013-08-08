@@ -103,7 +103,7 @@ public class XMLCompositeDirectCollectionMappingNodeValue extends MappingNodeVal
                 objectValue = xmlCompositeDirectCollectionMapping.convertObjectValueToDataValue(objectValue, session, marshalRecord.getMarshaller());
                 schemaType = xmlField.getSchemaTypeForValue(objectValue, session);
 
-                newValue = marshalRecord.getValueToWrite(schemaType, objectValue, (XMLConversionManager) session.getDatasourcePlatform().getConversionManager());
+                newValue = marshalRecord.getValueToWrite(schemaType, objectValue, (ConversionManager) session.getDatasourcePlatform().getConversionManager());
                 if (null != newValue) {
                     stringValueStringBuilder.append(newValue);
                     if (cp.hasNext(iterator)) {
@@ -182,18 +182,23 @@ public class XMLCompositeDirectCollectionMappingNodeValue extends MappingNodeVal
 
     public void endElement(XPathFragment xPathFragment, UnmarshalRecord unmarshalRecord) {
     	Field xmlField = (Field) xmlCompositeDirectCollectionMapping.getField();
+
+    	Object value = unmarshalRecord.getCharacters().toString();
+    	if(((String)value).length() == 0 && !xmlField.usesSingleNode()){
+    		if( xmlCompositeDirectCollectionMapping.getNullValue() != null){
+    			value = xmlCompositeDirectCollectionMapping.getNullValue();	
+    		}            
+    	}
+        unmarshalRecord.resetStringBuffer();
         XPathFragment lastXPathFragment = xmlField.getLastXPathFragment();
         if (!lastXPathFragment.nameIsText()) {
             return;
         }
 
-        String value = unmarshalRecord.getCharacters().toString();
-
-        unmarshalRecord.resetStringBuffer();
-
-        if (xmlField.usesSingleNode()) {
-            StringTokenizer stringTokenizer = new StringTokenizer(value);
+        if (xmlField.usesSingleNode() ) {
+        	
             Object collection = unmarshalRecord.getContainerInstance(this);
+            StringTokenizer stringTokenizer = new StringTokenizer((String)value);	            
             while (stringTokenizer.hasMoreTokens()) {
                 addUnmarshalValue(unmarshalRecord, stringTokenizer.nextToken(), collection);
             }
@@ -208,12 +213,18 @@ public class XMLCompositeDirectCollectionMappingNodeValue extends MappingNodeVal
     }
 
     public void endElement(XPathFragment xPathFragment, UnmarshalRecord unmarshalRecord, Object collection) {
-        String value = unmarshalRecord.getCharacters().toString();
+        Field xmlField = (Field) xmlCompositeDirectCollectionMapping.getField();
+    	
+    	Object value = unmarshalRecord.getCharacters().toString();
+    	if(((String)value).length() == 0 && !xmlField.usesSingleNode()){
+    		if( xmlCompositeDirectCollectionMapping.getNullValue() != null){
+    			value = xmlCompositeDirectCollectionMapping.getNullValue();	
+    		}            
+        }
         unmarshalRecord.resetStringBuffer();
 
-        Field xmlField = (Field) xmlCompositeDirectCollectionMapping.getField();
-        if (xmlField.usesSingleNode()) {
-            StringTokenizer stringTokenizer = new StringTokenizer(value);
+        if (xmlField.usesSingleNode() && value instanceof String) {        		        	
+	        StringTokenizer stringTokenizer = new StringTokenizer((String)value);
             while (stringTokenizer.hasMoreTokens()) {
                 addUnmarshalValue(unmarshalRecord, stringTokenizer.nextToken(), collection);
             }
@@ -238,21 +249,21 @@ public class XMLCompositeDirectCollectionMappingNodeValue extends MappingNodeVal
 
         Field xmlField = (Field) xmlCompositeDirectCollectionMapping.getField();
 
-        XMLConversionManager xmlConversionManager = (XMLConversionManager) unmarshalRecord.getSession().getDatasourcePlatform().getConversionManager();
+        ConversionManager conversionManager = unmarshalRecord.getConversionManager();
         if (unmarshalRecord.getTypeQName() != null) {
-            Class typeClass = xmlField.getJavaClass(unmarshalRecord.getTypeQName());
-            value = xmlConversionManager.convertObject(value, typeClass, unmarshalRecord.getTypeQName());
+            Class typeClass = xmlField.getJavaClass(unmarshalRecord.getTypeQName(), conversionManager);
+            value = conversionManager.convertObject(value, typeClass, unmarshalRecord.getTypeQName());
         } else {
-            value = unmarshalRecord.getXMLReader().convertValueBasedOnSchemaType(xmlField, value, xmlConversionManager, unmarshalRecord);
+            value = unmarshalRecord.getXMLReader().convertValueBasedOnSchemaType(xmlField, value, conversionManager, unmarshalRecord);
         }
 
         value = xmlCompositeDirectCollectionMapping.convertDataValueToObjectValue(value, unmarshalRecord.getSession(), unmarshalRecord.getUnmarshaller());
 
         if (value != null && value.getClass() == CoreClassConstants.STRING) {
             if (xmlCompositeDirectCollectionMapping.isCollapsingStringValues()) {
-                value = XMLConversionManager.getDefaultXMLManager().collapseStringValue((String)value);
+                value = conversionManager.collapseStringValue((String)value);
             } else if (xmlCompositeDirectCollectionMapping.isNormalizingStringValues()) {
-                value = XMLConversionManager.getDefaultXMLManager().normalizeStringValue((String)value);
+                value = conversionManager.normalizeStringValue((String)value);
             }
         }
         unmarshalRecord.addAttributeValue(this, value, collection);

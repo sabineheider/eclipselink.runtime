@@ -30,6 +30,7 @@ import org.eclipse.persistence.testing.tests.jpa.advanced.JoinedAttributeAdvance
 import org.eclipse.persistence.testing.tests.jpa.advanced.MetadataCachingTestSuite;
 import org.eclipse.persistence.testing.tests.jpa.advanced.OptimisticConcurrencyJUnitTestSuite;
 import org.eclipse.persistence.testing.tests.jpa.advanced.OptimisticLockForceIncrementTestSuite;
+import org.eclipse.persistence.testing.tests.jpa.advanced.PessimisticLockEntityRefreshTestSuite;
 import org.eclipse.persistence.testing.tests.jpa.advanced.PessimisticLockingExtendedScopeTestSuite;
 import org.eclipse.persistence.testing.tests.jpa.advanced.QueryCastTestSuite;
 import org.eclipse.persistence.testing.tests.jpa.advanced.ReportQueryAdvancedJUnitTest;
@@ -66,6 +67,7 @@ import org.eclipse.persistence.testing.tests.jpa.inheritance.JoinedAttributeInhe
 import org.eclipse.persistence.testing.tests.jpa.inheritance.LifecycleCallbackJunitTest;
 import org.eclipse.persistence.testing.tests.jpa.inheritance.MixedInheritanceJUnitTestCase;
 import org.eclipse.persistence.testing.tests.jpa.inheritance.ReportQueryMultipleReturnInheritanceTestSuite;
+import org.eclipse.persistence.testing.tests.jpa.inheritance.TablePerClassInheritanceDDLTest;
 import org.eclipse.persistence.testing.tests.jpa.inheritance.TablePerClassInheritanceJUnitTest;
 import org.eclipse.persistence.testing.tests.jpa.inherited.EmbeddableSuperclassJunitTest;
 import org.eclipse.persistence.testing.tests.jpa.inherited.InheritedCallbacksJunitTest;
@@ -127,6 +129,7 @@ public class FullRegressionTestSuite extends TestSuite {
         suite.addTest(AdvancedFetchGroupJunitTest.suite());
         suite.addTest(AdvancedMultiTenantJunitTest.suite());
         suite.addTest(PessimisticLockingExtendedScopeTestSuite.suite());
+        suite.addTest(PessimisticLockEntityRefreshTestSuite.suite());
         suite.addTest(UpdateAllQueryAdvancedJunitTest.suite());
         suite.addTest(ComplexAggregateTestSuite.suite());
         suite.addTest(MetadataCachingTestSuite.suite());
@@ -178,6 +181,7 @@ public class FullRegressionTestSuite extends TestSuite {
         suite.addTest(MixedInheritanceJUnitTestCase.suite());
         suite.addTest(JoinedAttributeInheritanceJunitTest.suite());
         suite.addTest(TablePerClassInheritanceJUnitTest.suite());
+        suite.addTest(TablePerClassInheritanceDDLTest.suite());
         suite.addTest(ReportQueryMultipleReturnInheritanceTestSuite.suite());
         fullSuite.addTest(suite);
 

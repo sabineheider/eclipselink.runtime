@@ -340,6 +340,14 @@
             <contains string="${MODEL_NAME}" substring="eclipselink-jaxrs-model"/>
         </condition>
 
+        <condition property="is.grid.testing">
+            <contains string="${grid}" substring="true"/>
+        </condition>
+
+        <condition property="is.kryo.testing">
+            <contains string="${kryo}" substring="true"/>
+        </condition>
+
         <condition property="is.jpars.testing">
             <contains string="${MODEL_NAME}" substring="eclipselink-jpars-model"/>
         </condition>
@@ -348,6 +356,8 @@
             <or>
                     <contains string="${MODEL_NAME}" substring="eclipselink-jaxrs-model"/>
                     <contains string="${MODEL_NAME}" substring="eclipselink-jpars-model"/>
+					<contains string="${grid}" substring="true"/>
+					<contains string="${kryo}" substring="true"/>
             </or>
         </condition>
         <condition property="is.jaxrs.testing.on.glassfish">
@@ -809,6 +819,10 @@
     <target name="package-annotation" depends="">
         <copy todir="${jpatest.basedir}/${build.dir}/${eclipselink.annotation.model}/META-INF">
             <fileset dir="${jpatest.basedir}/resource/${eclipselink.annotation.model}" includes="*.xml"/>
+        </copy>
+        <!-- copy jaxb index, properties files -->
+        <copy todir="${jpatest.basedir}/${build.dir}/${eclipselink.annotation.model}/">
+            <fileset dir="${jpatest.basedir}/resource/${eclipselink.annotation.model}" includes="org/eclipse/persistence/testing/models/jpa/lob/*"/>
         </copy>
         <copy todir="${jpatest.basedir}/${build.dir}/${eclipselink.annotation.model}">
             <!-- 248780: exclude copies of classes from this eclipselink-annotation-model.jar if weaving is disabled in any other jar -->
@@ -1489,6 +1503,16 @@
         </antcall>
         <antcall target="run-test" inheritRefs="true">
             <param name="TEST_CLASS" value="org.eclipse.persistence.testing.tests.jpa.xml.EntityMappingsJUnitTestSuite"/>
+            <param name="TEST_AGENT" value="${test.agent}"/>
+            <param name="TEST_WEAVING" value="${test.weaving}"/>
+            <param name="TEST_WEAVING_OPTION" value="${test.weaving.option}"/>
+            <param name="ORM_TESTING" value="-Dorm.testing=eclipselink"/>
+            <param name="RUN_PATH" value="run.extended.classpath"/>
+            <param name="DB_URL" value="${db.url}"/>
+        </antcall>
+        <!-- dynamic tests are JUnit 4 and can't run as part of the above tests - run them separately -->
+        <antcall target="run-test" inheritRefs="true">
+            <param name="TEST_CLASS" value="org.eclipse.persistence.testing.tests.jpa.dynamic.AllTests"/>
             <param name="TEST_AGENT" value="${test.agent}"/>
             <param name="TEST_WEAVING" value="${test.weaving}"/>
             <param name="TEST_WEAVING_OPTION" value="${test.weaving.option}"/>
@@ -2628,13 +2652,13 @@
 
         <copy todir="${jpatest.basedir}/stage/" overwrite="true" failonerror="false">
             <fileset dir="${jpatest.basedir}/resource/${MODEL_NAME}/server/">
-                <include name="tang*.xml"/>
+                <include name="extension*.*"/>
             </fileset>
         </copy>
 
-        <copy todir="${jpatest.basedir}/stage/" overwrite="true" failonerror="false">
-            <fileset dir="${jpatest.basedir}/resource/${MODEL_NAME}/server/">
-                <include name="extension*.*"/>
+        <copy todir="${jpatest.basedir}/stage/org" overwrite="true" failonerror="false">
+            <fileset dir="${jpatest.basedir}/resource/${MODEL_NAME}/org/">
+                <include name="**"/>
             </fileset>
         </copy>
 
@@ -2962,6 +2986,41 @@
         </ear>
         <copy file="${jpatest.basedir}/${build.dir}/${EAR_NAME}.ear" todir="."/>
     </target>
+    <!-- Build server test ear file specific to grid -->
+    <target name="server-build-ear-grid" if="is.grid.testing" depends="set-server-properties">
+        <copy overwrite="true" file="./resource/server/application.xml" todir="${build.dir}/META-INF"/>
+        <copy overwrite="true" file="./resource/${MODEL_NAME}/server/grid/weblogic-application.xml" todir="${build.dir}/META-INF"/>
+        <replace dir="${build.dir}/META-INF" token="%%modelname%%" value="${MODEL_NAME}">
+            <include name="*.xml"/>
+        </replace>
+        <copy overwrite="true" file="./resource/${MODEL_NAME}/server/grid/grid.gar" todir="${build.dir}"/>
+        <ear destfile="${jpatest.basedir}/${build.dir}/${EAR_NAME}.ear" appxml="${build.dir}/META-INF/application.xml">
+            <fileset dir="${jpatest.basedir}/${build.dir}" includes="${MODEL_NAME}_ejb.jar, grid.gar, META-INF/weblogic-application.xml"/>
+        </ear>
+        <copy file="${jpatest.basedir}/${build.dir}/${EAR_NAME}.ear" todir="."/>
+    </target>
+    <!-- Build server test ear file specific to kryo or jgroups -->
+    <target name="server-build-ear-kryo" if="is.kryo.testing" depends="set-server-properties">
+        <copy overwrite="true" file="./resource/server/application.xml" todir="${build.dir}/META-INF"/>
+        <copy overwrite="true" file="../../../extension.lib.external/kryo-all.jar" todir="${build.dir}/APP-INF/lib"/>
+        <copy overwrite="true" file="../../../extension.lib.external/jgroups.jar" todir="${build.dir}/APP-INF/lib"/>
+        <copy overwrite="true" file="../../../extension.oracle.lib.external/toplink-exalogic.jar" todir="${build.dir}/APP-INF/lib"/>
+        <copy overwrite="true" todir="${build.dir}/APP-INF/lib">		
+            <fileset dir="${jpatest.2.common.plugins.dir}" includes="org.eclipse.persistence.extension_*.jar"/>
+		</copy>
+        <copy overwrite="true" file="./resource/${MODEL_NAME}/server/kryo/META-INF/weblogic-application.xml" todir="${build.dir}/META-INF"/>
+        <replace dir="${build.dir}/META-INF" token="%%modelname%%" value="${MODEL_NAME}">
+            <include name="*.xml"/>
+        </replace>
+        <ear destfile="${jpatest.basedir}/${build.dir}/${EAR_NAME}.ear" appxml="${build.dir}/META-INF/application.xml">
+            <fileset dir="${jpatest.basedir}/${build.dir}">
+				<include name="META-INF/weblogic-application.xml"/>
+				<include name="${MODEL_NAME}_ejb.jar"/>
+				<include name="**/APP-INF/lib/*.jar"/>
+            </fileset>
+        </ear>
+        <copy file="${jpatest.basedir}/${build.dir}/${EAR_NAME}.ear" todir="."/>
+    </target>
     <!-- Build server test ear file specific to JPA-RS -->
     <target name="server-build-ear-jpars" if="is.jpars.testing" depends="set-server-properties">
         <ant antfile="antbuild.xml" dir="${jpatest.basedir}/../eclipselink.jpars.test"  target="create-jpars-war-file"/>
@@ -2983,19 +3042,21 @@
         includes="META-INF/MANIFEST.MF, WEB-INF/**"/>
     </target>
     <!-- Build server test ear. -->
-    <target name="server-build-ear" unless="is.jaxrs.or.jpars.testing">
+    <target name="server-build-ear" unless="is.jaxrs.or.jpars.testing" depends="set-server-properties">
         <copy overwrite="true" file="./resource/server/application.xml" todir="${build.dir}/META-INF"/>
         <replace dir="${build.dir}/META-INF" token='%%modelname%%' value="${MODEL_NAME}">
             <include name="*.xml"/>
         </replace>
         <ear destfile="${jpatest.basedir}/${build.dir}/${EAR_NAME}.ear" appxml="${build.dir}/META-INF/application.xml">
-            <fileset dir="${jpatest.basedir}/${build.dir}" includes ="${MODEL_NAME}_ejb.jar"/>
+            <fileset dir="${jpatest.basedir}/${build.dir}">
+				<include name="${MODEL_NAME}_ejb.jar"/>
+            </fileset>
         </ear>
         <copy file="${jpatest.basedir}/${build.dir}/${EAR_NAME}.ear" todir="."/>
     </target>
 
     <!-- Build the client jar, ejb jar, and ear. -->
-    <target name="server-build" depends="prepare-non-jta-ds-servertest,prepare-server-sessionbeans,server-build-jpa20-client-jar,server-build-jpa20-ejb-jar,server-build-ear,server-build-ear-jaxrs, server-build-ear-jpars"/>
+    <target name="server-build" depends="prepare-non-jta-ds-servertest,prepare-server-sessionbeans,server-build-jpa20-client-jar,server-build-jpa20-ejb-jar,server-build-ear,server-build-ear-jaxrs, server-build-ear-jpars,server-build-ear-grid,server-build-ear-kryo"/>
 
     <target name="server-build-jpa21" depends="prepare-non-jta-ds-servertest,prepare-server-sessionbeans,server-build-jpa21-client-jar,server-build-jpa21-ejb-jar,server-build-ear,server-build-ear-jaxrs, server-build-ear-jpars"/>
 
@@ -3691,8 +3752,11 @@
         <antcall target="server-test-jpars-core" inheritRefs="true"/>
     </target>
 
+    <!-- Since in nightly GlassFish 4 and WebLogic testing, the property is.JTA can't be passed to server, so we force isJTA() returns false in JUnitTestCase.java -->
     <target name="server-test-jpars-core">
         <echo message="jpars url is ${jpars.url}"/>
+        <copy file="${jpatest.basedir}/src/org/eclipse/persistence/testing/framework/junit/JUnitTestCase.java" tofile="${jpatest.basedir}/src/org/eclipse/persistence/testing/framework/junit/JUnitTestCase.java_original"/>
+        <copy file="${jpatest.basedir}/src/org/eclipse/persistence/testing/framework/junit/JUnitTestCase.java_nonjtaDS" tofile="${jpatest.basedir}/src/org/eclipse/persistence/testing/framework/junit/JUnitTestCase.java" overwrite="true"/>
         <copy file="${jpatest.basedir}/../eclipselink.jpars.test/src/META-INF/persistence.xml" tofile="${jpatest.basedir}/../eclipselink.jpars.test/src/META-INF/persistence.xml.original" overwrite="true"/>
         <replace file="${jpatest.basedir}/../eclipselink.jpars.test/src/META-INF/persistence.xml" token='Glassfish' value="${server.platform}"/>
         <property name="MODEL_NAME" value="eclipselink-jpars-model"/>
@@ -3714,6 +3778,7 @@
             <fileset dir="${jpatest.basedir}/../eclipselink.jpars.test/reports" includes="*.*"/>
         </copy>
         <move file="${jpatest.basedir}/../eclipselink.jpars.test/src/META-INF/persistence.xml.original" tofile="${jpatest.basedir}/../eclipselink.jpars.test/src/META-INF/persistence.xml" overwrite="true"/>
+        <move file="${jpatest.basedir}/src/org/eclipse/persistence/testing/framework/junit/JUnitTestCase.java_original" tofile="${jpatest.basedir}/src/org/eclipse/persistence/testing/framework/junit/JUnitTestCase.java" overwrite="true"/>
     </target>
 
     <target name="server-test-plsql">
@@ -4043,13 +4108,16 @@
         </antcall>
     </target>
 
-    <target name="server-test-mongotest" depends="clean-test" if="is.glassfish">
-        <antcall target="server-test-mongo" inheritRefs="true"/>
+    <!-- Since in nightly GlassFish 4 and WebLogic testing, the property is.JTA can't be passed to server, so we force isJTA() returns false in JUnitTestCase.java -->
+    <target name="server-test-mongotest" depends="clean-test" if="is.glassfish.or.weblogic">
+        <copy file="${jpatest.basedir}/src/org/eclipse/persistence/testing/framework/junit/JUnitTestCase.java" tofile="${jpatest.basedir}/src/org/eclipse/persistence/testing/framework/junit/JUnitTestCase.java_original"/>
+        <copy file="${jpatest.basedir}/src/org/eclipse/persistence/testing/framework/junit/JUnitTestCase.java_nonjtaDS" tofile="${jpatest.basedir}/src/org/eclipse/persistence/testing/framework/junit/JUnitTestCase.java" overwrite="true"/>
         <antcall target="server-test-mongo-xml" inheritRefs="true"/>
-        <antcall target="generate-report" inheritRefs="true"/>
-    </target>
+        <antcall target="server-test-mongo" inheritRefs="true"/>
+        <move file="${jpatest.basedir}/src/org/eclipse/persistence/testing/framework/junit/JUnitTestCase.java_original" tofile="${jpatest.basedir}/src/org/eclipse/persistence/testing/framework/junit/JUnitTestCase.java" overwrite="true"/>
+        <antcall target="generate-report" inheritRefs="true"/>    </target>
 
-    <target name="server-test-mongo" if="is.glassfish">
+    <target name="server-test-mongo" if="is.glassfish.or.weblogic">
         <copy file="./../../foundation/eclipselink.extension.nosql.test/resource/mongo/mongo-dynamic.xml" todir="${jpatest.basedir}/resource/eclipselink-mongo-model/server"/>
         <antcall target="server-run-all" inheritRefs="true">
             <param name="PERSISTENCE_UNIT_NAME" value="mongo"/>
@@ -4064,12 +4132,12 @@
         <delete file="${jpatest.basedir}/resource/eclipselink-mongo-model/server/mongo-dynamic.xml" failonerror="false"/>
     </target>
 
-    <target name="server-test-mongo-xml" if="is.glassfish">
+    <target name="server-test-mongo-xml" if="is.glassfish.or.weblogic">
         <copy file="./../../foundation/eclipselink.extension.nosql.test/resource/mongo/mongo-orm.xml" todir="${jpatest.basedir}/resource/eclipselink-mongo-model-xml/server"/>
         <antcall target="server-run-all" inheritRefs="true">
             <param name="PERSISTENCE_UNIT_NAME" value="mongo-xml"/>
             <param name="MODEL_DIR" value="org/eclipse/persistence/testing/models/jpa/mongo"/>
-            <param name="MODEL_NAME" value="eclipselink-mongo-model"/>
+            <param name="MODEL_NAME" value="eclipselink-mongo-model-xml"/>
             <param name="TEST_DIR" value="org/eclipse/persistence/testing/tests/jpa/mongo"/>
             <param name="TEST_NAME" value="eclipselink-mongo-model-xml"/>
             <param name="EAR_NAME" value="eclipselink-mongo-model-xml"/>
@@ -4132,10 +4200,31 @@ CREATE OR REPLACE TYPE MY_GEOMETRY AS OBJECT (id NUMBER, geom MDSYS.SDO_GEOMETRY
     <target name="server-start-cachecoordination" depends="detect-os,config-classpath">
         <ant antfile="${jpatest.basedir}/cachecoordination_${server.name}.xml" target="${server.name}-start-cachecoordination" inheritRefs="true"/>
     </target>
+    <target name="server-start-admin" depends="detect-os,config-classpath">
+        <ant antfile="${jpatest.basedir}/cachecoordination_${server.name}.xml" target="${server.name}-start-admin" inheritRefs="true"/>
+    </target>
+    <target name="server-start-cachecoordination-1" depends="detect-os,config-classpath">
+        <ant antfile="${jpatest.basedir}/cachecoordination_${server.name}.xml" target="${server.name}-start-cachecoordination-1" inheritRefs="true"/>
+    </target>
+    <target name="server-start-cachecoordination-2" depends="detect-os,config-classpath">
+        <ant antfile="${jpatest.basedir}/cachecoordination_${server.name}.xml" target="${server.name}-start-cachecoordination-2" inheritRefs="true"/>
+    </target>
+    <target name="server-start-cachecoordination-3" depends="detect-os,config-classpath">
+        <ant antfile="${jpatest.basedir}/cachecoordination_${server.name}.xml" target="${server.name}-start-cachecoordination-3" inheritRefs="true"/>
+    </target>
+    <target name="server-start-cachecoordination-jms" depends="detect-os,config-classpath">
+        <ant antfile="${jpatest.basedir}/cachecoordination_${server.name}.xml" target="${server.name}-start-cachecoordination-jms" inheritRefs="true"/>
+    </target>
     <target name="server-stop-cachecoordination" depends="detect-os,config-classpath">
         <ant antfile="${jpatest.basedir}/cachecoordination_${server.name}.xml" target="${server.name}-stop-cachecoordination" inheritRefs="true"/>
     </target>
-    <target name="server-run-test-cachecoordination" depends="detect-os,config-classpath">
+    <target name="server-run-test-cachecoordination" depends="clean-test,detect-os,config-classpath">
         <ant antfile="${jpatest.basedir}/cachecoordination-cluster.xml" target="${server.name}-run-test-cachecoordination" inheritRefs="true"/>
+    </target>
+    <target name="server-deploy-concurrency" depends="detect-os,config-classpath">
+        <ant antfile="${jpatest.basedir}/cachecoordination-cluster.xml" target="${server.name}-build-deploy-concurrency" inheritRefs="true"/>
+    </target>
+    <target name="server-undeploy-concurrency" depends="detect-os,config-classpath">
+        <ant antfile="${jpatest.basedir}/cachecoordination-cluster.xml" target="${server.name}-undeploy-concurrency" inheritRefs="true"/>
     </target>
 </project>

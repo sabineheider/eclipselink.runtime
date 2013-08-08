@@ -14,6 +14,7 @@ package org.eclipse.persistence.testing.tests.jpa.jpql;
 
 import java.math.BigInteger;
 import java.sql.Date;
+import java.sql.Timestamp;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Calendar;
@@ -290,8 +291,12 @@ public class JUnitJPQLComplexTestSuite extends JUnitTestCase
         tests.add("testNestedArrays2");
         tests.add("testNoSelect");
         tests.add("testHierarchicalClause");
+        tests.add("testAsOfClause");
         tests.add("testDeleteWithUnqualifiedPathExpression");
         tests.add("testElementCollectionInLikeExpression");
+        tests.add("converterOnElementCollectionTest");
+        tests.add("testCountExpression");
+        tests.add("testInItemCollectionValuedPath");
 
         Collections.sort(tests);
         for (String test : tests) {
@@ -1769,7 +1774,12 @@ public class JUnitJPQLComplexTestSuite extends JUnitTestCase
         // MEMBER of using identification variable p that is not the base
         // variable of the query
         ejbqlString = "SELECT DISTINCT e FROM Employee e, Project p WHERE p MEMBER OF e.projects";
-        result = em.createQuery(ejbqlString).getResultList();
+        Query query =  em.createQuery(ejbqlString);
+        if (usesSOP() && getServerSession().getPlatform().isOracle()) {
+        	// distinct is incompatible with blob in selection clause on Oracle
+        	query.setHint(QueryHints.SERIALIZED_OBJECT, "false");
+        }
+        result = query.getResultList();
         Assert.assertTrue("Complex MEMBER OF test failed",
                           comparer.compareObjects(result, expectedResult));
     }
@@ -2671,8 +2681,14 @@ public class JUnitJPQLComplexTestSuite extends JUnitTestCase
         beginTransaction(em);
         Expression exp = (new ExpressionBuilder()).get("manager").anyOf("phoneNumbers").get("areaCode").equal("613");
         List expectedResult = getServerSession().readAllObjects(Employee.class, exp);
-         clearCache();
-        String ejbqlString = "select distinct e from Employee e join e.manager.phoneNumbers p where p.areaCode = '613'";
+        clearCache();
+        String ejbqlString;
+        if (usesSOP() && getServerSession().getPlatform().isOracle()) {
+        	// distinct is incompatible with blob in selection clause on Oracle
+            ejbqlString = "select e from Employee e join e.manager.phoneNumbers p where p.areaCode = '613'";
+        } else {
+            ejbqlString = "select distinct e from Employee e join e.manager.phoneNumbers p where p.areaCode = '613'";
+        }
 
         List result = em.createQuery(ejbqlString).getResultList();
 
@@ -2864,7 +2880,12 @@ public class JUnitJPQLComplexTestSuite extends JUnitTestCase
         em.createQuery(ejbqlString).executeUpdate();
 
         String verificationString = "select e from Employee e where e.lastName = 'Jones'";
-        List results = em.createQuery(verificationString).getResultList();
+        Query query = em.createQuery(verificationString);
+        if (usesSOP() && !isSOPRecoverable()) {
+            // SOP query would fail because all Employees in the db have SOP field set to null after bulk update 
+            query.setHint(QueryHints.SERIALIZED_OBJECT, "false");
+        }
+        List results = query.getResultList();
 
         rollbackTransaction(em);
         assertTrue("complexConditionCaseInUpdateTest - wrong number of results", results.size() == 2);
@@ -3069,9 +3090,9 @@ public class JUnitJPQLComplexTestSuite extends JUnitTestCase
             return;
         }
         // Bug 407285
-        if (((Session) JUnitTestCase.getServerSession()).getPlatform().isSybase())
+        if (((Session) JUnitTestCase.getServerSession()).getPlatform().isSybase() || ((Session) JUnitTestCase.getServerSession()).getPlatform().isPostgreSQL())
         {
-            warning("The test 'caseTypeTest' is not supported on Sybase, "
+            warning("The test 'caseTypeTest' is not supported on Sybase or PostGres, "
                   + "because Sybase does not support implicit type conversion from Varchar to Integer.");
             closeEntityManager(em);
             return;
@@ -3441,6 +3462,10 @@ public class JUnitJPQLComplexTestSuite extends JUnitTestCase
                         + " union all Select a2 from Address a2"
             		+ " intersect Select a from Address a where a.city = 'Ottawa'"
                         + " except Select a from Address a where a.city = 'Ottawa'");
+            if (usesSOP() && getServerSession().getPlatform().isOracle()) {
+            	// field comparison is incompatible with blob in selection clause on Oracle
+            	query.setHint(QueryHints.SERIALIZED_OBJECT, "false");
+            }
             List result = query.getResultList();
             if (result.size() > 0) {
                 fail("Expected no results: " + result);
@@ -3876,6 +3901,10 @@ public class JUnitJPQLComplexTestSuite extends JUnitTestCase
         query = em.createQuery("select c from Buyer c join c.creditLines cc where key(cc) = :attrKey and value(cc) = :attrValue");
         query.setParameter("attrKey",   "test");
         query.setParameter("attrValue", 0);
+        query.getResultList();
+        query = em.createQuery("select g from Golfer g join g.sponsorDollars sd where key(sd) = :attrKey and value(sd) = :attrValue");
+        query.setParameter("attrKey",   "oracle");
+        query.setParameter("attrValue", 20);
         query.getResultList();
         closeEntityManager(em);
     }
@@ -4317,7 +4346,7 @@ public class JUnitJPQLComplexTestSuite extends JUnitTestCase
             String jpql = "SELECT e FROM Employee e where e.address.ID = 5";
             Query query = em.createQuery(jpql);
             query.getResultList();
-            String sql = (String)counter.getSqlStatements().get(0);
+            String sql = counter.getSqlStatements().get(0);
             if (sql.indexOf("CMP3_ADDRESS") != -1) {
                 fail("Join to address should have been optimized.");
             }
@@ -4550,6 +4579,24 @@ public class JUnitJPQLComplexTestSuite extends JUnitTestCase
         closeEntityManager(em);
     }
 
+    // Test As OF selects.
+    public void testAsOfClause() {
+        if (!getPlatform().isOracle()) {
+            warning("AS OF only supported on Oracle.");
+            return;
+        }
+        EntityManager em = createEntityManager();
+        Number scn = (Number)em.createNativeQuery("select dbms_flashback.get_system_change_number from dual").getSingleResult();
+        Query query = em.createQuery("Select e from Employee e as of scn :scn");
+        query.setParameter("scn", scn);
+        query.getResultList();
+        Timestamp timestamp = (Timestamp)em.createNativeQuery("Select sysdate from dual").getSingleResult();
+        query = em.createQuery("Select e from Employee e as of :date");
+        query.setParameter("date", timestamp);
+        query.getResultList();
+        closeEntityManager(em);
+    }
+
     // Bug#397192
     public void testDeleteWithUnqualifiedPathExpression() {
        EntityManager em = createEntityManager();
@@ -4559,9 +4606,48 @@ public class JUnitJPQLComplexTestSuite extends JUnitTestCase
 
     // Bug#395720 - ANTLR allowed it even though it's not spec compliant
     public void testElementCollectionInLikeExpression() {
-   	 EntityManager em = createEntityManager();
-   	 Query query = em.createQuery("SELECT b FROM Buyer b WHERE b.creditLines LIKE '%e%'");
-   	 query.getResultList();
-   	 closeEntityManager(em);
+   	  EntityManager em = createEntityManager();
+   	  Query query = em.createQuery("SELECT b FROM Buyer b WHERE b.creditLines LIKE '%e%'");
+   	  query.getResultList();
+   	  closeEntityManager(em);
+    }
+
+    public void converterOnElementCollectionTest()
+    {
+        EntityManager em = createEntityManager();
+
+        beginTransaction(em);
+
+        Buyer buyer = new Buyer();
+        buyer.setName("RBCL buyer");
+        buyer.setDescription("RBCL buyer");
+        buyer.addRoyalBankCreditLine(10);
+        em.persist(buyer);
+        em.flush();
+
+        String ejbqlString = "SELECT b.creditLines FROM Buyer b where b.id = :id";
+        Object result = em.createQuery(ejbqlString).setParameter("id", buyer.getId()).getSingleResult();
+        assertTrue("Converter not applied to element collection in jpql", (result instanceof Long));
+        rollbackTransaction(em);
+    }
+
+    // Bug#406631 - JPQL parser: The state field path 'x.y' cannot be resolved to a collection type.
+    public void testCountExpression() {
+        EntityManager em = createEntityManager();
+        Query query = em.createQuery(
+            "SELECT COUNT(employee.managedEmployees) FROM Employee employee"
+   	  );
+   	  assertFalse(query.getResultList().isEmpty());
+   	  closeEntityManager(em);
+    }
+
+    // Bug#412928 - JPQL parser: Regression, an IN item should allow a collection type
+    public void testInItemCollectionValuedPath() {
+   	  EntityManager em = createEntityManager();
+   	  Query query = em.createQuery(
+   	      "select e from Employee e, Project p where e in (p.teamMembers)"
+   	  );
+   	  assertFalse(query.getResultList().isEmpty());
+   	  closeEntityManager(em);
     }
 }

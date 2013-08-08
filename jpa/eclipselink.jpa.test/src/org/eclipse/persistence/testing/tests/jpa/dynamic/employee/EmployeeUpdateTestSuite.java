@@ -60,9 +60,6 @@ public class EmployeeUpdateTestSuite {
   @BeforeClass
   public static void setUp() throws Exception {
       emf = DynamicTestHelper.createEMF(DYNAMIC_PERSISTENCE_NAME);
-      boolean isMySQL = JpaHelper.getServerSession(emf).getDatasourcePlatform().
-          getClass().getName().contains("MySQLPlatform");
-      assumeTrue(isMySQL);
       helper = new JPADynamicHelper(emf);
       deSystem = DynamicEmployeeSystem.buildProject(helper);
       serverSession = JpaHelper.getServerSession(emf);
@@ -75,12 +72,22 @@ public class EmployeeUpdateTestSuite {
 
   @AfterClass
   public static void tearDown() {
-      serverSession.executeNonSelectingSQL("DROP TABLE D_SALARY");
-      serverSession.executeNonSelectingSQL("DROP TABLE D_PROJ_EMP");
-      serverSession.executeNonSelectingSQL("DROP TABLE D_PROJECT");
-      serverSession.executeNonSelectingSQL("DROP TABLE D_PHONE");
-      serverSession.executeNonSelectingSQL("DROP TABLE D_EMPLOYEE");
-      serverSession.executeNonSelectingSQL("DROP TABLE D_ADDRESS");
+      serverSession.executeNonSelectingSQL("DELETE FROM D_PROJ_EMP");
+      serverSession.executeNonSelectingSQL("DELETE FROM D_PHONE");
+      serverSession.executeNonSelectingSQL("DELETE FROM D_SALARY");
+      serverSession.executeNonSelectingSQL("DELETE FROM D_PROJECT");
+      serverSession.executeNonSelectingSQL("DELETE FROM D_EMPLOYEE");
+      serverSession.executeNonSelectingSQL("DELETE FROM D_ADDRESS");
+      try{
+          serverSession.executeNonSelectingSQL("DROP TABLE D_SALARY");
+          serverSession.executeNonSelectingSQL("DROP TABLE D_PROJ_EMP");
+          serverSession.executeNonSelectingSQL("DROP TABLE D_PROJECT");
+          serverSession.executeNonSelectingSQL("DROP TABLE D_PHONE");
+          serverSession.executeNonSelectingSQL("DROP TABLE D_EMPLOYEE");
+          serverSession.executeNonSelectingSQL("DROP TABLE D_ADDRESS");
+      } catch (Exception e){
+          e.printStackTrace();
+      }
       helper = null;
       qTracker = null;
       emf.close();

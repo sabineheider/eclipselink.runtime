@@ -12,41 +12,41 @@
 package org.eclipse.persistence.jpa.rs.resources.common;
 
 import java.io.StringWriter;
+import java.io.UnsupportedEncodingException;
 import java.net.URI;
-import java.util.ArrayList;
+import java.net.URLDecoder;
+import java.net.URLEncoder;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.ServiceLoader;
+import java.util.UUID;
 
 import javax.ws.rs.core.PathSegment;
 import javax.ws.rs.core.UriInfo;
-import javax.xml.bind.JAXBElement;
 import javax.xml.bind.JAXBException;
 import javax.xml.bind.Marshaller;
-import javax.xml.namespace.QName;
 
-import org.eclipse.persistence.descriptors.ClassDescriptor;
 import org.eclipse.persistence.internal.jpa.rs.metadata.model.Attribute;
 import org.eclipse.persistence.internal.jpa.rs.metadata.model.Descriptor;
 import org.eclipse.persistence.internal.jpa.rs.metadata.model.Link;
 import org.eclipse.persistence.internal.jpa.rs.metadata.model.LinkTemplate;
 import org.eclipse.persistence.internal.jpa.rs.metadata.model.PersistenceUnit;
 import org.eclipse.persistence.internal.jpa.rs.metadata.model.Query;
-import org.eclipse.persistence.internal.queries.ReportItem;
 import org.eclipse.persistence.jaxb.JAXBContext;
 import org.eclipse.persistence.jaxb.JAXBContextFactory;
 import org.eclipse.persistence.jaxb.MarshallerProperties;
+import org.eclipse.persistence.jpa.rs.DataStorage;
 import org.eclipse.persistence.jpa.rs.MatrixParameters;
 import org.eclipse.persistence.jpa.rs.PersistenceContext;
 import org.eclipse.persistence.jpa.rs.PersistenceContextFactory;
 import org.eclipse.persistence.jpa.rs.PersistenceContextFactoryProvider;
 import org.eclipse.persistence.jpa.rs.QueryParameters;
+import org.eclipse.persistence.jpa.rs.exceptions.JPARSException;
 import org.eclipse.persistence.jpa.rs.util.JPARSLogger;
 import org.eclipse.persistence.jpa.rs.util.list.LinkList;
 import org.eclipse.persistence.jpa.rs.util.list.QueryList;
-import org.eclipse.persistence.mappings.DatabaseMapping;
 
 /**
  * @author gonural
@@ -54,10 +54,11 @@ import org.eclipse.persistence.mappings.DatabaseMapping;
  */
 
 public abstract class AbstractResource {
-    public static final String SERVICE_VERSION_FORMAT = "v\\d\\.\\d"; 
+    public static final String SERVICE_VERSION_FORMAT = "v\\d\\.\\d";
     protected PersistenceContextFactory factory;
 
-    public static final String SERVICE_VERSION_1_0 = "v1.0"; 
+    public static final String SERVICE_VERSION_1_0 = "v1.0";
+    public static final String SERVICE_VERSION_2_0 = "v2.0";
 
     /**
      * Sets the persistence factory.
@@ -76,6 +77,7 @@ public abstract class AbstractResource {
     public PersistenceContextFactory getPersistenceFactory() {
         return getPersistenceFactory(Thread.currentThread().getContextClassLoader());
     }
+
     /**
      * Gets the persistence factory.
      *
@@ -87,13 +89,19 @@ public abstract class AbstractResource {
         }
         return factory;
     }
-    
-    protected PersistenceContextFactory buildPersistenceContextFactory(ClassLoader loader){
+
+    /**
+     * Builds the persistence context factory.
+     *
+     * @param loader the loader
+     * @return the persistence context factory
+     */
+    protected PersistenceContextFactory buildPersistenceContextFactory(ClassLoader loader) {
         ServiceLoader<PersistenceContextFactoryProvider> contextFactoryLoader = ServiceLoader.load(PersistenceContextFactoryProvider.class, loader);
 
-        for (PersistenceContextFactoryProvider provider: contextFactoryLoader){
+        for (PersistenceContextFactoryProvider provider : contextFactoryLoader) {
             PersistenceContextFactory factory = provider.getPersistenceContextFactory(null);
-            if (factory != null){
+            if (factory != null) {
                 return factory;
             }
         }
@@ -143,73 +151,59 @@ public abstract class AbstractResource {
         }
         return queryParameters;
     }
-    
-    /**
-     * Creates the shell jaxb element list.
-     *
-     * @param reportItems the report items
-     * @return the list
-     */
-    @SuppressWarnings({ "rawtypes", "unchecked" })
-    protected List<JAXBElement> createShellJAXBElementList(List<ReportItem> reportItems, Object record) {
-        List<JAXBElement> jaxbElements = new ArrayList<JAXBElement>(reportItems.size());
-        if ((reportItems != null) && (reportItems.size() > 0)) {
-            for (int index = 0; index < reportItems.size(); index++) {
-                ReportItem reportItem = reportItems.get(index);
-                Object reportItemValue = record;
-                if (record instanceof Object[]) {
-                    reportItemValue = ((Object[]) record)[index];
-                }
-                Class reportItemValueType = null;
-                if (reportItemValue != null) {
-                    reportItemValueType = reportItemValue.getClass();
-                }
-                if (reportItemValueType == null) {
-                    // try other paths to determine the type of the report item 
-                    DatabaseMapping dbMapping = reportItem.getMapping();
-                    if (dbMapping != null) {
-                        reportItemValueType = dbMapping.getAttributeClassification();
-                    } else {
-                        ClassDescriptor desc = reportItem.getDescriptor();
-                        if (desc != null) {
-                            reportItemValueType = desc.getJavaClass();
-                        } 
-                    }
-                }
 
-                // so, we couldn't determine the type of the report item, stop here... 
-                if (reportItemValueType == null) {
-                    return null;
-                }
-                
-                JAXBElement element = new JAXBElement(new QName(reportItem.getName()), reportItemValueType, reportItemValue);
-                jaxbElements.add(reportItem.getResultIndex(), element);
-            }
-        }
-        return jaxbElements;
-    }
-    
-    
+    /**
+     * Checks if is valid version.
+     *
+     * @param version the version
+     * @return true, if is valid version
+     */
     protected static boolean isValidVersion(String version) {
-        if ((version == null) || (SERVICE_VERSION_1_0.equals(version))) {
+        if ((version == null) || (SERVICE_VERSION_1_0.equals(version)) || (SERVICE_VERSION_2_0.equals(version))) {
             return true;
         }
         return false;
     }
-    
-    protected PersistenceContext getPersistenceContext(String persistenceUnit, URI baseURI, String version, Map<String, Object> initializationProperties) {
+
+    /**
+     * Gets the persistence context.
+     *
+     * @param persistenceUnit the persistence unit
+     * @param baseURI the base uri
+     * @param version the version
+     * @param initializationProperties the initialization properties
+     * @return the persistence context
+     */
+    protected PersistenceContext getPersistenceContext(String persistenceUnit, String entityType, URI baseURI, String version, Map<String, Object> initializationProperties) {
         if (!isValidVersion(version)) {
-            JPARSLogger.fine("unsupported_service_version_in_the_request", new Object[] { version });
+            JPARSLogger.error("unsupported_service_version_in_the_request", new Object[] { version });
             throw new IllegalArgumentException();
         }
 
-        return getPersistenceFactory().get(persistenceUnit, baseURI, version, initializationProperties);
+        PersistenceContext context = getPersistenceFactory().get(persistenceUnit, baseURI, version, initializationProperties);
+        if (context == null) {
+            JPARSLogger.error("jpars_could_not_find_persistence_context", new Object[] { persistenceUnit });
+            throw JPARSException.persistenceContextCouldNotBeBootstrapped(persistenceUnit);
+        }
+
+        if ((entityType != null) && (context.getClass(entityType) == null)) {
+            JPARSLogger.error("jpars_could_not_find_class_in_persistence_unit", new Object[] { entityType, persistenceUnit });
+            throw JPARSException.classOrClassDescriptorCouldNotBeFoundForEntity(entityType, persistenceUnit);
+        }
+
+        return context;
     }
-    
+
+    /**
+     * Gets the relationship partner.
+     *
+     * @param matrixParams the matrix params
+     * @param queryParams the query params
+     * @return the relationship partner
+     */
     protected String getRelationshipPartner(Map<String, String> matrixParams, Map<String, Object> queryParams) {
         String partner = null;
         // Fix for Bug 396791 - JPA-RS: partner should be treated as a query parameter
-        //
         // For backwards compatibility, we check both, matrix and query parameters.
         if ((queryParams != null) && (!queryParams.isEmpty())) {
             partner = (String) queryParams.get(QueryParameters.JPARS_RELATIONSHIP_PARTNER);
@@ -222,7 +216,15 @@ public abstract class AbstractResource {
         }
         return partner;
     }
-    
+
+    /**
+     * Marshall metadata.
+     *
+     * @param metadata the metadata
+     * @param mediaType the media type
+     * @return the string
+     * @throws JAXBException the jAXB exception
+     */
     protected String marshallMetadata(Object metadata, String mediaType) throws JAXBException {
         Class<?>[] jaxbClasses = new Class[] { Link.class, Attribute.class, Descriptor.class, LinkTemplate.class, PersistenceUnit.class, Query.class, LinkList.class, QueryList.class };
         JAXBContext context = (JAXBContext) JAXBContextFactory.createContext(jaxbClasses, null);
@@ -236,4 +238,27 @@ public abstract class AbstractResource {
         return writer.toString();
     }
 
+    @SuppressWarnings("unused")
+    private static String getEncodedUri(String uri) {
+        try {
+            return URLEncoder.encode(uri, "UTF-8");
+        } catch (UnsupportedEncodingException e) {
+            // TODO: Log it
+            return uri;
+        }
+    }
+
+    @SuppressWarnings("unused")
+    private static String getDecodedUri(String uri) {
+        try {
+            return URLDecoder.decode(uri, "UTF-8");
+        } catch (UnsupportedEncodingException e) {
+            // TODO: Log it
+            return uri;
+        }
+    }
+
+    protected void setRequestUniqueId() {
+        DataStorage.set(DataStorage.REQUEST_ID, UUID.randomUUID().toString());
+    }
 }

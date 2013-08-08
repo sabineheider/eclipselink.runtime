@@ -192,6 +192,12 @@ public abstract class ObjectLevelReadQuery extends ObjectBuildingQuery {
     /** Allow concrete subclasses calls to be prepared and cached for inheritance queries. */
     protected Map<Class, DatabaseCall> concreteSubclassCalls;
     
+    /** Allow concrete subclasses queries to be prepared and cached for inheritance queries. */
+    protected Map<Class, DatabaseQuery> concreteSubclassQueries;
+    
+    /** Allow aggregate queries to be prepared and cached. */
+    protected Map<DatabaseMapping, ObjectLevelReadQuery> aggregateQueries;
+    
     /** Allow concrete subclasses joined mapping indexes to be prepared and cached for inheritance queries. */
     protected Map<Class, Map<DatabaseMapping, Object>> concreteSubclassJoinedMappingIndexes;
     
@@ -218,6 +224,15 @@ public abstract class ObjectLevelReadQuery extends ObjectBuildingQuery {
      * Allow a query's results to be unioned (UNION, INTERSECT, EXCEPT) with another query results.
      */
     protected List<Expression> unionExpressions;
+    
+    /** Indicates whether the query is cached as an expression query in descriptor's query manager. */
+    protected boolean isCachedExpressionQuery;
+
+    /** default value for shouldUseSerializedObjectPolicy */
+    public static boolean shouldUseSerializedObjectPolicyDefault = true;
+    
+    /** Indicates whether the query should use SerializedObjectPolicy if descriptor has it.*/
+    protected boolean shouldUseSerializedObjectPolicy;
 
     /**
      * INTERNAL:
@@ -230,6 +245,7 @@ public abstract class ObjectLevelReadQuery extends ObjectBuildingQuery {
         this.shouldIncludeData = false;
         this.inMemoryQueryIndirectionPolicy = InMemoryQueryIndirectionPolicy.SHOULD_THROW_INDIRECTION_EXCEPTION;
         this.isCacheCheckComplete = false;
+        this.shouldUseSerializedObjectPolicy = shouldUseSerializedObjectPolicyDefault;
     }
     
     /**
@@ -475,7 +491,6 @@ public abstract class ObjectLevelReadQuery extends ObjectBuildingQuery {
             cloneQuery.fetchGroup = this.fetchGroup.clone();
             // don't clone immutable entityFetchGroup
         }
-        cloneQuery.clearUsesResultSetAccessOptimization();
         return cloneQuery;
     }
 
@@ -697,8 +712,9 @@ public abstract class ObjectLevelReadQuery extends ObjectBuildingQuery {
         ClassDescriptor referenceDescriptor = mapping.getReferenceDescriptor();
 
         // Add the fields defined by the nested fetch group - if it exists.
+        ObjectLevelReadQuery nestedQuery = null;
         if (referenceDescriptor != null && referenceDescriptor.hasFetchGroupManager()) {
-            ObjectLevelReadQuery nestedQuery = getJoinedAttributeManager().getNestedJoinedMappingQuery(expression);
+            nestedQuery = getJoinedAttributeManager().getNestedJoinedMappingQuery(expression);
             FetchGroup nestedFetchGroup = nestedQuery.getExecutionFetchGroup();
             if(nestedFetchGroup != null) {
                 List<DatabaseField> nestedFields = nestedQuery.getFetchGroupSelectionFields(mapping);
@@ -711,7 +727,10 @@ public abstract class ObjectLevelReadQuery extends ObjectBuildingQuery {
 
         if(isCustomSQL) {
             if(referenceDescriptor != null) {
-                fields.addAll(referenceDescriptor.getAllFields());
+                if (nestedQuery == null) {
+                    nestedQuery = getJoinedAttributeManager().getNestedJoinedMappingQuery(expression);
+                }
+                fields.addAll(referenceDescriptor.getAllSelectionFields(nestedQuery));
             } else {
                 fields.add(expression);
             }
@@ -779,7 +798,7 @@ public abstract class ObjectLevelReadQuery extends ObjectBuildingQuery {
      */
     @Override
     public Object buildObject(AbstractRecord row) {
-        return this.descriptor.getObjectBuilder().buildObject(this, row);
+        return this.descriptor.getObjectBuilder().buildObject(this, row, this.joinedAttributeManager);
     }
 
     /**
@@ -1025,8 +1044,6 @@ public abstract class ObjectLevelReadQuery extends ObjectBuildingQuery {
      */
     public void dontAcquireLocks() {
         setLockMode(NO_LOCK);
-        //Bug2804042 Must un-prepare if prepared as the SQL may change.
-        setIsPrepared(false);
     }
 
     /**
@@ -1159,7 +1176,7 @@ public abstract class ObjectLevelReadQuery extends ObjectBuildingQuery {
                 if (this.shouldIncludeData) {
                     resultToLoad = ((ComplexQueryResult)result).getResult();
                 }
-                session.load(resultToLoad, getLoadGroup());
+                session.load(resultToLoad, getLoadGroup(), getDescriptor(), false);
             } else {
                 FetchGroup executionFetchGroup = getExecutionFetchGroup(); 
                 if (executionFetchGroup != null) {
@@ -1169,7 +1186,7 @@ public abstract class ObjectLevelReadQuery extends ObjectBuildingQuery {
                         if (this.shouldIncludeData) {
                             resultToLoad = ((ComplexQueryResult)result).getResult();
                         }
-                        session.load(resultToLoad, lg);
+                        session.load(resultToLoad, lg, getDescriptor(), true);
                     }
                 }
             }
@@ -1574,7 +1591,7 @@ public abstract class ObjectLevelReadQuery extends ObjectBuildingQuery {
                     if(!isCustomSQL){
                         foreignFields.add(expression);
                     }else{
-                        foreignFields.addAll(expression.getFields());
+                        foreignFields.addAll(expression.getSelectionFields(this));
                     }
                 }else{
                     if (mapping == null) {
@@ -1587,10 +1604,10 @@ public abstract class ObjectLevelReadQuery extends ObjectBuildingQuery {
                         if(!isCustomSQL){
                             foreignFields.add(expression);
                         }else{
-                            foreignFields.addAll(expression.getFields());
+                            foreignFields.addAll(expression.getSelectionFields(this));
                         }
                     }else{
-                        localFields.addAll(expression.getFields());
+                        localFields.addAll(expression.getSelectionFields(this));
                     }
                 }
             } else {
@@ -1728,7 +1745,7 @@ public abstract class ObjectLevelReadQuery extends ObjectBuildingQuery {
         if (getExecutionFetchGroup() != null) {
             fields.addAll(getFetchGroupSelectionFields());
         } else {
-            fields.addAll(getDescriptor().getAllFields());
+            fields.addAll(getDescriptor().getAllSelectionFields(this));
         }
         // Add joined fields.
         if (hasJoining()) {
@@ -1818,7 +1835,7 @@ public abstract class ObjectLevelReadQuery extends ObjectBuildingQuery {
      * Return if partial attribute.
      */
     public boolean isPartialAttribute(String attributeName) {
-        if (!hasPartialAttributeExpressions()) {
+        if (this.partialAttributeExpressions == null) {
             return false;
         }
         List<Expression> partialAttributeExpressions = getPartialAttributeExpressions();
@@ -1887,10 +1904,21 @@ public abstract class ObjectLevelReadQuery extends ObjectBuildingQuery {
      * Clear cached flags when un-preparing.
      */
     public void setIsPrepared(boolean isPrepared) {
+        boolean oldIsPrepared = this.isPrepared;
         super.setIsPrepared(isPrepared);
         if (!isPrepared) {
+            // when the query is cached is not yet prepared and while the query is prepared setIsPrepared(false) may be called.
+            // the intention is to remove the query from cache when it has been altered after prepare has completed. 
+            if (this.isCachedExpressionQuery && oldIsPrepared) {
+                if (this.descriptor != null) {
+                    this.descriptor.getQueryManager().removeCachedExpressionQuery(this);
+                    this.isCachedExpressionQuery = false;
+                }
+            }
             this.isReferenceClassLocked = null;
             this.concreteSubclassCalls = null;
+            this.concreteSubclassQueries = null;
+            this.aggregateQueries = null;
             this.concreteSubclassJoinedMappingIndexes = null;
         }
     }
@@ -1947,6 +1975,7 @@ public abstract class ObjectLevelReadQuery extends ObjectBuildingQuery {
             return true;
         }
         this.descriptor.getQueryManager().putCachedExpressionQuery(this);
+        this.isCachedExpressionQuery = true;
         this.isExecutionClone = false;
         return false;
     }
@@ -1971,6 +2000,7 @@ public abstract class ObjectLevelReadQuery extends ObjectBuildingQuery {
             this.lockModeType = readQuery.lockModeType;
             this.defaultBuilder = readQuery.defaultBuilder;
             this.distinctState = readQuery.distinctState;
+            this.shouldUseSerializedObjectPolicy = readQuery.shouldUseSerializedObjectPolicy;
         }
     }
     
@@ -1990,14 +2020,7 @@ public abstract class ObjectLevelReadQuery extends ObjectBuildingQuery {
             this.referenceClass = objectQuery.referenceClass;
             this.distinctState = objectQuery.distinctState;
             if (objectQuery.hasJoining()) {
-                JoinedAttributeManager thisManager = getJoinedAttributeManager();
-                JoinedAttributeManager queryManager = objectQuery.getJoinedAttributeManager();
-                thisManager.setJoinedAttributeExpressions_(queryManager.getJoinedAttributeExpressions());
-                thisManager.setJoinedMappingExpressions_(queryManager.getJoinedMappingExpressions());
-                thisManager.setJoinedMappingIndexes_(queryManager.getJoinedMappingIndexes_());
-                thisManager.setJoinedMappingQueries_(queryManager.getJoinedMappingQueries_());
-                thisManager.setOrderByExpressions_(queryManager.getOrderByExpressions_());
-                thisManager.setAdditionalFieldExpressions_(queryManager.getAdditionalFieldExpressions_());
+                getJoinedAttributeManager().copyFrom(objectQuery.getJoinedAttributeManager());
             }
             if (objectQuery.hasBatchReadAttributes()) {
                 this.batchFetchPolicy = objectQuery.getBatchFetchPolicy().clone();
@@ -2010,6 +2033,8 @@ public abstract class ObjectLevelReadQuery extends ObjectBuildingQuery {
             this.shouldOuterJoinSubclasses = objectQuery.shouldOuterJoinSubclasses;
             this.shouldUseDefaultFetchGroup = objectQuery.shouldUseDefaultFetchGroup;
             this.concreteSubclassCalls = objectQuery.concreteSubclassCalls;
+            this.concreteSubclassQueries = objectQuery.concreteSubclassQueries;
+            this.aggregateQueries = objectQuery.aggregateQueries;
             this.concreteSubclassJoinedMappingIndexes = objectQuery.concreteSubclassJoinedMappingIndexes;
             this.additionalFields = objectQuery.additionalFields;
             this.partialAttributeExpressions = objectQuery.partialAttributeExpressions;
@@ -2041,11 +2066,13 @@ public abstract class ObjectLevelReadQuery extends ObjectBuildingQuery {
                     //fetch group does not work with partial attribute reading
                     throw QueryException.fetchGroupNotSupportOnPartialAttributeReading();
                 }
+                // currently SOP is incompatible with fetch groups
+                setShouldUseSerializedObjectPolicy(false);
                 this.descriptor.getFetchGroupManager().prepareAndVerify(this.fetchGroup);
             }
         } else {
             // FetchGroupManager is null
-            if ((this.fetchGroup != null && !this.fetchGroup.isValidated()) || this.fetchGroupName != null) {
+            if (this.fetchGroup != null || this.fetchGroupName != null) {
                 throw QueryException.fetchGroupValidOnlyIfFetchGroupManagerInDescriptor(getDescriptor().getJavaClassName(), getName());
             }
         }
@@ -2170,16 +2197,24 @@ public abstract class ObjectLevelReadQuery extends ObjectBuildingQuery {
         }
         if (!shouldOuterJoinSubclasses()) {
             setShouldOuterJoinSubclasses(getMaxRows()>0 || getFirstResult()>0 || (this.descriptor != null && 
-                    this.descriptor.hasInheritance() && this.descriptor.getInheritancePolicy().shouldOuterJoinSubclasses()) );
+                    this.descriptor.hasInheritance() && (this.descriptor.getInheritancePolicy().shouldOuterJoinSubclasses()|| this.getExpressionBuilder().isTreatUsed()) ));
         }
 
         // Ensure the subclass call cache is initialized if a multiple table inheritance descriptor.
         // This must be initialized in the query before it is cloned, and never cloned.
-        if ((!shouldOuterJoinSubclasses()) && this.descriptor.hasInheritance() && this.descriptor.getInheritancePolicy().requiresMultipleTableSubclassRead()) {
+        if (!shouldOuterJoinSubclasses() && this.descriptor.hasInheritance()
+                && this.descriptor.getInheritancePolicy().requiresMultipleTableSubclassRead()) {
             getConcreteSubclassCalls();
             if (hasJoining()) {
                 getConcreteSubclassJoinedMappingIndexes();
             }
+        }
+
+        // Ensure the subclass call cache is initialized if a table per class inheritance descriptor.
+        // This must be initialized in the query before it is cloned, and never cloned.
+        if (this.descriptor.hasTablePerClassPolicy()
+                && (this.descriptor.getTablePerClassPolicy().getChildDescriptors().size() > 0)) {
+            getConcreteSubclassQueries();
         }
     }
 
@@ -2242,8 +2277,6 @@ public abstract class ObjectLevelReadQuery extends ObjectBuildingQuery {
      */
     public void resetDistinct() {
         setDistinctState(UNCOMPUTED_DISTINCT);
-        //Bug2804042 Must un-prepare if prepared as the SQL may change.
-        setIsPrepared(false);
     }
 
     /**
@@ -2309,6 +2342,8 @@ public abstract class ObjectLevelReadQuery extends ObjectBuildingQuery {
      */
     public void setDistinctState(short distinctState) {
         this.distinctState = distinctState;
+        //Bug2804042 Must un-prepare if prepared as the SQL may change.
+        setIsPrepared(false);
     }
 
     /**
@@ -2573,6 +2608,15 @@ public abstract class ObjectLevelReadQuery extends ObjectBuildingQuery {
      */
     public void setShouldIncludeData(boolean shouldIncludeData) {
         this.shouldIncludeData = shouldIncludeData;
+        if (usesResultSetAccessOptimization() && shouldIncludeData) {
+        	// shouldIncludeData==true requires full row(s), ResultSetAccessOptimization purpose is to (sometimes) deliver incomplete row(s). These setting can't be used together.  
+            if (this.isResultSetAccessOptimizedQuery != null) {
+                this.usesResultSetAccessOptimization = null;
+                throw QueryException.resultSetAccessOptimizationIsNotPossible(this);
+            } else {
+                this.usesResultSetAccessOptimization = Boolean.FALSE;
+            }
+        }
     }
 
     /**
@@ -2673,8 +2717,14 @@ public abstract class ObjectLevelReadQuery extends ObjectBuildingQuery {
      */
     public void useDistinct() {
         setDistinctState(USE_DISTINCT);
-        //Bug2804042 Must un-prepare if prepared as the SQL may change.
-        setIsPrepared(false);
+    }
+
+    /**
+    * INTERNAL:
+    * Indicates whether the query is cached as an expression query in descriptor's query manager.
+    */
+    public boolean isCachedExpressionQuery() {
+        return this.isCachedExpressionQuery;
     }
 
     /**
@@ -2761,33 +2811,10 @@ public abstract class ObjectLevelReadQuery extends ObjectBuildingQuery {
                 }
             }
         } else {
-            if (getSession().shouldOptimizeResultSetAccess() && supportsResultSetAccessOptimizationOnPrepare() && supportsResultSetAccessOptimizationOnExecute()) {
+            if (this.session.shouldOptimizeResultSetAccess() && supportsResultSetAccessOptimizationOnPrepare() && supportsResultSetAccessOptimizationOnExecute()) {
                 this.usesResultSetAccessOptimization = Boolean.TRUE;
             } else {
                 this.usesResultSetAccessOptimization = Boolean.FALSE;
-            }
-        }
-    }
-    
-    /**
-     * INTERNAL:
-     * Sets usesResultSetAccessOptimization each time when the query is executed.
-     * Unless usesResultSetAccessOptimization hasn't been set yet  
-     * checks only query settings that could be altered without re-preparing the query.
-     * Throws exception if isResultSetAccessOptimizedQuery==true cannot be accommodated because of a conflict with the query settings.
-     * In case of isResultSetAccessOptimizedQuery hasn't been set and session default conflicting with the the query settings
-     * the optimization is turned off.
-     */
-    public void checkResultSetAccessOptimization() {
-        if (this.usesResultSetAccessOptimization == null) {
-            prepareResultSetAccessOptimization();
-        } else {
-            if (this.usesResultSetAccessOptimization.booleanValue() && !supportsResultSetAccessOptimizationOnExecute()) {
-                if (this.isResultSetAccessOptimizedQuery == null) {
-                    usesResultSetAccessOptimization = Boolean.FALSE;
-                } else {
-                    throw QueryException.resultSetAccessOptimizationIsNotPossible(this);                        
-                }
             }
         }
     }
@@ -2824,7 +2851,7 @@ public abstract class ObjectLevelReadQuery extends ObjectBuildingQuery {
      * ADVANCED:
      * Clear the flag set by setIsResultSetOptimizedQuery method, allow to use default set on the session instead.
      */
-    public void clearIsResultSetOptimizedQuery(boolean isResultSetOptimizedQuery) {
+    public void clearIsResultSetOptimizedQuery() {
         if (this.isResultSetAccessOptimizedQuery != null) {
             this.isResultSetAccessOptimizedQuery = null;
             this.usesResultSetAccessOptimization = null;
@@ -2851,6 +2878,7 @@ public abstract class ObjectLevelReadQuery extends ObjectBuildingQuery {
         return super.isDefaultPropertiesQuery()
             && (!this.isResultSetOptimizedQuery)
             && (this.isResultSetAccessOptimizedQuery == null || this.isResultSetAccessOptimizedQuery.equals(isResultSetAccessOptimizedQueryDefault))
+            && (this.shouldUseSerializedObjectPolicy == shouldUseSerializedObjectPolicyDefault)
             && (isDefaultLock())
             && (!hasAdditionalFields())
             && (!hasPartialAttributeExpressions())
@@ -2988,6 +3016,49 @@ public abstract class ObjectLevelReadQuery extends ObjectBuildingQuery {
         }
         return concreteSubclassCalls;
     }
+    
+    /**
+     * INTERNAL:
+     * Return the cache of concrete subclass queries.
+     * This allow concrete subclasses calls to be prepared and cached for table per class inheritance and interface queries.
+     */
+    public Map<Class, DatabaseQuery> getConcreteSubclassQueries() {
+        if (concreteSubclassQueries == null) {
+            concreteSubclassQueries = new ConcurrentHashMap(8);
+        }
+        return concreteSubclassQueries;
+    }
+    
+    /**
+     * INTERNAL:
+     * Return the cache of aggregate queries.
+     * This allows aggregate query clones to be cached.
+     */
+    public Map<DatabaseMapping, ObjectLevelReadQuery> getAggregateQueries() {
+        if (aggregateQueries == null) {
+            aggregateQueries = new HashMap(8);
+        }
+        return aggregateQueries;
+    }
+    
+    /**
+     * INTERNAL:
+     * Return the aggregate query clone for the mapping.
+     */
+    public ObjectLevelReadQuery getAggregateQuery(DatabaseMapping mapping) {
+        if (this.aggregateQueries == null) {
+            return null;
+        }
+        return this.aggregateQueries.get(mapping);
+    }
+    
+    /**
+     * INTERNAL:
+     * Set the aggregate query clone for the mapping.
+     */
+    public void setAggregateQuery(DatabaseMapping mapping, ObjectLevelReadQuery query) {
+        getAggregateQueries().put(mapping, query);
+    }
 
     /**
      * INTERNAL:
@@ -3095,11 +3166,6 @@ public abstract class ObjectLevelReadQuery extends ObjectBuildingQuery {
         if (this.batchFetchPolicy == null) {
             return false;
         }
-        // Since aggregates share the same query as their parent, must avoid the aggregate thinking
-        // the parents mappings is for it, (queries only share if the aggregate was not joined).
-        if (mappingDescriptor.isAggregateDescriptor() && (mappingDescriptor != this.descriptor)) {
-            return false;
-        }
         return this.batchFetchPolicy.isAttributeBatchRead(mappingDescriptor, attributeName);
     }
 
@@ -3135,8 +3201,7 @@ public abstract class ObjectLevelReadQuery extends ObjectBuildingQuery {
                 this.batchFetchPolicy.setBatchedMappings(getDescriptor().getObjectBuilder().getBatchFetchedAttributes());
             }
         }
-        // Cannot prepare the batch queries if using inheritance, as child descriptors can have different mappings.
-        if (hasBatchReadAttributes() && (!this.descriptor.hasInheritance())) {
+        if (hasBatchReadAttributes()) {
             List<Expression> batchReadAttributeExpressions = getBatchReadAttributeExpressions();
             this.batchFetchPolicy.setAttributes(new ArrayList(batchReadAttributeExpressions.size()));
             if (!initialized) {
@@ -3144,6 +3209,36 @@ public abstract class ObjectLevelReadQuery extends ObjectBuildingQuery {
             }
             computeNestedQueriesForBatchReadExpressions(batchReadAttributeExpressions);
         }
+    }
+
+    /**
+     * INTERNAL:
+     * Compute the cache batched attributes.
+     * Used to recompute batched attributes for nested aggregate queries.
+     */
+    public void computeBatchReadAttributes() {
+        List<Expression> batchReadAttributeExpressions = getBatchReadAttributeExpressions();
+        this.batchFetchPolicy.setAttributes(new ArrayList(batchReadAttributeExpressions.size()));
+        int size = batchReadAttributeExpressions.size();
+        for (int index = 0; index < size; index++) {
+            ObjectExpression objectExpression = (ObjectExpression)batchReadAttributeExpressions.get(index);
+
+            // Expression may not have been initialized.
+            ExpressionBuilder builder = objectExpression.getBuilder();
+            if (builder.getSession() == null) {
+                builder.setSession(getSession().getRootSession(null));
+            }
+            if (builder.getQueryClass() == null) {
+                builder.setQueryClass(getReferenceClass());
+            }
+            
+            // PERF: Cache join attribute names.
+            ObjectExpression baseExpression = objectExpression;
+            while (!baseExpression.getBaseExpression().isExpressionBuilder()) {
+                baseExpression = (ObjectExpression)baseExpression.getBaseExpression();
+            }
+            this.batchFetchPolicy.getAttributes().add(baseExpression.getName());
+        }        
     }
 
     /**
@@ -3158,8 +3253,12 @@ public abstract class ObjectLevelReadQuery extends ObjectBuildingQuery {
 
             // Expression may not have been initialized.
             ExpressionBuilder builder = objectExpression.getBuilder();
-            builder.setSession(getSession().getRootSession(null));
-            builder.setQueryClass(getReferenceClass());            
+            if (builder.getSession() == null) {
+                builder.setSession(getSession().getRootSession(null));
+            }
+            if (builder.getQueryClass() == null) {
+                builder.setQueryClass(getReferenceClass());
+            }
             
             // PERF: Cache join attribute names.
             ObjectExpression baseExpression = objectExpression;
@@ -3168,10 +3267,14 @@ public abstract class ObjectLevelReadQuery extends ObjectBuildingQuery {
             }
             this.batchFetchPolicy.getAttributes().add(baseExpression.getName());
             
-            // Ignore nested
-            if (objectExpression.getBaseExpression().isExpressionBuilder()) {
-                DatabaseMapping mapping = objectExpression.getMapping();
-                if ((mapping != null) && mapping.isForeignReferenceMapping()) {
+            DatabaseMapping mapping = baseExpression.getMapping();
+            if ((mapping != null) && mapping.isAggregateObjectMapping()) {
+                // Also prepare the nested aggregate queries, as aggregates do not have their own query.
+                baseExpression = objectExpression.getFirstNonAggregateExpressionAfterExpressionBuilder(new ArrayList(2));
+                mapping = baseExpression.getMapping();
+            }
+            if ((mapping != null) && mapping.isForeignReferenceMapping()) {
+                if (!this.batchFetchPolicy.getMappingQueries().containsKey(mapping)) {
                     // A nested query must be built to pass to the descriptor that looks like the real query execution would.
                     ReadQuery nestedQuery = ((ForeignReferenceMapping)mapping).prepareNestedBatchQuery(this);    
                     // Register the nested query to be used by the mapping for all the objects.
@@ -3221,6 +3324,7 @@ public abstract class ObjectLevelReadQuery extends ObjectBuildingQuery {
             throw QueryException.batchReadingNotSupported(this);
         }
         getBatchReadAttributeExpressions().add(attributeExpression);
+        setIsPrepared(false);
     }
 
     /**
@@ -3234,6 +3338,7 @@ public abstract class ObjectLevelReadQuery extends ObjectBuildingQuery {
      */
     public void setBatchFetchType(BatchFetchType type) {
         getBatchFetchPolicy().setType(type);
+        setIsPrepared(false);
     }
 
     /**
@@ -3247,6 +3352,7 @@ public abstract class ObjectLevelReadQuery extends ObjectBuildingQuery {
      */
     public void setBatchFetchSize(int size) {
         getBatchFetchPolicy().setSize(size);
+        setIsPrepared(false);
     }
 
     /**
@@ -3292,11 +3398,13 @@ public abstract class ObjectLevelReadQuery extends ObjectBuildingQuery {
      * this method will be called to set a (transient and therefore set to null) usesResultSetAccessOptimization attribute. 
      */
     public boolean supportsResultSetAccessOptimizationOnPrepare() {
-        return getCall() != null && ((DatabaseCall)getCall()).getReturnsResultSet() && // must return ResultSet
+        DatabaseCall call = getCall();
+        return ((call != null) && call.getReturnsResultSet()) && // must return ResultSet
             (!hasJoining() || !this.joinedAttributeManager.isToManyJoin()) && 
             (!this.descriptor.hasInheritance() || 
                     !this.descriptor.getInheritancePolicy().hasClassExtractor() &&  // ClassExtractor requires the whole row
-                    (shouldOuterJoinSubclasses() || !this.descriptor.getInheritancePolicy().requiresMultipleTableSubclassRead() || this.descriptor.getInheritancePolicy().hasView())); // don't know how to handle select class type call - ResultSet optimization breaks it.
+                    (shouldOuterJoinSubclasses() || !this.descriptor.getInheritancePolicy().requiresMultipleTableSubclassRead() || this.descriptor.getInheritancePolicy().hasView())) &&  // don't know how to handle select class type call - ResultSet optimization breaks it.
+            (this.batchFetchPolicy == null || !this.batchFetchPolicy.isIN());  // batchFetchPolicy.isIN() requires all rows up front - can't support it 
     }
 
     /**
@@ -3307,6 +3415,30 @@ public abstract class ObjectLevelReadQuery extends ObjectBuildingQuery {
      * so it should refer only to the attributes that can be altered without re-preparing the query.
      */
     public boolean supportsResultSetAccessOptimizationOnExecute() {
-        return !getSession().isConcurrent();
+        return !this.session.isConcurrent() && !this.shouldIncludeData; // doesn't make sense to use ResultSetAccessOptimization if the whole row is required
+    }
+    
+    /**
+     * INTERNAL:
+     * Indicates whether the query should use SerializedObjectPolicy if descriptor has it.
+     */
+    @Override
+    public boolean shouldUseSerializedObjectPolicy() {
+        return this.shouldUseSerializedObjectPolicy;
+    }
+    
+    /**
+     * INTERNAL:
+     * Set a flag that indicates whether the query should use SerializedObjectPolicy if descriptor has it.
+     */
+    public void setShouldUseSerializedObjectPolicy(boolean shouldUseSerializedObjectPolicy) {
+        if (this.shouldUseSerializedObjectPolicy != shouldUseSerializedObjectPolicy) {
+            if (shouldUseSerializedObjectPolicy && this.fetchGroup != null) {
+                // currently SOP is incompatible with fetch groups
+                return;
+            }
+            this.shouldUseSerializedObjectPolicy = shouldUseSerializedObjectPolicy;
+            setIsPrepared(false);
+        }
     }
 }

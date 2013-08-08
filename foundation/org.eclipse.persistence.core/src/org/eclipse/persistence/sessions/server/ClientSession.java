@@ -92,6 +92,7 @@ public class ClientSession extends AbstractSession {
         this.connectionPolicy = connectionPolicy;
         this.name = parent.getName();
         this.profiler = parent.getProfiler();
+        this.serializer = parent.getSerializer();
         this.isInProfile = parent.isInProfile();
         this.commitManager = parent.getCommitManager();
         this.partitioningPolicy = parent.getPartitioningPolicy();
@@ -103,6 +104,7 @@ public class ClientSession extends AbstractSession {
         this.pessimisticLockTimeoutDefault = parent.getPessimisticLockTimeoutDefault();
         this.queryTimeoutDefault = parent.getQueryTimeoutDefault();
         this.isConcurrent = parent.isConcurrent();
+        this.shouldOptimizeResultSetAccess = parent.shouldOptimizeResultSetAccess();
         this.properties = properties;
         this.multitenantContextProperties = parent.getMultitenantContextProperties();
         

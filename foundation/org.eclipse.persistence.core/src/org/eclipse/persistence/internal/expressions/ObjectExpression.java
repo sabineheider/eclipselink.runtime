@@ -21,6 +21,8 @@ import org.eclipse.persistence.internal.helper.*;
 import org.eclipse.persistence.internal.sessions.AbstractSession;
 import org.eclipse.persistence.descriptors.ClassDescriptor;
 import org.eclipse.persistence.mappings.DatabaseMapping;
+import org.eclipse.persistence.queries.ObjectLevelReadQuery;
+import org.eclipse.persistence.queries.ReadQuery;
 
 /**
  * Superclass for any object type expressions.
@@ -43,32 +45,42 @@ public abstract class ObjectExpression extends DataExpression {
 
     /** Allow for an ON clause to be specified on a join condition. */
     protected Expression onClause;
+    
+    /** Used to track the index of the OuterJoinExpressionHolder that might be associated to this expression */
+    private Integer outerJoinExpIndex = null;
+
+    /** Allow hasBeenAliased to be marked independently from the existence of the tableAliases collection. */
+    protected boolean hasBeenAliased = false;
 
     public ObjectExpression() {
         this.shouldUseOuterJoin = false;
     }
-    
+
     /**
-     * ADVANCED:
      * Return an expression that allows you to treat its base as if it were a subclass of the class returned by the base
      * This can only be called on an ExpressionBuilder, the result of expression.get(String), expression.getAllowingNull(String),
      * the result of expression.anyOf("String") or the result of expression.anyOfAllowingNull("String")
      * 
-     * downcast does not guarantee the results of the downcast will be of the specified class and should be used in conjunction
-     * with a Expression.type()
+     * downcast uses Expression.type() internally to guarantee the results are of the specified class.
      * <p>Example:
      * <pre><blockquote>
      *     Expression: employee.get("project").as(LargeProject.class).get("budget").equal(1000)
      *     Java: ((LargeProject)employee.getProjects().get(0)).getBudget() == 1000
-     *     SQL: LPROJ.PROJ_ID (+)= PROJ.PROJ_ID AND L_PROJ.BUDGET = 1000
+     *     SQL: LPROJ.PROJ_ID (+)= PROJ.PROJ_ID AND L_PROJ.BUDGET = 1000 AND PROJ.TYPE = "L"
      * </blockquote></pre>
      */
     @Override
     public Expression treat(Class castClass){
-        setCastClass(castClass);
-        return this;
+        //to be used on expressionBuilders
+        QueryKeyExpression clonedExpression = new TreatAsExpression(castClass, this);
+        clonedExpression.shouldQueryToManyRelationship = false;
+        clonedExpression.hasQueryKey = false;
+        clonedExpression.hasMapping = false;
+
+        this.addDerivedExpression(clonedExpression);
+        return clonedExpression;
     }
-    
+
     /**
      * INTERNAL:
      * Return if the expression is equal to the other.
@@ -156,6 +168,19 @@ public abstract class ObjectExpression extends DataExpression {
     }
 
     /**
+     * INTERNAL:
+     * Assign aliases to any tables which I own. Start with t(initialValue),
+     * and return the new value of  the counter , i.e. if initialValue is one
+     * and I have tables ADDRESS and EMPLOYEE I will assign them t1 and t2 respectively, and return 3.
+     */
+    public int assignTableAliasesStartingAt(int initialValue) {
+        //This differs from the Expression implementation only in that it must set the hasBeenAliased flag when done.
+        int returnVal = super.assignTableAliasesStartingAt(initialValue);
+        this.hasBeenAliased = true;
+        return returnVal;
+    }
+
+    /**
      * PUBLIC:
      * Return an expression representing traversal of a 1:many or many:many relationship.
      * This allows you to query whether any of the "many" side of the relationship satisfies the remaining criteria.
@@ -236,19 +261,28 @@ public abstract class ObjectExpression extends DataExpression {
         
         throw QueryException.couldNotFindCastDescriptor(castClass, getBaseExpression());
     }
-    
+
+    /**
+     * INTERNAL
+     * Return true if treat was used on this expression
+     */
+    public boolean isTreatUsed() {
+        if  (this.hasDerivedExpressions() )
+            for (Expression exp: this.derivedExpressions) {
+                if (exp.isTreatExpression()) {
+                    return true;
+            }
+        }
+        return false;
+    }
+
     /**
      * INTERNAL
      * Return the descriptor which contains this query key, look in the inheritance hierarchy 
      * of rootDescriptor for the descriptor.
      */
     public ClassDescriptor convertToCastDescriptor(ClassDescriptor rootDescriptor, AbstractSession session) {
-        if (castClass == null){
-            return rootDescriptor;
-        }
-        
-        if (rootDescriptor.getJavaClass() == castClass){
-           this.descriptor = rootDescriptor;
+        if (castClass == null || rootDescriptor == null || rootDescriptor.getJavaClass() == castClass) {
             return rootDescriptor;
         }
 
@@ -263,21 +297,19 @@ public abstract class ObjectExpression extends DataExpression {
         ClassDescriptor parentDescriptor = castDescriptor.getInheritancePolicy().getParentDescriptor();
         while (parentDescriptor != null){
             if (parentDescriptor == rootDescriptor){
-                this.descriptor = castDescriptor;
                 return castDescriptor;
             }
             parentDescriptor = parentDescriptor.getInheritancePolicy().getParentDescriptor();
         }
-        
+
         ClassDescriptor childDescriptor = rootDescriptor;
         while (childDescriptor != null){
             if (childDescriptor == castDescriptor){
-                descriptor = rootDescriptor;
-                return descriptor;
+                return rootDescriptor;
             }
             childDescriptor = childDescriptor.getInheritancePolicy().getParentDescriptor();
         }
-        
+
         throw QueryException.couldNotFindCastDescriptor(castClass, getBaseExpression());
     }
     
@@ -414,8 +446,8 @@ public abstract class ObjectExpression extends DataExpression {
             // for everything and can dispense with the mapping part.
             ForeignReferenceQueryKey queryKey = (ForeignReferenceQueryKey)getQueryKeyOrNull();
             if (queryKey != null) {
-                descriptor = getSession().getDescriptor(queryKey.getReferenceClass());
-                return convertToCastDescriptor(descriptor, getSession());
+                descriptor = convertToCastDescriptor(getSession().getDescriptor(queryKey.getReferenceClass()), getSession());
+                return descriptor;
             }
             if (getMapping() == null) {
                 throw QueryException.invalidQueryKeyInExpression(this);
@@ -426,7 +458,7 @@ public abstract class ObjectExpression extends DataExpression {
             if (getMapping().isVariableOneToOneMapping()) {
                 throw QueryException.cannotQueryAcrossAVariableOneToOneMapping(getMapping(), descriptor);
             }
-            convertToCastDescriptor(descriptor, getSession());
+            descriptor = convertToCastDescriptor(descriptor, getSession());
         }
         return descriptor;
 
@@ -452,6 +484,35 @@ public abstract class ObjectExpression extends DataExpression {
             return descriptor.getAllFields();
         } else {
             return descriptor.getFields();
+        }
+    }
+
+    /**
+     * INTERNAL:
+     */
+    @Override
+    public List<DatabaseField> getSelectionFields(ReadQuery query) {
+        if (getDescriptor() == null) {
+            DatabaseMapping mapping = getMapping();
+            if (mapping != null) {
+                return mapping.getSelectFields();
+            }
+            return new ArrayList<DatabaseField>(0);
+        }
+        if (descriptor.hasInheritance() && descriptor.getInheritancePolicy().shouldReadSubclasses()
+                && (!descriptor.getInheritancePolicy().hasMultipleTableChild()) || shouldUseOuterJoinForMultitableInheritance()) {
+            // return all fields because we can.
+            if (query != null && query.isObjectLevelReadQuery()) {
+                return descriptor.getAllSelectionFields((ObjectLevelReadQuery)query);
+            } else {
+                return descriptor.getAllSelectionFields();
+            }
+        } else {
+            if (query != null && query.isObjectLevelReadQuery()) {
+                return descriptor.getSelectionFields((ObjectLevelReadQuery)query);
+            } else {
+                return descriptor.getSelectionFields();
+            }
         }
     }
 
@@ -533,6 +594,18 @@ public abstract class ObjectExpression extends DataExpression {
             return tables;
         }
         return tables;
+    }
+
+    public boolean hasBeenAliased() {
+        return hasBeenAliased;
+    }
+
+    /**
+     * INTERNAL:
+     */
+    public void clearAliases() {
+        hasBeenAliased = false;
+        super.clearAliases();
     }
 
     protected boolean hasDerivedExpressions() {
@@ -673,6 +746,43 @@ public abstract class ObjectExpression extends DataExpression {
 
     public void setJoinSource(Expression joinSource) {
         this.joinSource = joinSource;
+    }
+
+    public Integer getOuterJoinExpIndex() {
+        return outerJoinExpIndex;
+    }
+
+    public void setOuterJoinExpIndex(Integer outerJoinExpIndex) {
+        this.outerJoinExpIndex = outerJoinExpIndex;
+    }
+    
+    /**
+     * INTERNAL:
+     * Parses an expression to return the first non-AggregateObjectMapping expression after the base ExpressionBuilder.
+     * This is used by joining and batch fetch to get the list of mappings that really need to be processed (non-aggregates).
+     * @param aggregateMappingsEncountered - collection of aggregateObjectMapping expressions encountered in the returned expression
+     *  between the first expression and the ExpressionBuilder
+     * @return first non-AggregateObjectMapping expression after the base ExpressionBuilder from the fullExpression
+     */
+    public ObjectExpression getFirstNonAggregateExpressionAfterExpressionBuilder(List aggregateMappingsEncountered) {
+        boolean done = false;
+        ObjectExpression baseExpression = this;
+        ObjectExpression prevExpression = this;
+        while (!baseExpression.getBaseExpression().isExpressionBuilder() && !done) {
+            baseExpression = (ObjectExpression)baseExpression.getBaseExpression();
+            while (!baseExpression.isExpressionBuilder() && baseExpression.getMapping().isAggregateObjectMapping()) {
+                aggregateMappingsEncountered.add(baseExpression.getMapping());
+                baseExpression = (ObjectExpression)baseExpression.getBaseExpression();
+            }
+            if (baseExpression.isExpressionBuilder()) {
+                done = true;
+                //use the one closest to the expression builder that wasn't an aggregate
+                baseExpression = prevExpression;
+            } else {
+                prevExpression = baseExpression;
+            }
+        }
+        return baseExpression;
     }
 
 }

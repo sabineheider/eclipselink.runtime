@@ -35,6 +35,7 @@ import java.util.Set;
 import javax.persistence.EntityManager;
 import javax.persistence.EntityManagerFactory;
 import javax.persistence.Query;
+import javax.persistence.RollbackException;
 import javax.persistence.spi.PersistenceUnitInfo;
 import javax.ws.rs.core.MediaType;
 import javax.xml.bind.JAXBElement;
@@ -69,29 +70,35 @@ import org.eclipse.persistence.jaxb.JAXBContextProperties;
 import org.eclipse.persistence.jaxb.MarshallerProperties;
 import org.eclipse.persistence.jaxb.UnmarshallerProperties;
 import org.eclipse.persistence.jaxb.dynamic.DynamicJAXBContextFactory;
+import org.eclipse.persistence.jpa.JpaEntityManager;
 import org.eclipse.persistence.jpa.JpaHelper;
 import org.eclipse.persistence.jpa.PersistenceProvider;
 import org.eclipse.persistence.jpa.dynamic.JPADynamicHelper;
-import org.eclipse.persistence.jpa.rs.config.ConfigDefaults;
-import org.eclipse.persistence.jpa.rs.exceptions.JPARSConfigurationException;
 import org.eclipse.persistence.jpa.rs.exceptions.JPARSException;
-import org.eclipse.persistence.jpa.rs.logging.LoggingLocalization;
+import org.eclipse.persistence.jpa.rs.features.FeatureSet;
 import org.eclipse.persistence.jpa.rs.util.IdHelper;
 import org.eclipse.persistence.jpa.rs.util.JPARSLogger;
 import org.eclipse.persistence.jpa.rs.util.JTATransactionWrapper;
 import org.eclipse.persistence.jpa.rs.util.PreLoginMappingAdapter;
 import org.eclipse.persistence.jpa.rs.util.ResourceLocalTransactionWrapper;
 import org.eclipse.persistence.jpa.rs.util.TransactionWrapper;
-import org.eclipse.persistence.jpa.rs.util.list.MultiResultQueryList;
-import org.eclipse.persistence.jpa.rs.util.list.MultiResultQueryListItem;
+import org.eclipse.persistence.jpa.rs.util.list.ReadAllQueryResultCollection;
+import org.eclipse.persistence.jpa.rs.util.list.ReportQueryResultCollection;
+import org.eclipse.persistence.jpa.rs.util.list.ReportQueryResultList;
+import org.eclipse.persistence.jpa.rs.util.list.ReportQueryResultListItem;
 import org.eclipse.persistence.jpa.rs.util.list.SingleResultQueryList;
 import org.eclipse.persistence.jpa.rs.util.metadatasources.DynamicXMLMetadataSource;
+import org.eclipse.persistence.jpa.rs.util.metadatasources.ErrorResponseMetadataSource;
+import org.eclipse.persistence.jpa.rs.util.metadatasources.ItemLinksMetadataSource;
 import org.eclipse.persistence.jpa.rs.util.metadatasources.JavaLangMetadataSource;
 import org.eclipse.persistence.jpa.rs.util.metadatasources.JavaMathMetadataSource;
 import org.eclipse.persistence.jpa.rs.util.metadatasources.JavaUtilMetadataSource;
 import org.eclipse.persistence.jpa.rs.util.metadatasources.LinkMetadataSource;
-import org.eclipse.persistence.jpa.rs.util.metadatasources.MultiResultQueryListItemMetadataSource;
-import org.eclipse.persistence.jpa.rs.util.metadatasources.MultiResultQueryListMetadataSource;
+import org.eclipse.persistence.jpa.rs.util.metadatasources.LinkV2MetadataSource;
+import org.eclipse.persistence.jpa.rs.util.metadatasources.ReadAllQueryResultCollectionMetadataSource;
+import org.eclipse.persistence.jpa.rs.util.metadatasources.ReportQueryResultCollectionMetadataSource;
+import org.eclipse.persistence.jpa.rs.util.metadatasources.ReportQueryResultListItemMetadataSource;
+import org.eclipse.persistence.jpa.rs.util.metadatasources.ReportQueryResultListMetadataSource;
 import org.eclipse.persistence.jpa.rs.util.metadatasources.SimpleHomogeneousListMetadataSource;
 import org.eclipse.persistence.jpa.rs.util.metadatasources.SingleResultQueryListMetadataSource;
 import org.eclipse.persistence.jpa.rs.util.xmladapters.LinkAdapter;
@@ -105,6 +112,7 @@ import org.eclipse.persistence.queries.FetchGroup;
 import org.eclipse.persistence.queries.FetchGroupTracker;
 import org.eclipse.persistence.sessions.DatabaseSession;
 import org.eclipse.persistence.sessions.Session;
+import org.eclipse.persistence.sessions.UnitOfWork;
 
 /**
  * A wrapper around the JPA and JAXB artifacts used to persist an application.
@@ -119,8 +127,8 @@ import org.eclipse.persistence.sessions.Session;
  * @author douglas.clarke, tom.ware
  */
 public class PersistenceContext {
-
     public static final String JPARS_CONTEXT = "eclipselink.jpars.context";
+    public static final String CLASS_NAME = PersistenceContext.class.getName();
 
     @SuppressWarnings("rawtypes")
     protected List<XmlAdapter> adapters = null;
@@ -135,16 +143,18 @@ public class PersistenceContext {
     protected EntityManagerFactory emf;
 
     /** The JAXBConext used to produce JSON or XML **/
-    protected JAXBContext context = null;
+    protected JAXBContext jaxbContext = null;
 
     /** The URI of the Persistence context.  This is used to build Links in JSON and XML **/
     protected URI baseURI = null;
 
     protected TransactionWrapper transaction = null;
-    
+
     private Boolean weavingEnabled = null;
-    
+
     private String version = null;
+
+    private FeatureSet supportedFeatureSet;
 
     protected PersistenceContext() {
     }
@@ -160,18 +170,18 @@ public class PersistenceContext {
         super();
         this.emf = emf;
         this.name = emfName;
-        if (getJpaSession().hasExternalTransactionController()){
+        if (getServerSession().hasExternalTransactionController()) {
             transaction = new JTATransactionWrapper();
         } else {
             transaction = new ResourceLocalTransactionWrapper();
         }
-        try{
-            this.context = createDynamicJAXBContext(emf.getDatabaseSession());
-        } catch (JAXBException jaxbe){
-            JPARSLogger.exception("exception_creating_jaxb_context", new Object[]{emfName, jaxbe.toString()}, jaxbe);
+        try {
+            this.jaxbContext = createDynamicJAXBContext(emf.getDatabaseSession());
+        } catch (JAXBException jaxbe) {
+            JPARSLogger.exception("exception_creating_jaxb_context", new Object[] { emfName, jaxbe.toString() }, jaxbe);
             emf.close();
-        } catch (IOException e){
-            JPARSLogger.exception("exception_creating_jaxb_context", new Object[]{emfName, e.toString()}, e);
+        } catch (IOException e) {
+            JPARSLogger.exception("exception_creating_jaxb_context", new Object[] { emfName, e.toString() }, e);
             emf.close();
         }
         setBaseURI(defaultURI);
@@ -206,18 +216,18 @@ public class PersistenceContext {
     protected void addDynamicXMLMetadataSources(List<Object> metadataSources, AbstractSession session) {
         Set<String> packages = new HashSet<String>();
         Iterator<Class> i = session.getDescriptors().keySet().iterator();
-        while (i.hasNext()){
+        while (i.hasNext()) {
             Class<?> descriptorClass = i.next();
             String packageName = "";
-            if (descriptorClass.getName().lastIndexOf('.') > 0){
+            if (descriptorClass.getName().lastIndexOf('.') > 0) {
                 packageName = descriptorClass.getName().substring(0, descriptorClass.getName().lastIndexOf('.'));
             }
-            if (!packages.contains(packageName)){
+            if (!packages.contains(packageName)) {
                 packages.add(packageName);
             }
         }
 
-        for(String packageName: packages){
+        for (String packageName : packages) {
             metadataSources.add(new DynamicXMLMetadataSource(session, packageName));
         }
     }
@@ -227,13 +237,19 @@ public class PersistenceContext {
      * Persist an entity in JPA and commit
      * @param tenantId
      * @param entity
+     * @throws Exception 
      */
-    public void create(Map<String, String> tenantId, Object entity) {
+    public void create(Map<String, String> tenantId, Object entity) throws Exception {
         EntityManager em = getEmf().createEntityManager(tenantId);
         try {
             transaction.beginTransaction(em);
             em.persist(entity);
             transaction.commitTransaction(em);
+        } catch (RollbackException ex) {
+            throw ex;
+        } catch (Exception ex) {
+            transaction.rollbackTransaction(em);
+            throw ex;
         } finally {
             em.close();
         }
@@ -250,7 +266,7 @@ public class PersistenceContext {
             return jaxbContext;
         }
 
-        Map<String, Object> properties = createJAXBProperties(session);      
+        Map<String, Object> properties = createJAXBProperties(session);
 
         ClassLoader cl = session.getDatasourcePlatform().getConversionManager().getLoader();
         jaxbContext = DynamicJAXBContextFactory.createContextFromOXM(cl, properties);
@@ -267,10 +283,10 @@ public class PersistenceContext {
      * @param properties
      * @return
      */
-    protected EntityManagerFactoryImpl createEntityManagerFactory(PersistenceUnitInfo info, Map<String, ?> properties){
+    protected EntityManagerFactoryImpl createEntityManagerFactory(PersistenceUnitInfo info, Map<String, ?> properties) {
         PersistenceProvider provider = new PersistenceProvider();
         EntityManagerFactory emf = provider.createContainerEntityManagerFactory(info, properties);
-        return (EntityManagerFactoryImpl)emf;
+        return (EntityManagerFactoryImpl) emf;
     }
 
     /**
@@ -299,32 +315,40 @@ public class PersistenceContext {
         addDynamicXMLMetadataSources(metadataLocations, session);
         String oxmLocation = (String) emf.getProperties().get("eclipselink.jpa-rs.oxm");
 
-        if (oxmLocation != null){
+        if (oxmLocation != null) {
             metadataLocations.add(oxmLocation);
         }
 
         Object passedOXMLocations = emf.getProperties().get(JAXBContextProperties.OXM_METADATA_SOURCE);
-        if (passedOXMLocations != null){
-            if (passedOXMLocations instanceof Collection){
-                metadataLocations.addAll((Collection)passedOXMLocations);
+        if (passedOXMLocations != null) {
+            if (passedOXMLocations instanceof Collection) {
+                metadataLocations.addAll((Collection) passedOXMLocations);
             } else {
                 metadataLocations.add(passedOXMLocations);
             }
         }
 
         metadataLocations.add(new LinkMetadataSource());
-        metadataLocations.add(new MultiResultQueryListMetadataSource());
-        metadataLocations.add(new MultiResultQueryListItemMetadataSource());
+        metadataLocations.add(new ReportQueryResultListMetadataSource());
+        metadataLocations.add(new ReportQueryResultListItemMetadataSource());
         metadataLocations.add(new SingleResultQueryListMetadataSource());
         metadataLocations.add(new SimpleHomogeneousListMetadataSource());
+        metadataLocations.add(new ReportQueryResultCollectionMetadataSource());
+        metadataLocations.add(new ReadAllQueryResultCollectionMetadataSource());
 
         metadataLocations.add(new JavaLangMetadataSource());
         metadataLocations.add(new JavaMathMetadataSource());
         metadataLocations.add(new JavaUtilMetadataSource());
+        metadataLocations.add(new LinkV2MetadataSource());
+        metadataLocations.add(new ItemLinksMetadataSource());
+        metadataLocations.add(new ErrorResponseMetadataSource());
 
         properties.put(JAXBContextProperties.OXM_METADATA_SOURCE, metadataLocations);
+        properties.put(JAXBContextProperties.SESSION_EVENT_LISTENER, new PreLoginMappingAdapter((AbstractSession) session));
 
-        properties.put("eclipselink.session-event-listener", new PreLoginMappingAdapter((AbstractSession)session));
+        // Bug 410095 - JSON_WRAPPER_AS_ARRAY_NAME property doesn't work when jaxb context is created using DynamicJAXBContextFactory
+        //properties.put(JAXBContextProperties.JSON_WRAPPER_AS_ARRAY_NAME, true);
+
         return properties;
     }
 
@@ -338,10 +362,15 @@ public class PersistenceContext {
         try {
             transaction.beginTransaction(em);
             Object entity = em.find(getClass(type), id);
-            if (entity != null){
+            if (entity != null) {
                 em.remove(entity);
             }
             transaction.commitTransaction(em);
+        } catch (RollbackException ex) {
+            throw JPARSException.exceptionOccurred(ex);
+        } catch (Exception ex) {
+            transaction.rollbackTransaction(em);
+            throw JPARSException.exceptionOccurred(ex);
         } finally {
             em.close();
         }
@@ -354,7 +383,7 @@ public class PersistenceContext {
      * @param entity the entity
      * @return true, if successful
      */
-    public boolean doesExist(Map<String, String> tenantId, Object entity){
+    public boolean doesExist(Map<String, String> tenantId, Object entity) {
         DatabaseSession session = JpaHelper.getDatabaseSession(getEmf());
         return session.doesObjectExist(entity);
     }
@@ -363,10 +392,10 @@ public class PersistenceContext {
      * Finalize.
      */
     @Override
-    public void finalize(){
+    public void finalize() {
         this.emf.close();
         this.emf = null;
-        this.context = null;
+        this.jaxbContext = null;
     }
 
     /**
@@ -412,32 +441,6 @@ public class PersistenceContext {
     }
 
     /**
-     * Find attribute.
-     *
-     * @param tenantId the tenant id
-     * @param entityName the entity name
-     * @param id the id
-     * @param properties the properties
-     * @param attribute the attribute
-     * @return the object
-     */
-    public Object findAttribute(Map<String, String> tenantId, String entityName, Object id, Map<String, Object> properties, String attribute) {
-        EntityManager em = getEmf().createEntityManager(tenantId);
-
-        try {
-            Object object = em.find(getClass(entityName), id, properties);
-            ClassDescriptor descriptor =getJpaSession().getClassDescriptor(getClass(entityName));
-            DatabaseMapping mapping = descriptor.getMappingForAttributeName(attribute);            
-            if (mapping == null){
-                return null;
-            }
-            return mapping.getRealAttributeValueFromAttribute(mapping.getAttributeValueFromObject(object), object, (AbstractSession) getJpaSession());
-        } finally {
-            em.close();
-        }
-    }
-
-    /**
      * Update or add attribute.
      *
      * @param tenantId the tenant id
@@ -453,31 +456,34 @@ public class PersistenceContext {
         EntityManager em = getEmf().createEntityManager(tenantId);
 
         try {
-            ClassDescriptor descriptor = getJpaSession().getClassDescriptor(getClass(entityName));
+            ClassDescriptor descriptor = getServerSession().getClassDescriptor(getClass(entityName));
             DatabaseMapping mapping = descriptor.getMappingForAttributeName(attribute);
             Object object = null;
-            if (mapping == null){
+            if (mapping == null) {
                 return null;
-            } else if (mapping.isObjectReferenceMapping() || mapping.isCollectionMapping()){
+            } else if (mapping.isObjectReferenceMapping() || mapping.isCollectionMapping()) {
                 DatabaseMapping partnerMapping = null;
-                if (partner != null){
-                    ClassDescriptor referenceDescriptor = ((ForeignReferenceMapping)mapping).getReferenceDescriptor();
+                if (partner != null) {
+                    ClassDescriptor referenceDescriptor = ((ForeignReferenceMapping) mapping).getReferenceDescriptor();
                     partnerMapping = referenceDescriptor.getMappingForAttributeName(partner);
-                    if (partnerMapping == null){
+                    if (partnerMapping == null) {
                         return null;
                     }
                 }
                 transaction.beginTransaction(em);
-                try{
+                try {
                     object = em.find(getClass(entityName), id, properties);
-                    if (object == null){
+                    if (object == null) {
                         return null;
                     }
                     attributeValue = em.merge(attributeValue);
                     setMappingValueInObject(object, attributeValue, mapping, partnerMapping);
                     transaction.commitTransaction(em);
-                } catch (Exception e){
-                    JPARSLogger.fine("exception_while_updating_attribute", new Object[]{entityName, getName(), e.toString()});
+                } catch (RollbackException e) {
+                    JPARSLogger.exception("exception_while_updating_attribute", new Object[] { entityName, getName() }, e);
+                    return null;
+                } catch (Exception e) {
+                    JPARSLogger.exception("exception_while_updating_attribute", new Object[] { entityName, getName() }, e);
                     transaction.rollbackTransaction(em);
                     return null;
                 }
@@ -511,7 +517,7 @@ public class PersistenceContext {
 
         try {
             Class<?> clazz = getClass(entityName);
-            ClassDescriptor descriptor = getJpaSession().getClassDescriptor(clazz);
+            ClassDescriptor descriptor = getServerSession().getClassDescriptor(clazz);
             DatabaseMapping mapping = descriptor.getMappingForAttributeName(attribute);
             if (mapping == null) {
                 return null;
@@ -570,7 +576,7 @@ public class PersistenceContext {
             }
             return null;
         } catch (Exception e) {
-            JPARSLogger.fine("exception_while_removing_attribute", new Object[] { fieldName, entityName, getName(), e.toString() });
+            JPARSLogger.exception("exception_while_removing_attribute", new Object[] { fieldName, entityName, getName() }, e);
             transaction.rollbackTransaction(em);
             return null;
         } finally {
@@ -603,18 +609,18 @@ public class PersistenceContext {
     }
 
     @SuppressWarnings("rawtypes")
-    protected void removeMappingValueFromObject(Object object, Object attributeValue, DatabaseMapping mapping, DatabaseMapping partner){
-        if (mapping.isObjectReferenceMapping()){
-            Object currentValue = mapping.getRealAttributeValueFromObject(object, (AbstractSession) getJpaSession());
-            if (currentValue.equals(attributeValue)){
-                ((ObjectReferenceMapping)mapping).getIndirectionPolicy().setRealAttributeValueInObject(object, null, true);
-                if (partner != null){
+    protected void removeMappingValueFromObject(Object object, Object attributeValue, DatabaseMapping mapping, DatabaseMapping partner) {
+        if (mapping.isObjectReferenceMapping()) {
+            Object currentValue = mapping.getRealAttributeValueFromObject(object, (AbstractSession) getServerSession());
+            if (currentValue.equals(attributeValue)) {
+                ((ObjectReferenceMapping) mapping).getIndirectionPolicy().setRealAttributeValueInObject(object, null, true);
+                if (partner != null) {
                     removeMappingValueFromObject(attributeValue, object, partner, null);
                 }
             }
-        } else if (mapping.isCollectionMapping()){
-            boolean removed = ((Collection) mapping.getRealAttributeValueFromObject(object, (AbstractSession) getJpaSession())).remove(attributeValue);
-            if (removed && partner != null){
+        } else if (mapping.isCollectionMapping()) {
+            boolean removed = ((Collection) mapping.getRealAttributeValueFromObject(object, (AbstractSession) getServerSession())).remove(attributeValue);
+            if (removed && partner != null) {
                 removeMappingValueFromObject(attributeValue, object, partner, null);
             }
         }
@@ -637,21 +643,32 @@ public class PersistenceContext {
      */
     public Class<?> getClass(String entityName) {
         ClassDescriptor descriptor = getDescriptor(entityName);
-        if (descriptor == null){
+        if (descriptor == null) {
             return null;
         }
         return descriptor.getJavaClass();
     }
 
     /**
-     * Gets the jpa session.
+     * Gets the jpa server session.
      *
-     * @return the jpa session
+     * @return the jpa server session
      */
-    public DatabaseSession getJpaSession() {
+    public DatabaseSession getServerSession() {
         // Fix for bug 390786 - JPA-RS: ClassCastException retrieving metadata for Composite Persistence Unit
         DatabaseSession dbSession = JpaHelper.getDatabaseSession(emf);
         return dbSession;
+    }
+
+    /**
+     * Gets the client session.
+     *
+     * @param em the em
+     * @return the client session
+     */
+    public AbstractSession getClientSession(EntityManager em) {
+        UnitOfWork uow = ((JpaEntityManager) JpaHelper.getEntityManager(em)).getUnitOfWork();
+        return (AbstractSession) uow;
     }
 
     /**
@@ -662,13 +679,13 @@ public class PersistenceContext {
      * @param entityName
      * @return
      */
-    public ClassDescriptor getDescriptor(String entityName){
-        DatabaseSession session = getJpaSession();
+    public ClassDescriptor getDescriptor(String entityName) {
+        DatabaseSession session = getServerSession();
         ClassDescriptor descriptor = session.getDescriptorForAlias(entityName);
-        if (descriptor == null){
-            for (Object ajaxBSession:((JAXBContext)getJAXBContext()).getXMLContext().getSessions() ){
-                descriptor = ((Session)ajaxBSession).getClassDescriptorForAlias(entityName);
-                if (descriptor != null){
+        if (descriptor == null) {
+            for (Object ajaxBSession : ((JAXBContext) getJAXBContext()).getXMLContext().getSessions()) {
+                descriptor = ((Session) ajaxBSession).getClassDescriptorForAlias(entityName);
+                if (descriptor != null) {
                     break;
                 }
             }
@@ -683,10 +700,10 @@ public class PersistenceContext {
      * @return the descriptor for class
      */
     @SuppressWarnings("rawtypes")
-    public ClassDescriptor getDescriptorForClass(Class clazz){
-        DatabaseSession session = getJpaSession();
+    public ClassDescriptor getDescriptorForClass(Class clazz) {
+        DatabaseSession session = getServerSession();
         ClassDescriptor descriptor = session.getDescriptor(clazz);
-        if (descriptor == null){
+        if (descriptor == null) {
             return getJAXBDescriptorForClass(clazz);
         }
         return descriptor;
@@ -726,7 +743,7 @@ public class PersistenceContext {
      * @return the jAXB context
      */
     public JAXBContext getJAXBContext() {
-        return context;
+        return jaxbContext;
     }
 
     /**
@@ -754,9 +771,9 @@ public class PersistenceContext {
         Object mergedEntity = null;
         try {
             transaction.beginTransaction(em);
-            if (entity instanceof List){
+            if (entity instanceof List) {
                 List<Object> mergeList = new ArrayList<Object>();
-                for (Object o: (List)entity){
+                for (Object o : (List) entity) {
                     mergeList.add(em.merge(o));
                 }
                 mergedEntity = mergeList;
@@ -765,6 +782,11 @@ public class PersistenceContext {
             }
             transaction.commitTransaction(em);
             return mergedEntity;
+        } catch (RollbackException ex) {
+            throw JPARSException.exceptionOccurred(ex);
+        } catch (Exception ex) {
+            transaction.rollbackTransaction(em);
+            throw JPARSException.exceptionOccurred(ex);
         } finally {
             em.close();
         }
@@ -788,17 +810,17 @@ public class PersistenceContext {
     public DynamicEntity newEntity(Map<String, String> tenantId, String type) {
         JPADynamicHelper helper = new JPADynamicHelper(getEmf());
         DynamicEntity entity = null;
-        try{
+        try {
             entity = helper.newDynamicEntity(type);
-        } catch (IllegalArgumentException e){
+        } catch (IllegalArgumentException e) {
             ClassDescriptor descriptor = getDescriptor(type);
-            if (descriptor != null){
+            if (descriptor != null) {
                 DynamicType jaxbType = (DynamicType) descriptor.getProperty(DynamicType.DESCRIPTOR_PROPERTY);
-                if (jaxbType != null){
+                if (jaxbType != null) {
                     return jaxbType.newDynamicEntity();
                 }
             }
-            JPARSLogger.fine("exception_thrown_while_creating_dynamic_entity", new Object[]{type, e.toString()});
+            JPARSLogger.exception("exception_thrown_while_creating_dynamic_entity", new Object[] { type }, e);
             throw e;
         }
         return entity;
@@ -821,6 +843,11 @@ public class PersistenceContext {
             int result = query.executeUpdate();
             transaction.commitTransaction(em);
             return result;
+        } catch (RollbackException ex) {
+            throw JPARSException.exceptionOccurred(ex);
+        } catch (Exception ex) {
+            transaction.rollbackTransaction(em);
+            throw JPARSException.exceptionOccurred(ex);
         } finally {
             em.close();
         }
@@ -912,17 +939,16 @@ public class PersistenceContext {
         this.baseURI = baseURI;
     }
 
-
     @SuppressWarnings({ "rawtypes", "unchecked" })
-    protected void setMappingValueInObject(Object object, Object attributeValue, DatabaseMapping mapping, DatabaseMapping partner){
-        if (mapping.isObjectReferenceMapping()){
-            ((ObjectReferenceMapping)mapping).getIndirectionPolicy().setRealAttributeValueInObject(object, attributeValue, true);
-            if (partner != null){
+    protected void setMappingValueInObject(Object object, Object attributeValue, DatabaseMapping mapping, DatabaseMapping partner) {
+        if (mapping.isObjectReferenceMapping()) {
+            ((ObjectReferenceMapping) mapping).getIndirectionPolicy().setRealAttributeValueInObject(object, attributeValue, true);
+            if (partner != null) {
                 setMappingValueInObject(attributeValue, object, partner, null);
             }
-        } else if (mapping.isCollectionMapping()){
-            ((Collection)mapping.getAttributeValueFromObject(object)).add(attributeValue);
-            if (partner != null){
+        } else if (mapping.isCollectionMapping()) {
+            ((Collection) mapping.getAttributeValueFromObject(object)).add(attributeValue);
+            if (partner != null) {
                 setMappingValueInObject(attributeValue, object, partner, null);
             }
         }
@@ -936,9 +962,8 @@ public class PersistenceContext {
             emf.close();
         }
         this.emf = null;
-        this.context = null;
+        this.jaxbContext = null;
     }
-
 
     /**
      * To string.
@@ -946,7 +971,7 @@ public class PersistenceContext {
      * @return the string
      */
     public String toString() {
-        return "Application(" + getName() + ")::" + System.identityHashCode(this);
+        return "PersistenceContext(name:" + getName() + ", version:" + getVersion() + ", identityHashCode:" + System.identityHashCode(this) + ")";
     }
 
     /**
@@ -998,7 +1023,7 @@ public class PersistenceContext {
             }
         });
 
-        for (XmlAdapter adapter:getAdapters()) {
+        for (XmlAdapter adapter : getAdapters()) {
             unmarshaller.setAdapter(adapter);
         }
 
@@ -1039,25 +1064,28 @@ public class PersistenceContext {
      * @param entity
      * @return
      */
-    protected Object wrap(Object entity){
-        if (!doesExist(null, entity)){
-            return entity;
-        }
-        ClassDescriptor descriptor = getJAXBDescriptorForClass(entity.getClass());
-        if (entity instanceof FetchGroupTracker){
-            FetchGroup fetchGroup = new FetchGroup();
-            for (DatabaseMapping mapping: descriptor.getMappings()){
-                if (!(mapping instanceof XMLInverseReferenceMapping)){
-                    fetchGroup.addAttribute(mapping.getAttributeName());
-                }
+    protected Object wrap(Object entity) {
+        if ((entity != null) && (PersistenceWeavedRest.class.isAssignableFrom(entity.getClass()))) {
+            if (!doesExist(null, entity)) {
+                return entity;
             }
-            (new FetchGroupManager()).setObjectFetchGroup(entity, fetchGroup, null);
-            ((FetchGroupTracker) entity)._persistence_setSession(JpaHelper.getDatabaseSession(getEmf()));
-        } else if (descriptor.hasRelationships()){
-            for (DatabaseMapping mapping: descriptor.getMappings()){
-                if (mapping instanceof XMLInverseReferenceMapping){
-                    // we require Fetch groups to handle relationships
-                    throw new JPARSConfigurationException(LoggingLocalization.buildMessage("weaving_required_for_relationships", new Object[]{}));
+            ClassDescriptor descriptor = getJAXBDescriptorForClass(entity.getClass());
+            if (entity instanceof FetchGroupTracker) {
+                FetchGroup fetchGroup = new FetchGroup();
+                for (DatabaseMapping mapping : descriptor.getMappings()) {
+                    if (!(mapping instanceof XMLInverseReferenceMapping)) {
+                        fetchGroup.addAttribute(mapping.getAttributeName());
+                    }
+                }
+                (new FetchGroupManager()).setObjectFetchGroup(entity, fetchGroup, null);
+                ((FetchGroupTracker) entity)._persistence_setSession(JpaHelper.getDatabaseSession(getEmf()));
+            } else if (descriptor.hasRelationships()) {
+                for (DatabaseMapping mapping : descriptor.getMappings()) {
+                    if (mapping instanceof XMLInverseReferenceMapping) {
+                        // we require Fetch groups to handle relationships
+                        JPARSLogger.error("weaving_required_for_relationships", new Object[] {});
+                        throw JPARSException.invalidConfiguration();
+                    }
                 }
             }
         }
@@ -1074,7 +1102,9 @@ public class PersistenceContext {
      * @throws JAXBException
      */
     public void marshallEntity(Object object, MediaType mediaType, OutputStream output) throws JAXBException {
+        JPARSLogger.entering(CLASS_NAME, "marshallEntity", new Object[] { object, mediaType });
         marshallEntity(object, mediaType, output, true);
+        JPARSLogger.exiting(CLASS_NAME, "marshallEntity", this, object, mediaType);
     }
 
     /**
@@ -1097,10 +1127,12 @@ public class PersistenceContext {
         marshaller.setProperty(MarshallerProperties.JSON_INCLUDE_ROOT, false);
         marshaller.setProperty(MarshallerProperties.JSON_REDUCE_ANY_ARRAYS, true);
 
+        marshaller.setProperty(MarshallerProperties.JSON_WRAPPER_AS_ARRAY_NAME, true);
+
         marshaller.setAdapter(new LinkAdapter(getBaseURI().toString(), this));
         marshaller.setAdapter(new RelationshipLinkAdapter(getBaseURI().toString(), this));
 
-        for (XmlAdapter adapter:getAdapters()) {
+        for (XmlAdapter adapter : getAdapters()) {
             marshaller.setAdapter(adapter);
         }
 
@@ -1111,16 +1143,15 @@ public class PersistenceContext {
             try {
                 writer = outputFactory.createXMLStreamWriter(output);
                 writer.writeStartDocument();
-                writer.writeStartElement(ConfigDefaults.JPARS_LIST_GROUPING_NAME);
+                writer.writeStartElement(ReservedWords.JPARS_LIST_GROUPING_NAME);
                 for (Object o : (List<Object>) object) {
                     marshaller.marshal(o, writer);
                 }
                 writer.writeEndDocument();
                 writer.flush();
                 postMarshallEntity(object);
-            } catch (Exception e) {
-                e.printStackTrace();
-                throw new JPARSException(e.toString());
+            } catch (Exception ex) {
+                throw JPARSException.exceptionOccurred(ex);
             }
         } else {
             marshaller.marshal(object, output);
@@ -1134,10 +1165,10 @@ public class PersistenceContext {
      * @param object
      */
     @SuppressWarnings("rawtypes")
-    protected void preMarshallEntity(Object object){
-        if (object instanceof List){
-            Iterator i = ((List)object).iterator();
-            while (i.hasNext()){
+    protected void preMarshallEntity(Object object) {
+        if (object instanceof List) {
+            Iterator i = ((List) object).iterator();
+            while (i.hasNext()) {
                 preMarshallIndividualEntity(i.next());
             }
         } else {
@@ -1152,8 +1183,8 @@ public class PersistenceContext {
      */
     @SuppressWarnings("rawtypes")
     protected void preMarshallIndividualEntity(Object entity) {
-        if (entity instanceof MultiResultQueryListItem) {
-            MultiResultQueryListItem item = (MultiResultQueryListItem) entity;
+        if (entity instanceof ReportQueryResultListItem) {
+            ReportQueryResultListItem item = (ReportQueryResultListItem) entity;
             List<JAXBElement> fields = item.getFields();
             for (int i = 0; i < fields.size(); i++) {
                 // one or more fields in the MultiResultQueryListItem might be a domain object,
@@ -1168,16 +1199,34 @@ public class PersistenceContext {
                 // so, we need to set the relationshipInfo for those domain objects.
                 setRelationshipInfo(fields.get(i).getValue());
             }
-        } else if (entity instanceof MultiResultQueryList) {
-            MultiResultQueryList list = (MultiResultQueryList) entity;
-            List<MultiResultQueryListItem> items = list.getItems();
+        } else if (entity instanceof ReportQueryResultList) {
+            ReportQueryResultList list = (ReportQueryResultList) entity;
+            List<ReportQueryResultListItem> items = list.getItems();
             for (int i = 0; i < items.size(); i++) {
-                MultiResultQueryListItem item = items.get(i);
+                ReportQueryResultListItem item = items.get(i);
                 List<JAXBElement> fields = item.getFields();
                 for (int index = 0; index < fields.size(); index++) {
                     // one or more fields in the MultiResultQueryList might be a domain object,
                     // so, we need to set the relationshipInfo for those domain objects.
                     setRelationshipInfo(fields.get(index).getValue());
+                }
+            }
+        } else if (entity instanceof ReadAllQueryResultCollection) {
+            ReadAllQueryResultCollection list = (ReadAllQueryResultCollection) entity;
+            List<Object> items = list.getItems();
+            if ((items != null) && (!items.isEmpty())) {
+                for (int i = 0; i < items.size(); i++) {
+                    Object item = items.get(i);
+                    setRelationshipInfo(item);
+                }
+            }
+        } else if (entity instanceof ReportQueryResultCollection) {
+            ReportQueryResultCollection list = (ReportQueryResultCollection) entity;
+            List<ReportQueryResultListItem> items = list.getItems();
+            if ((items != null) && (!items.isEmpty())) {
+                for (int i = 0; i < items.size(); i++) {
+                    ReportQueryResultListItem item = items.get(i);
+                    setRelationshipInfo(item);
                 }
             }
         } else {
@@ -1187,7 +1236,7 @@ public class PersistenceContext {
 
     private void setRelationshipInfo(Object entity) {
         if ((entity != null) && (entity instanceof PersistenceWeavedRest)) {
-            ClassDescriptor descriptor = getJpaSession().getClassDescriptor(entity.getClass());
+            ClassDescriptor descriptor = getServerSession().getClassDescriptor(entity.getClass());
             if (descriptor != null) {
                 ((PersistenceWeavedRest) entity)._persistence_setRelationships(new ArrayList<RelationshipInfo>());
                 for (DatabaseMapping mapping : descriptor.getMappings()) {
@@ -1197,16 +1246,16 @@ public class PersistenceContext {
                         info.setAttributeName(frMapping.getAttributeName());
                         info.setOwningEntity(entity);
                         info.setOwningEntityAlias(descriptor.getAlias());
-                        info.setPersistencePrimaryKey(descriptor.getObjectBuilder().extractPrimaryKeyFromObject(entity, (AbstractSession) getJpaSession()));
+                        info.setPersistencePrimaryKey(descriptor.getObjectBuilder().extractPrimaryKeyFromObject(entity, (AbstractSession) getServerSession()));
                         ((PersistenceWeavedRest) entity)._persistence_getRelationships().add(info);
                     } else if (mapping.isEISMapping()) {
                         if (mapping instanceof EISCompositeCollectionMapping) {
-                            EISCompositeCollectionMapping eisMapping = (EISCompositeCollectionMapping)mapping;
+                            EISCompositeCollectionMapping eisMapping = (EISCompositeCollectionMapping) mapping;
                             RelationshipInfo info = new RelationshipInfo();
                             info.setAttributeName(eisMapping.getAttributeName());
                             info.setOwningEntity(entity);
                             info.setOwningEntityAlias(descriptor.getAlias());
-                            info.setPersistencePrimaryKey(descriptor.getObjectBuilder().extractPrimaryKeyFromObject(entity, (AbstractSession) getJpaSession()));
+                            info.setPersistencePrimaryKey(descriptor.getObjectBuilder().extractPrimaryKeyFromObject(entity, (AbstractSession) getServerSession()));
                             ((PersistenceWeavedRest) entity)._persistence_getRelationships().add(info);
                         }
                     }
@@ -1216,22 +1265,19 @@ public class PersistenceContext {
     }
 
     @SuppressWarnings("rawtypes")
-    protected void postMarshallEntity(Object object){
-        if (object instanceof List){
-            Iterator i = ((List)object).iterator();
-            while (i.hasNext()){
+    protected void postMarshallEntity(Object object) {
+        if (object instanceof List) {
+            Iterator i = ((List) object).iterator();
+            while (i.hasNext()) {
                 Object entity = i.next();
-                if (entity instanceof PersistenceWeavedRest){
-                    ((PersistenceWeavedRest)entity)._persistence_setRelationships(new ArrayList<RelationshipInfo>());
+                if (entity instanceof PersistenceWeavedRest) {
+                    ((PersistenceWeavedRest) entity)._persistence_setRelationships(new ArrayList<RelationshipInfo>());
                 }
             }
-        } else {
-            if (object instanceof PersistenceWeavedRest){
-                ((PersistenceWeavedRest)object)._persistence_setRelationships(new ArrayList<RelationshipInfo>());
-            }
+        } else if (object instanceof PersistenceWeavedRest) {
+            ((PersistenceWeavedRest) object)._persistence_setRelationships(new ArrayList<RelationshipInfo>());
         }
     }
-
 
     @SuppressWarnings({ "rawtypes", "unchecked" })
     protected List<XmlAdapter> getAdapters() throws JPARSException {
@@ -1240,27 +1286,26 @@ public class PersistenceContext {
         }
         adapters = new ArrayList<XmlAdapter>();
         try {
-            for (ClassDescriptor desc : this.getJpaSession().getDescriptors().values()) {
+            for (ClassDescriptor desc : this.getServerSession().getDescriptors().values()) {
                 // avoid embeddables
                 if (!desc.isAggregateCollectionDescriptor() && !desc.isAggregateDescriptor()) {
                     Class clz = desc.getJavaClass();
                     String referenceAdapterName = RestAdapterClassWriter.constructClassNameForReferenceAdapter(clz.getName());
-                    ClassLoader cl = getJpaSession().getDatasourcePlatform().getConversionManager().getLoader();
+                    ClassLoader cl = getServerSession().getDatasourcePlatform().getConversionManager().getLoader();
                     Class referenceAdaptorClass = Class.forName(referenceAdapterName, true, cl);
-                    Class[] argTypes = { String.class, PersistenceContext.class};
+                    Class[] argTypes = { String.class, PersistenceContext.class };
                     Constructor referenceAdaptorConstructor = referenceAdaptorClass.getDeclaredConstructor(argTypes);
                     Object[] args = new Object[] { getBaseURI().toString(), this };
                     adapters.add((XmlAdapter) referenceAdaptorConstructor.newInstance(args));
                 }
             }
-        } catch(Exception ex) {
+        } catch (Exception ex) {
             ex.printStackTrace();
-            throw new JPARSException(ex.getMessage());
+            throw JPARSException.exceptionOccurred(ex);
         }
         return adapters;
     }
-    
-    
+
     private boolean getWeavingProperty() {
         // Initialize the properties with their defaults first
         boolean restWeavingEnabled = true;
@@ -1292,5 +1337,92 @@ public class PersistenceContext {
             }
         }
         return (weavingEnabled && restWeavingEnabled && fetchGroupWeavingEnabled);
+    }
+
+    /**
+     * Checks if is version greater or equal to.
+     *
+     * @param version the version
+     * @return true, if is version greater or equal to
+     */
+    public boolean isVersionGreaterOrEqualTo(String version) {
+        String currentVersion = this.version;
+        if ((currentVersion != null) && (!currentVersion.isEmpty())) {
+            if ((version != null) && (!version.isEmpty())) {
+                try {
+                    int current = new Integer(currentVersion.replace("v", "").replace(".", "")).intValue();
+                    int requested = new Integer(version.replace("v", "").replace(".", "")).intValue();
+                    if (current >= requested) {
+                        return true;
+                    }
+                } catch (Exception ex) {
+                    ex.printStackTrace();
+                    return false;
+                }
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Gets the supported feature set.
+     *
+     * @return the supported feature set
+     */
+    public FeatureSet getSupportedFeatureSet() {
+        return supportedFeatureSet;
+    }
+
+    /**
+     * Sets the supported feature set.
+     *
+     * @param supportedFeatureSet the new supported feature set
+     */
+    public void setSupportedFeatureSet(FeatureSet supportedFeatureSet) {
+        this.supportedFeatureSet = supportedFeatureSet;
+    }
+
+    @Override
+    public int hashCode() {
+        final int prime = 31;
+        int result = 1;
+        result = prime * result + ((name == null) ? 0 : name.hashCode());
+        result = prime * result + ((version == null) ? 0 : version.hashCode());
+        return result;
+    }
+
+    @Override
+    public boolean equals(Object other) {
+        if (this == other) {
+            return true;
+        }
+
+        if (other == null) {
+            return false;
+        }
+
+        if (getClass() != other.getClass()) {
+            return false;
+        }
+
+        PersistenceContext otherContext = (PersistenceContext) other;
+
+        if (name == null) {
+            if (otherContext.name != null) {
+                return false;
+            }
+        } else if (!name.equals(otherContext.name)) {
+            return false;
+        }
+
+        if (version == null) {
+            if (otherContext.version != null) {
+                return false;
+            }
+        } else if (!version.equals(otherContext.version)) {
+            return false;
+        }
+
+        return true;
     }
 }

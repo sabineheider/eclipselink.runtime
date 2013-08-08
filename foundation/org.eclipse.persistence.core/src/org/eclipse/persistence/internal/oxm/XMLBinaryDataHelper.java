@@ -22,7 +22,10 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.StringReader;
+import java.util.ArrayList;
 import java.util.Iterator;
+import java.util.List;
+
 import javax.activation.DataHandler;
 import javax.imageio.ImageIO;
 import javax.imageio.ImageWriter;
@@ -36,8 +39,8 @@ import javax.xml.transform.stream.StreamSource;
 import org.eclipse.persistence.exceptions.ConversionException;
 import org.eclipse.persistence.exceptions.XMLMarshalException;
 import org.eclipse.persistence.internal.core.helper.CoreClassConstants;
+import org.eclipse.persistence.internal.core.queries.CoreContainerPolicy;
 import org.eclipse.persistence.internal.core.sessions.CoreAbstractSession;
-import org.eclipse.persistence.internal.helper.Helper;
 
 public class XMLBinaryDataHelper {
     protected static XMLBinaryDataHelper binaryDataHelper;
@@ -71,7 +74,20 @@ public class XMLBinaryDataHelper {
         MULTIPART = javax.mail.internet.MimeMultipart.class;
     }
 
-    public Object convertObject(Object obj, Class classification, CoreAbstractSession session) {
+    public Object convertObject(Object obj, Class classification, CoreAbstractSession session, CoreContainerPolicy cp) {
+    	if( obj instanceof List && cp != null){
+    		List theList = (List)obj;
+    		Object container = cp.containerInstance(theList.size());
+    		for(int i=0; i<theList.size(); i++){
+    			Object next = theList.get(i);
+    			cp.addInto(convertSingleObject(next, classification, session), container, session);
+    		}
+    		return container;
+    	}
+    	return convertSingleObject(obj, classification, session);
+        
+    }
+    public Object convertSingleObject(Object obj, Class classification, CoreAbstractSession session) {
         if (classification == DATA_HANDLER) {
             return convertObjectToDataHandler(obj, session);
         } else if (classification == IMAGE) {
@@ -84,7 +100,6 @@ public class XMLBinaryDataHelper {
             return session.getDatasourcePlatform().getConversionManager().convertObject(obj, classification);
         }
     }
-
     public EncodedData getBytesFromDataHandler(DataHandler handler) {
         ByteArrayOutputStream output = new ByteArrayOutputStream();
         try {
@@ -95,8 +110,24 @@ public class XMLBinaryDataHelper {
 
         return new EncodedData(output.toByteArray(), handler.getContentType());
     }
+    
+    public List<byte[]> getBytesListForBinaryValues(List attributeValue, Marshaller marshaller, String mimeType){
+		List returnList = new ArrayList(attributeValue.size());
+		for(int i=0;i<attributeValue.size(); i++){
+			Object next = attributeValue.get(i);
+			EncodedData nextEncodedData = getBytesForSingleBinaryValue(next, marshaller, mimeType); 
+			returnList.add(nextEncodedData.getData());
+		}
+		return returnList;
+    }
 
     public EncodedData getBytesForBinaryValue(Object attributeValue, Marshaller marshaller, String mimeType) {
+    	return getBytesForSingleBinaryValue(attributeValue, marshaller, mimeType);
+    	
+    }
+    
+    public EncodedData getBytesForSingleBinaryValue(Object attributeValue, Marshaller marshaller, String mimeType) {
+
         if (attributeValue instanceof DataHandler) {
             return getBytesFromDataHandler((DataHandler) attributeValue);
         } else if (attributeValue instanceof Image) {
@@ -109,7 +140,7 @@ public class XMLBinaryDataHelper {
             return new EncodedData((byte[]) attributeValue, mimeType);
         } else if (attributeValue.getClass() == CoreClassConstants.ABYTE) {
             return getBytesFromByteObjectArray((Byte[]) attributeValue, mimeType);
-        }
+        } 
 
         return new EncodedData(new byte[0], null);
     }
@@ -120,7 +151,7 @@ public class XMLBinaryDataHelper {
             ContentType contentType = new ContentType(value.getContentType());
             String boundary = contentType.getParameter("boundary");
 
-            output.write(Helper.cr().getBytes());
+            output.write(Constants.cr().getBytes());
             output.write(("Content-Type: " + contentType.getBaseType() + "; boundary=\"" + boundary + "\"\n").getBytes());
         } catch (Exception ex) {
             throw ConversionException.couldNotBeConverted(value, byte[].class, ex);
@@ -278,7 +309,7 @@ public class XMLBinaryDataHelper {
         ByteArrayOutputStream output = new ByteArrayOutputStream();
         try {
             source.writeTo(output);
-            return (String) ((XMLConversionManager) session.getDatasourcePlatform().getConversionManager()).convertObject(output.toByteArray(), String.class, schemaTypeQName);
+            return (String) ((ConversionManager) session.getDatasourcePlatform().getConversionManager()).convertObject(output.toByteArray(), String.class, schemaTypeQName);
         } catch (Exception ex) {
             throw ConversionException.couldNotBeConverted(source, CoreClassConstants.STRING, ex);
         }
@@ -305,7 +336,7 @@ public class XMLBinaryDataHelper {
                 throw XMLMarshalException.noEncoderForMimeType(mimeType);
             }
 
-            return ((XMLConversionManager) session.getDatasourcePlatform().getConversionManager()).buildBase64StringFromBytes(outputStream.toByteArray());
+            return ((ConversionManager) session.getDatasourcePlatform().getConversionManager()).buildBase64StringFromBytes(outputStream.toByteArray());
         } catch (Exception ex) {
             throw ConversionException.couldNotBeConverted(image, byte[].class, ex);
         }
@@ -335,7 +366,7 @@ public class XMLBinaryDataHelper {
         }
         if (sourceObject instanceof String) {
             //assume base64 String
-            byte[] bytes = ((XMLConversionManager) session.getDatasourcePlatform().getConversionManager()).convertSchemaBase64ToByteArray(sourceObject);
+            byte[] bytes = ((ConversionManager) session.getDatasourcePlatform().getConversionManager()).convertSchemaBase64ToByteArray(sourceObject);
             handler = new DataHandler(new ByteArrayDataSource(bytes, "application/octet-stream"));
         } else if (sourceObject instanceof Image) {
             handler = new DataHandler(sourceObject, "image/jpeg");

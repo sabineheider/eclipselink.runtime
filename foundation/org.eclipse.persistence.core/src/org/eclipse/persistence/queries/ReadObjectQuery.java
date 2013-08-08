@@ -36,6 +36,7 @@ import org.eclipse.persistence.descriptors.ClassDescriptor;
 import org.eclipse.persistence.descriptors.DescriptorQueryManager;
 import org.eclipse.persistence.exceptions.*;
 import org.eclipse.persistence.expressions.*;
+import org.eclipse.persistence.sessions.DatabaseRecord;
 import org.eclipse.persistence.sessions.SessionProfiler;
 import org.eclipse.persistence.sessions.remote.*;
 import org.eclipse.persistence.tools.profiler.QueryMonitor;
@@ -313,6 +314,7 @@ public class ReadObjectQuery extends ObjectLevelReadQuery {
                         // If the query require special SQL generation or execution do not use the static read object query.
                         // PERF: the read-object query should always be static to ensure no regeneration of SQL.
                         if ((!hasJoining() || !this.joinedAttributeManager.hasJoinedAttributeExpressions()) && (!hasPartialAttributeExpressions()) && (redirector == null) && !doNotRedirect && (!hasAsOfClause()) && (!hasNonDefaultFetchGroup())
+                                && (this.shouldUseSerializedObjectPolicy == shouldUseSerializedObjectPolicyDefault) 
                                 && this.wasDefaultLockMode && (shouldBindAllParameters == null) && (this.hintString == null)) {
                             if ((this.selectionId != null) || (this.selectionObject != null)) {// Must be primary key.
                                 this.isCustomQueryUsed = true;
@@ -453,9 +455,13 @@ public class ReadObjectQuery extends ObjectLevelReadQuery {
         Object result = null;
         AbstractRecord row = null;
         
-        checkResultSetAccessOptimization();
+        Object sopObject = getTranslationRow().getSopObject();
+        boolean useOptimization = false;
+        if (sopObject == null) {
+            useOptimization = usesResultSetAccessOptimization(); 
+        }        
         
-        if (this.usesResultSetAccessOptimization) {
+        if (useOptimization) {
             DatabaseCall call = ((DatasourceCallQueryMechanism)this.queryMechanism).selectResultSet();
             this.executionTime = System.currentTimeMillis();
             boolean exceptionOccured = false;
@@ -464,15 +470,17 @@ public class ReadObjectQuery extends ObjectLevelReadQuery {
             try {
                 if (resultSet.next()) {
                     ResultSetMetaData metaData = call.getResult().getMetaData();
-                    boolean useSimple = this.descriptor.getObjectBuilder().isSimple();  
+                    boolean useSimple = this.descriptor.getObjectBuilder().isSimple(); 
+                    DatabasePlatform platform = dbAccessor.getPlatform();
+                    boolean optimizeData = platform.shouldOptimizeDataConversion();
                     if (useSimple) {
-                        row = new SimpleResultSetRecord(call.getFields(), call.getFieldsArray(), resultSet, metaData, dbAccessor, getExecutionSession());
+                        row = new SimpleResultSetRecord(call.getFields(), call.getFieldsArray(), resultSet, metaData, dbAccessor, getExecutionSession(), platform, optimizeData);
                         if (this.descriptor.isDescriptorTypeAggregate()) {
                             // Aggregate Collection may have an unmapped primary key referencing the owner, the corresponding field will not be used when the object is populated and therefore may not be cleared.
                             ((SimpleResultSetRecord)row).setShouldKeepValues(true);
                         }
                     } else {
-                        row = new ResultSetRecord(call.getFields(), call.getFieldsArray(), resultSet, metaData, dbAccessor, getExecutionSession());
+                        row = new ResultSetRecord(call.getFields(), call.getFieldsArray(), resultSet, metaData, dbAccessor, getExecutionSession(), platform, optimizeData);
                     }
                     if (session.isUnitOfWork()) {
                         result = registerResultInUnitOfWork(row, (UnitOfWorkImpl)session, this.translationRow, true);
@@ -480,8 +488,15 @@ public class ReadObjectQuery extends ObjectLevelReadQuery {
                         result = buildObject(row);
                     }
                         
-                    if (!useSimple && !((ResultSetRecord)row).hasResultSet() && this.descriptor.getObjectBuilder().shouldKeepRow()) {
-                        ((ResultSetRecord)row).removeNonIndirectionValues();
+                    if (!useSimple && this.descriptor.getObjectBuilder().shouldKeepRow()) {
+                        if (((ResultSetRecord)row).hasResultSet()) {
+                        	// ResultSet has not been fully triggered - that means the cached object was used. 
+                        	// Yet the row still may be cached in a value holder (see loadBatchReadAttributes and loadJoinedAttributes methods).
+                        	// Remove ResultSet to avoid attempt to trigger it (already closed) when pk or fk values (already extracted) accessed when the value holder is instantiated.
+                            ((ResultSetRecord)row).removeResultSet();
+                        } else {
+                            ((ResultSetRecord)row).removeNonIndirectionValues();
+                        }
                     }
                 }
             } catch (SQLException exception) {
@@ -515,15 +530,20 @@ public class ReadObjectQuery extends ObjectLevelReadQuery {
                 }
             }
         } else {
-            // If using 1-m joins, must select all rows.
-            if (shouldSetRowsForJoins) {
-                List rows = getQueryMechanism().selectAllRows();
-                if (rows.size() > 0) {
-                    row = (AbstractRecord)rows.get(0);
-                }
-                getJoinedAttributeManager().setDataResults(rows, session);
+            if (sopObject != null) {
+                row = new DatabaseRecord(0);
+                row.setSopObject(sopObject);
             } else {
-                row = getQueryMechanism().selectOneRow();
+                // If using 1-m joins, must select all rows.
+                if (shouldSetRowsForJoins) {
+                    List rows = getQueryMechanism().selectAllRows();
+                    if (rows.size() > 0) {
+                        row = (AbstractRecord)rows.get(0);
+                    }
+                    getJoinedAttributeManager().setDataResults(rows, session);
+                } else {
+                    row = getQueryMechanism().selectOneRow();
+                }
             }
             
             this.executionTime = System.currentTimeMillis();
@@ -547,7 +567,7 @@ public class ReadObjectQuery extends ObjectLevelReadQuery {
             }
         }                
 
-        if (this.shouldIncludeData) {
+        if (this.shouldIncludeData && (sopObject == null)) {
             ComplexQueryResult complexResult = new ComplexQueryResult();
             complexResult.setResult(result);
             complexResult.setData(row);
@@ -914,6 +934,16 @@ public class ReadObjectQuery extends ObjectLevelReadQuery {
      */
     public Object getSelectionId() {
         return this.selectionId;
+    }
+
+    /**
+     * INTERNAL:
+     * Clear the selection id and object.
+     * This is done after cloning queries to prepare them in inheritance.
+     */
+    public void clearSelectionId() {
+        this.selectionId = null;
+        this.selectionObject = null;
     }
 
     /**

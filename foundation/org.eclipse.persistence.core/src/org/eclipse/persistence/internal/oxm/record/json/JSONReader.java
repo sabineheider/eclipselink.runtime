@@ -35,6 +35,7 @@ import org.eclipse.persistence.internal.libraries.antlr.runtime.TokenRewriteStre
 import org.eclipse.persistence.internal.libraries.antlr.runtime.TokenStream;
 import org.eclipse.persistence.internal.libraries.antlr.runtime.tree.CommonTree;
 import org.eclipse.persistence.internal.libraries.antlr.runtime.tree.Tree;
+import org.eclipse.persistence.internal.oxm.ConversionManager;
 import org.eclipse.persistence.internal.oxm.CollectionGroupingElementNodeValue;
 import org.eclipse.persistence.internal.oxm.Constants;
 import org.eclipse.persistence.internal.oxm.ContainerValue;
@@ -43,7 +44,6 @@ import org.eclipse.persistence.internal.oxm.MediaType;
 import org.eclipse.persistence.internal.oxm.NamespaceResolver;
 import org.eclipse.persistence.internal.oxm.NodeValue;
 import org.eclipse.persistence.internal.oxm.Root;
-import org.eclipse.persistence.internal.oxm.XMLConversionManager;
 import org.eclipse.persistence.internal.oxm.XPathFragment;
 import org.eclipse.persistence.internal.oxm.mappings.Field;
 import org.eclipse.persistence.internal.oxm.record.AbstractUnmarshalRecord;
@@ -226,6 +226,9 @@ public class JSONReader extends XMLReaderAdapter {
                 }
             }
             
+        } else {
+            getContentHandler().startDocument();
+            parse(tree);
         }
     }
     
@@ -261,7 +264,7 @@ public class JSONReader extends XMLReaderAdapter {
                         }else{
                             localName = localName.substring(nsIndex + 1);
                         }
-                        if(localName.equals(Constants.SCHEMA_TYPE_ATTRIBUTE) && uri.equals(javax.xml.XMLConstants.W3C_XML_SCHEMA_INSTANCE_NS_URI)){
+                        if(localName.equals(Constants.SCHEMA_TYPE_ATTRIBUTE) && uri != null && uri.equals(javax.xml.XMLConstants.W3C_XML_SCHEMA_INSTANCE_NS_URI)){
                             break;
                         }   
                     }else{
@@ -362,21 +365,6 @@ public class JSONReader extends XMLReaderAdapter {
             	}
             }
             startCollection();
-            
-            if(size == 1){
-				CommonTree ct = (CommonTree) tree.getChild(0);
-				if(ct != null && ct.getType() == JSONLexer.NULL){
-					contentHandler.setNil(true);
-				}
-				if(!isTextValue){
-		         	   contentHandler.startElement(uri, parentLocalName, parentLocalName, attributes.setTree(ct, attributePrefix, namespaces, namespaceSeparator, namespaceAware));
-		         	   }
-		               parse(ct);
-		               if(!isTextValue){
-		                  contentHandler.endElement(uri, parentLocalName, parentLocalName);
-		               }
-			}else{
-            
 			XPathFragment groupingXPathFragment = null;
 			XPathFragment itemXPathFragment = null;
             if(contentHandler instanceof UnmarshalRecord) {
@@ -432,7 +420,6 @@ public class JSONReader extends XMLReaderAdapter {
             }
             if(null != groupingXPathFragment) {
                 contentHandler.endElement(uri, groupingXPathFragment.getLocalName(), groupingXPathFragment.getLocalName());
-            }
             }
             endCollection();
 
@@ -556,7 +543,7 @@ public class JSONReader extends XMLReaderAdapter {
      * @since 2.4
      */
     @Override
-    public Object convertValueBasedOnSchemaType(Field xmlField, Object value, XMLConversionManager xmlConversionManager, AbstractUnmarshalRecord record) {
+    public Object convertValueBasedOnSchemaType(Field xmlField, Object value, ConversionManager conversionManager, AbstractUnmarshalRecord record) {
         if (xmlField.getSchemaType() != null) { 
         	if(Constants.QNAME_QNAME.equals(xmlField.getSchemaType())){
         		String stringValue = (String)value;
@@ -568,7 +555,9 @@ public class JSONReader extends XMLReaderAdapter {
         		    uri = stringValue.substring(indexOpen+1, indexClose);
         		    localName = stringValue.substring(indexClose + 1);
         		}else{
-        			localName = stringValue;
+        			QName obj = (QName)xmlField.convertValueBasedOnSchemaType(stringValue, conversionManager, record);
+        			localName = obj.getLocalPart();
+        			uri = obj.getNamespaceURI();
         		}
         		if(uri != null){
         			return new QName(uri, localName);
@@ -578,9 +567,9 @@ public class JSONReader extends XMLReaderAdapter {
         	}else{
 	            Class fieldType = xmlField.getType();
 	            if (fieldType == null) {
-	                fieldType = xmlField.getJavaClass(xmlField.getSchemaType());
+	                fieldType = xmlField.getJavaClass(xmlField.getSchemaType(), conversionManager);
 	            }            
-	            return xmlConversionManager.convertObject(value, fieldType, xmlField.getSchemaType());
+	            return conversionManager.convertObject(value, fieldType, xmlField.getSchemaType());
         	}
         }
         return value;

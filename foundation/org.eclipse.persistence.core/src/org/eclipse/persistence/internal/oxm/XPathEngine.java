@@ -17,7 +17,9 @@ import java.util.Collection;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Vector;
+
 import javax.xml.namespace.QName;
+
 import org.eclipse.persistence.exceptions.ConversionException;
 import org.eclipse.persistence.exceptions.XMLMarshalException;
 import org.eclipse.persistence.internal.core.helper.CoreClassConstants;
@@ -121,7 +123,7 @@ public class XPathEngine <
                     if (xmlField.isTypedTextField()) {
                         XMLNodeList createdElements = new XMLNodeList();
                         createdElements.add(element);
-                        addTypeAttributes(createdElements, xmlField, value, resolveNamespacePrefixForURI(javax.xml.XMLConstants.W3C_XML_SCHEMA_INSTANCE_NS_URI, getNamespaceResolverForField(xmlField)));
+                        addTypeAttributes(createdElements, xmlField, value, resolveNamespacePrefixForURI(javax.xml.XMLConstants.W3C_XML_SCHEMA_INSTANCE_NS_URI, getNamespaceResolverForField(xmlField)), session);
                     }
                     return addText(xmlField, element, (String)textValue);
                 }
@@ -245,7 +247,7 @@ public class XPathEngine <
         }
 
         if (xmlField.isTypedTextField()) {
-            addTypeAttributes(createdElements, xmlField, value, resolveNamespacePrefixForURI(javax.xml.XMLConstants.W3C_XML_SCHEMA_INSTANCE_NS_URI, getNamespaceResolverForField(xmlField)));
+            addTypeAttributes(createdElements, xmlField, value, resolveNamespacePrefixForURI(javax.xml.XMLConstants.W3C_XML_SCHEMA_INSTANCE_NS_URI, getNamespaceResolverForField(xmlField)), session);
         }
 
         return createdElements;
@@ -262,7 +264,8 @@ public class XPathEngine <
         }else if (xmlField.isUnionField()) {
             return getValueToWriteForUnion((UnionField)xmlField, value, session);
         }else if (xmlField.isTypedTextField()) {
-            schemaType = xmlField.getXMLType(value.getClass());
+            ConversionManager conversionManager = (ConversionManager) session.getDatasourcePlatform().getConversionManager();
+            schemaType = xmlField.getXMLType(value.getClass(), conversionManager);
         }else if (xmlField.getSchemaType() != null) {
             schemaType = xmlField.getSchemaType();
         }
@@ -277,7 +280,7 @@ public class XPathEngine <
                     if(schemaType != null && schemaType.equals(Constants.QNAME_QNAME)){
                         nextConvertedItem = getStringForQName((QName)nextItem, getNamespaceResolverForField(xmlField));
                     }else{
-                    	nextConvertedItem = (String) ((XMLConversionManager)session.getDatasourcePlatform().getConversionManager()).convertObject(nextItem, CoreClassConstants.STRING, schemaType);
+                    	nextConvertedItem = (String) ((ConversionManager)session.getDatasourcePlatform().getConversionManager()).convertObject(nextItem, CoreClassConstants.STRING, schemaType);
                     }
                     returnStringBuilder.append(nextConvertedItem);
                     if (i < (((List)value).size() - 1)) {
@@ -296,7 +299,7 @@ public class XPathEngine <
                             String nextConvertedItem = getStringForQName((QName)nextItem, getNamespaceResolverForField(xmlField));
                             items.add(nextConvertedItem);
                         }else{
-                            String nextConvertedItem = (String) ((XMLConversionManager)session.getDatasourcePlatform().getConversionManager()).convertObject(nextItem, CoreClassConstants.STRING, schemaType);
+                            String nextConvertedItem = (String) ((ConversionManager)session.getDatasourcePlatform().getConversionManager()).convertObject(nextItem, CoreClassConstants.STRING, schemaType);
                             items.add(nextConvertedItem);
                         }
                     }
@@ -307,7 +310,7 @@ public class XPathEngine <
             if(schemaType != null && schemaType.equals(Constants.QNAME_QNAME)){
                 return getStringForQName((QName)value, getNamespaceResolverForField(xmlField));
             }
-            return ((XMLConversionManager)session.getDatasourcePlatform().getConversionManager()).convertObject(value, CoreClassConstants.STRING, schemaType);
+            return ((ConversionManager)session.getDatasourcePlatform().getConversionManager()).convertObject(value, CoreClassConstants.STRING, schemaType);
         }
     }
 
@@ -326,8 +329,9 @@ public class XPathEngine <
             QName nextQName = (QName)(xmlField).getSchemaTypes().get(i);
             try {
                 if (nextQName != null) {
-                    Class javaClass = xmlField.getJavaClass(nextQName);
-                    value = ((XMLConversionManager)session.getDatasourcePlatform().getConversionManager()).convertObject(value, javaClass, nextQName);
+                    ConversionManager conversionManager = (ConversionManager)session.getDatasourcePlatform().getConversionManager();
+                    Class javaClass = xmlField.getJavaClass(nextQName, conversionManager);
+                    value = conversionManager.convertObject(value, javaClass, nextQName);
                     schemaType = nextQName;
                     break;
                 }
@@ -337,7 +341,7 @@ public class XPathEngine <
                 }
             }
         }
-        return (String) ((XMLConversionManager)session.getDatasourcePlatform().getConversionManager()).convertObject(value, CoreClassConstants.STRING, schemaType);
+        return (String) ((ConversionManager)session.getDatasourcePlatform().getConversionManager()).convertObject(value, CoreClassConstants.STRING, schemaType);
     }
 
     private Object getValueToWriteForUnion(UnionField xmlField, Object value, CoreAbstractSession session) {
@@ -648,7 +652,7 @@ public class XPathEngine <
     * @param value Object to base the lookup on
     * @param schemaInstancePrefix the prefix representing the schema instance namespace
     */
-    private void addTypeAttributes(NodeList elements, Field field, Object value, String schemaInstancePrefix) {
+    private void addTypeAttributes(NodeList elements, Field field, Object value, String schemaInstancePrefix, CoreAbstractSession session) {
         NamespaceResolver namespaceResolver = getNamespaceResolverForField(field);
         if (!field.isTypedTextField()) {
             return;
@@ -675,7 +679,8 @@ public class XPathEngine <
             if (next.getNodeType() == Node.ELEMENT_NODE) {
                 Class valueClass = values.get(i).getClass();
                 if(valueClass != CoreClassConstants.STRING){
-                    QName qname = field.getXMLType(valueClass);
+                    ConversionManager conversionManager = (ConversionManager) session.getDatasourcePlatform().getConversionManager();
+                    QName qname = field.getXMLType(valueClass, conversionManager);
                     if (qname != null) {
                         if (null == schemaInstancePrefix) {
                             schemaInstancePrefix = namespaceResolver.generatePrefix(Constants.SCHEMA_INSTANCE_PREFIX);
@@ -875,6 +880,17 @@ public class XPathEngine <
     public NodeList replaceValue(Field xmlField, Node parent, Object value, CoreAbstractSession session) throws XMLMarshalException {
         NodeList nodes = unmarshalXPathEngine.selectNodes(parent, xmlField, getNamespaceResolverForField(xmlField));
         int numberOfNodes = nodes.getLength();
+        if(numberOfNodes == 0 && xmlField.getLastXPathFragment().nameIsText()) {
+            nodes = unmarshalXPathEngine.selectNodes(parent, xmlField, getNamespaceResolverForField(xmlField), null, true);
+            XMLNodeList textNodes = new XMLNodeList();
+            for(int i = 0; i < nodes.getLength(); i++) {
+                Element nextNode = (Element)nodes.item(i);
+                Text text = nextNode.getOwnerDocument().createTextNode("");
+                nextNode.appendChild(text);
+                textNodes.add(text);
+            }
+            numberOfNodes = textNodes.getLength();
+        }
         XMLNodeList createdElements = new XMLNodeList();
         for (int i = 0; i < numberOfNodes; i++) {
             Node node = nodes.item(i);
@@ -894,7 +910,7 @@ public class XPathEngine <
                             addXsiNilToElement(parentElement, xmlField);
                             parentElement.removeChild(node);
                         } else {
-                            String stringValue = (String)((XMLConversionManager)session.getDatasourcePlatform().getConversionManager()).convertObject(value, CoreClassConstants.STRING);
+                            String stringValue = (String)session.getDatasourcePlatform().getConversionManager().convertObject(value, CoreClassConstants.STRING);
                             Element parentElement = (Element)node.getParentNode();
                             if(parentElement == null && parent.getNodeType() == Node.ELEMENT_NODE) {
                                 parentElement = (Element)parent;
@@ -939,7 +955,7 @@ public class XPathEngine <
         }
         if (xmlField.isTypedTextField()) {
 
-            addTypeAttributes(createdElements, xmlField, value, resolveNamespacePrefixForURI(javax.xml.XMLConstants.W3C_XML_SCHEMA_INSTANCE_NS_URI, getNamespaceResolverForField(xmlField)));
+            addTypeAttributes(createdElements, xmlField, value, resolveNamespacePrefixForURI(javax.xml.XMLConstants.W3C_XML_SCHEMA_INSTANCE_NS_URI, getNamespaceResolverForField(xmlField)), session);
         }
         return nodes;
     }
@@ -1007,7 +1023,7 @@ public class XPathEngine <
                     Node grandParentNode = parentNode.getParentNode();
                     grandParentNode.removeChild(parentNode);
                 } else {
-                    oldChild.setNodeValue((String) ((XMLConversionManager)session.getDatasourcePlatform().getConversionManager()).convertObject(value, CoreClassConstants.STRING));
+                    oldChild.setNodeValue((String) session.getDatasourcePlatform().getConversionManager().convertObject(value, CoreClassConstants.STRING));
                 }
             } else {
                 Element element = (Element)oldChild;

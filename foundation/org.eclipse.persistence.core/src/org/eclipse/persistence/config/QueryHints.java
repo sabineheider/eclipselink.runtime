@@ -838,4 +838,34 @@ public class QueryHints {
      */
     public static final String BATCH_WRITING = "eclipselink.jdbc.batch-writing";
 
+    /**
+     * "eclipselink.result-set-access"
+     * <p>Configures if this read object(s) query should keep result set until all result object(s) are built.
+     * That allows to avoid getting potentially huge objects (LOBs) from ResultSet in case they would not be used
+     * because the object is found in the cache.   
+     * Valid values are:  HintValues.PERSISTENCE_UNIT_DEFAULT, HintValues.TRUE, HintValues.FALSE,
+     * "" could be used instead of default value HintValues.PERSISTENCE_UNIT_DEFAULT
+     * @see org.eclipse.persistence.queries.ObjectLevelReadQuery#setIsResultSetAccessOptimizedQuery(boolean)
+     * @see org.eclipse.persistence.queries.ObjectLevelReadQuery#clearIsResultSetOptimizedQuery
+     */
+    public static final String RESULT_SET_ACCESS = "eclipselink.result-set-access";
+
+    /**
+     * "eclipselink.serialized-object"
+     * <p>Configures if this read object(s) query use SerializedObjectPolicy if it's set on the descriptor.
+     * Valid values are:  HintValues.TRUE, HintValues.FALSE,
+     * "" could be used instead of default value HintValues.FALSE
+     * @see org.eclipse.persistence.queries.ObjectLevelReadQuery#setShouldUseSerializedObjectPolicy(boolean)
+     */
+    public static final String SERIALIZED_OBJECT = "eclipselink.serialized-object";
+
+    /**
+     * "eclipselink.query-return-name-value-pairs"
+     * <p>Configures a ResultSetMappingQuery to return populated DatabaseRecord(s)
+     * instead of raw data.  This is particularly useful when the structure of the
+     * returned data is not known.
+     * @see org.eclipse.persistence.queries.ResultSetMappingQuery#setShouldReturnNameValuePairs(boolean)
+     * @see org.eclipse.persistence.queries.ResultSetMappingQuery#shouldReturnNameValuePairs()
+     */
+    public static final String RETURN_NAME_VALUE_PAIRS = "eclipselink.query-return-name-value-pairs";
 }

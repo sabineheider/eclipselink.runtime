@@ -18,7 +18,7 @@ import javax.xml.bind.annotation.XmlElement;
 import javax.xml.bind.annotation.XmlRootElement;
 
 import org.eclipse.persistence.internal.jpa.rs.metadata.model.Link;
-import org.eclipse.persistence.jpa.rs.config.ConfigDefaults;
+import org.eclipse.persistence.jpa.rs.ReservedWords;
 
 /**
  * This class is used to wrap collection of Link objects
@@ -27,14 +27,14 @@ import org.eclipse.persistence.jpa.rs.config.ConfigDefaults;
  * @author gonural
  *
  */
-@XmlRootElement(name = ConfigDefaults.JPARS_LIST_GROUPING_NAME)
+@XmlRootElement(name = ReservedWords.JPARS_LIST_GROUPING_NAME)
 public class LinkList {
     private List<Link> list;
 
     public LinkList() {
     }
 
-    @XmlElement(name = ConfigDefaults.JPARS_LIST_ITEM_NAME)
+    @XmlElement(name = ReservedWords.JPARS_LIST_ITEM_NAME)
     public List<Link> getList() {
         return list;
     }

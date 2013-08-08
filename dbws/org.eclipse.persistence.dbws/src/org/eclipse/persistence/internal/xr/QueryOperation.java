@@ -71,16 +71,18 @@ import org.eclipse.persistence.oxm.schema.XMLSchemaURLReference;
 import org.eclipse.persistence.queries.DataReadQuery;
 import org.eclipse.persistence.queries.DatabaseQuery;
 import org.eclipse.persistence.queries.ReadObjectQuery;
-import org.eclipse.persistence.queries.StoredProcedureCall;
 import org.eclipse.persistence.sessions.DatabaseRecord;
 import org.eclipse.persistence.sessions.Session;
+
 import static org.eclipse.persistence.internal.helper.ClassConstants.STRING;
+import static org.eclipse.persistence.internal.oxm.Constants.INT_QNAME;
 import static org.eclipse.persistence.internal.xr.Util.DEFAULT_ATTACHMENT_MIMETYPE;
 import static org.eclipse.persistence.internal.xr.sxf.SimpleXMLFormat.DEFAULT_SIMPLE_XML_FORMAT_TAG;
 import static org.eclipse.persistence.internal.xr.sxf.SimpleXMLFormat.DEFAULT_SIMPLE_XML_TAG;
 import static org.eclipse.persistence.internal.xr.Util.sqlToXmlName;
 import static org.eclipse.persistence.internal.xr.Util.EMPTY_STR;
 import static org.eclipse.persistence.internal.xr.Util.SLASH_CHAR;
+import static org.eclipse.persistence.internal.xr.Util.SXF_QNAME;
 import static org.eclipse.persistence.internal.xr.Util.TEMP_DOC;
 import static org.eclipse.persistence.oxm.XMLConstants.BASE_64_BINARY_QNAME;
 import static org.eclipse.persistence.oxm.XMLConstants.DATE_QNAME;
@@ -361,7 +363,6 @@ public class QueryOperation extends Operation {
      *
      * @see  {@link Operation}
      */
-    @SuppressWarnings("rawtypes")
     @Override
     public Object invoke(XRServiceAdapter xrService, Invocation invocation) {
         DatabaseQuery query = queryHandler.getDatabaseQuery();
@@ -397,6 +398,16 @@ public class QueryOperation extends Operation {
         Object value = xrService.getORSession().getActiveSession().executeQuery(query);
 
         if (value != null) {
+        	// a recent change in core results in an empty vector being returned in cases
+        	// where before we'd expect an int value (typically 1) - need to handle this
+            if (result != null && (result.getType() == INT_QNAME || result.getType().equals(SXF_QNAME))) {
+                if (value instanceof ArrayList && ((ArrayList) value).isEmpty()) {
+                    ((ArrayList) value).add(1);
+                } else  if (value instanceof Vector && ((Vector) value).isEmpty()) {
+                    ((Vector) value).add(1);
+                }
+            }
+        	
             // JPA spec returns an ArrayList<Object[]> for stored procedure queries - will need to unwrap.
             // Note that for legacy deployment XML projects this is not the case.
             if (value instanceof ArrayList) {
@@ -511,7 +522,6 @@ public class QueryOperation extends Operation {
         }
     }
 
-    @SuppressWarnings("rawtypes")
     public Object createSimpleXMLFormat(XRServiceAdapter xrService, Object value) {
         XMLRoot xmlRoot = new XMLRoot();
         SimpleXMLFormat simpleXMLFormat = result.getSimpleXMLFormat();
@@ -539,12 +549,24 @@ public class QueryOperation extends Operation {
             for (Object obj : dsCall.getParameters()) {
                 if (obj instanceof OutputParameterForCallableStatement) {
                     paramFlds.add(((OutputParameterForCallableStatement) obj).getOutputField());
+                } else if (obj instanceof Object[]) {
+                    Object[] objArray = (Object[]) obj;
+                    for (int i = 0; i < objArray.length; i++) {
+                        Object o = objArray[i];
+                        if (o instanceof OutputParameterForCallableStatement) {
+                            paramFlds.add(((OutputParameterForCallableStatement) o).getOutputField());
+                        }
+                    }
                 }
             }
             // now create a record using DatabaseField/value pairs
             DatabaseRecord dr = new DatabaseRecord();
-            for (int i=0; i <  ((ArrayList) value).size(); i++) {
-                dr.add(paramFlds.get(i), ((ArrayList) value).get(i));
+            if (paramFlds.size() > 0) {
+                for (int i=0; i <  ((ArrayList) value).size(); i++) {
+                    dr.add(paramFlds.get(i), ((ArrayList) value).get(i));
+                }
+            } else {
+                dr.add(new DatabaseField(RESULT_STR), ((ArrayList) value).get(0));
             }
             records = new Vector<DatabaseRecord>();
             records.add(dr);

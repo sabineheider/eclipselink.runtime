@@ -139,6 +139,7 @@ public class ExpressionBuilder extends ObjectExpression {
             aliased.setName(alias);
             assignAlias(alias, viewTable);
             aliasedViewTable = aliased;
+            hasBeenAliased = true;
             return initialValue + 1;
         }
         return super.assignTableAliasesStartingAt(initialValue);
@@ -264,10 +265,7 @@ public class ExpressionBuilder extends ObjectExpression {
         if (this.onClause != null) {
             this.onClause = this.onClause.normalize(normalizer);
             if (shouldUseOuterJoin() || (!getSession().getPlatform().shouldPrintInnerJoinInWhereClause())) {
-                normalizer.getStatement().getOuterJoinExpressions().add(this);
-                normalizer.getStatement().getOuterJoinedMappingCriteria().add(null);
-                normalizer.getStatement().getOuterJoinedAdditionalJoinCriteria().add(null);
-                normalizer.getStatement().getDescriptorsForMultitableInheritanceOnly().add(null);
+                normalizer.getStatement().addOuterJoinExpressionsHolders(this, null, null, null);
                 if ((getDescriptor() != null) && (getDescriptor().getHistoryPolicy() != null)) {
                     Expression historyCriteria = getDescriptor().getHistoryPolicy().additionalHistoryExpression(this, this);
                     if (historyCriteria != null) {
@@ -296,22 +294,20 @@ public class ExpressionBuilder extends ObjectExpression {
                 }
             }
 
-            if (isUsingOuterJoinForMultitableInheritance() && getSession().getPlatform().shouldPrintOuterJoinInWhereClause()) {
-                Expression childrenCriteria = getDescriptor().getInheritancePolicy().getChildrenJoinExpression();
-                childrenCriteria = twist(childrenCriteria, this);
-                childrenCriteria.convertToUseOuterJoin();
-                if(criteria == null) {
-                    criteria = childrenCriteria;
+            if (isUsingOuterJoinForMultitableInheritance()) {
+                if (getSession().getPlatform().shouldPrintOuterJoinInWhereClause()) {
+                    Expression childrenCriteria = getDescriptor().getInheritancePolicy().getChildrenJoinExpression();
+                    childrenCriteria = twist(childrenCriteria, this);
+                    childrenCriteria.convertToUseOuterJoin();
+                    if(criteria == null) {
+                        criteria = childrenCriteria;
+                    } else {
+                        criteria = criteria.and(childrenCriteria);
+                    }
                 } else {
-                    criteria = criteria.and(childrenCriteria);
+                    normalizer.getStatement().addOuterJoinExpressionsHolders(null, null, additionalExpressionCriteriaMap(), this.getDescriptor());
+                    // fall through to the main case
                 }
-            }
-            if (isUsingOuterJoinForMultitableInheritance() && (!getSession().getPlatform().shouldPrintOuterJoinInWhereClause())) {
-                normalizer.getStatement().getOuterJoinExpressions().add(null);
-                normalizer.getStatement().getOuterJoinedMappingCriteria().add(null);
-                normalizer.getStatement().getOuterJoinedAdditionalJoinCriteria().add(additionalExpressionCriteriaMap());
-                normalizer.getStatement().getDescriptorsForMultitableInheritanceOnly().add(this.getDescriptor());
-                // fall through to the main case
             }
             normalizer.addAdditionalExpression(criteria);
 
@@ -327,14 +323,14 @@ public class ExpressionBuilder extends ObjectExpression {
         }
 
         ReadQuery query = normalizer.getStatement().getQuery();
-        // Record any class used in a join to invlaidate query results cache.
+        // Record any class used in a join to invalidate query results cache.
         if ((query != null) && query.shouldCacheQueryResults()) {
             if (this.queryClass != null) {
                 query.getQueryResultsCachePolicy().getInvalidationClasses().add(this.queryClass);
             }
         }
 
-        return super.normalize(normalizer);
+        return this;
     }
 
     /**
@@ -457,16 +453,14 @@ public class ExpressionBuilder extends ObjectExpression {
      * Rebuild myself against the base, with the values of parameters supplied by the context
      * expression. This is used for transforming a standalone expression (e.g. the join criteria of a mapping)
      * into part of some larger expression. You normally would not call this directly, instead calling twist
-     * See the comment there for more details"
-     * @param newBase
-     * @param context
-     * @return
+     * See the comment there for more details.
      */
     @Override
     public Expression twistedForBaseAndContext(Expression newBase, Expression context, Expression oldBase) {
-        // TODO: this is wrong, it should only return the newBase if equal to the old base
-        // since twist needs to copy as it twists it needs a map to keep track of new bases
-        return newBase;
+        if (oldBase == null || this == oldBase) {
+            return newBase;            
+        }
+        return this;
     }
 
     /**
@@ -507,9 +501,9 @@ public class ExpressionBuilder extends ObjectExpression {
         // which has a different reference class as the primary builder.
         Class queryClass = getQueryClass();
         if ((queryClass != null) && ((query == null) || (queryClass != query.getReferenceClass()))) {
-            return session.getDescriptor(queryClass);
+           return convertToCastDescriptor( session.getDescriptor(queryClass), session);
         }
-        return rootDescriptor;
+        return convertToCastDescriptor(rootDescriptor, session);//support casting
     }
     
     /**

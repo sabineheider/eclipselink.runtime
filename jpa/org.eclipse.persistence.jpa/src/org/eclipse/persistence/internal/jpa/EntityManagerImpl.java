@@ -66,6 +66,7 @@ import org.eclipse.persistence.jpa.JpaEntityManager;
 import org.eclipse.persistence.logging.SessionLog;
 import org.eclipse.persistence.queries.*;
 import org.eclipse.persistence.sessions.*;
+import org.eclipse.persistence.sessions.UnitOfWork.CommitOrderType;
 import org.eclipse.persistence.sessions.broker.SessionBroker;
 import org.eclipse.persistence.sessions.factories.SessionManager;
 import org.eclipse.persistence.sessions.server.ConnectionPolicy;
@@ -180,7 +181,7 @@ public class EntityManagerImpl implements org.eclipse.persistence.jpa.JpaEntityM
     protected boolean shouldValidateExistence;
 
     /** Allow updates to be ordered by id to avoid possible deadlocks. */
-    protected boolean shouldOrderUpdates;
+    protected org.eclipse.persistence.sessions.UnitOfWork.CommitOrderType commitOrder;
     
     protected boolean commitWithoutPersistRules;
     
@@ -229,9 +230,19 @@ public class EntityManagerImpl implements org.eclipse.persistence.jpa.JpaEntityM
                 }
             }});
             put(EntityManagerProperties.ORDER_UPDATES, new PropertyProcessor() {void process(String name, Object value, EntityManagerImpl em) {
-                em.shouldOrderUpdates = "true".equalsIgnoreCase(getPropertiesHandlerProperty(name, (String)value));
+                if ("true".equalsIgnoreCase(getPropertiesHandlerProperty(name, (String)value))) {
+                    em.commitOrder = CommitOrderType.ID;
+                } else {
+                    em.commitOrder = CommitOrderType.NONE;
+                }
                 if (em.hasActivePersistenceContext()) {
-                    em.extendedPersistenceContext.setShouldOrderUpdates(em.shouldOrderUpdates);
+                    em.extendedPersistenceContext.setCommitOrder(em.commitOrder);
+                }
+            }});
+            put(EntityManagerProperties.PERSISTENCE_CONTEXT_COMMIT_ORDER, new PropertyProcessor() {void process(String name, Object value, EntityManagerImpl em) {
+                em.commitOrder = CommitOrderType.valueOf(getPropertiesHandlerProperty(name, (String)value).toUpperCase());
+                if (em.hasActivePersistenceContext()) {
+                    em.extendedPersistenceContext.setCommitOrder(em.commitOrder);
                 }
             }});
             put(EntityManagerProperties.FLUSH_CLEAR_CACHE, new PropertyProcessor() {void process(String name, Object value, EntityManagerImpl em) {
@@ -387,7 +398,7 @@ public class EntityManagerImpl implements org.eclipse.persistence.jpa.JpaEntityM
         this.referenceMode = factory.getReferenceMode();
         this.flushClearCache = factory.getFlushClearCache();
         this.shouldValidateExistence = factory.shouldValidateExistence();
-        this.shouldOrderUpdates = factory.shouldOrderUpdates();
+        this.commitOrder = factory.getCommitOrder();
         this.isOpen = true;
         this.cacheStoreBypass = false;
         this.syncType = syncType;
@@ -795,6 +806,23 @@ public class EntityManagerImpl implements org.eclipse.persistence.jpa.JpaEntityM
                 throw new IllegalArgumentException(ExceptionLocalization.buildMessage("invalid_pk_class", new Object[] { descriptor.getCMPPolicy().getPKClass(), id.getClass() }));
             }
             primaryKey = policy.createPrimaryKeyFromId(id, session);
+        }
+        
+        // If the LockModeType is PESSIMISTIC*, check the unitofwork cache and return the entity if it has previously been locked
+        // Must avoid using the new JPA 2.0 Enum values directly to allow JPA 1.0 jars to still work.
+        if (lockMode != null && (lockMode.name().equals(ObjectLevelReadQuery.PESSIMISTIC_READ) || lockMode.name().equals(ObjectLevelReadQuery.PESSIMISTIC_WRITE)
+                || lockMode.name().equals(ObjectLevelReadQuery.PESSIMISTIC_FORCE_INCREMENT))) {
+            // PERF: check if the UnitOfWork has pessimistically locked objects to avoid a cache query
+            if (session.isUnitOfWork() && ((UnitOfWorkImpl)session).hasPessimisticLockedObjects()) {
+                ReadObjectQuery query = new ReadObjectQuery();
+                query.setReferenceClass(descriptor.getJavaClass());
+                query.setSelectionId(primaryKey);
+                query.checkCacheOnly();
+                Object cachedEntity = session.executeQuery(query);
+                if (cachedEntity != null && ((UnitOfWorkImpl)session).isPessimisticLocked(cachedEntity)) {
+                    return cachedEntity;
+                }
+            }
         }
 
         // Get the read object query and apply the properties to it.
@@ -1223,7 +1251,10 @@ public class EntityManagerImpl implements org.eclipse.persistence.jpa.JpaEntityM
      * called.
      */
     public AbstractSession getActiveSessionIfExists() {
-        if (hasActivePersistenceContext()) {
+        // When requesting an active session, if there isn't one but we have
+        // table per tenant descriptors, make sure we return one. The 'scrap'
+        // session will not be initialized for table per tenant multitenancy.
+        if (hasActivePersistenceContext() || getAbstractSession().hasTablePerTenantDescriptors()) {
             return (AbstractSession) getActiveSession();
         } else {
             return getAbstractSession();
@@ -1849,6 +1880,12 @@ public class EntityManagerImpl implements org.eclipse.persistence.jpa.JpaEntityM
             // Must avoid using the new JPA 2.0 Enum values directly to allow JPA 1.0 jars to still work.
             if (lockMode.name().equals(ObjectLevelReadQuery.PESSIMISTIC_READ) || lockMode.name().equals(ObjectLevelReadQuery.PESSIMISTIC_WRITE )
                     || lockMode.name().equals(ObjectLevelReadQuery.PESSIMISTIC_FORCE_INCREMENT)) {
+                
+                // return if the entity has previously been pessimistically locked
+                if (((UnitOfWorkImpl)uow).isPessimisticLocked(entity)) {
+                    return;
+                }
+                
                 // Get the read object query and apply the properties to it.
                 ReadObjectQuery query = getReadObjectQuery(entity, properties);
 
@@ -1922,7 +1959,7 @@ public class EntityManagerImpl implements org.eclipse.persistence.jpa.JpaEntityM
             this.extendedPersistenceContext.setDiscoverUnregisteredNewObjectsWithoutPersist(this.commitWithoutPersistRules);
             this.extendedPersistenceContext.setFlushClearCache(this.flushClearCache);
             this.extendedPersistenceContext.setShouldValidateExistence(this.shouldValidateExistence);
-            this.extendedPersistenceContext.setShouldOrderUpdates(this.shouldOrderUpdates);
+            this.extendedPersistenceContext.setCommitOrder(this.commitOrder);
             this.extendedPersistenceContext.setShouldCascadeCloneToJoinedRelationship(true);
             this.extendedPersistenceContext.setShouldStoreByPassCache(this.cacheStoreBypass);
             if (txn != null) {

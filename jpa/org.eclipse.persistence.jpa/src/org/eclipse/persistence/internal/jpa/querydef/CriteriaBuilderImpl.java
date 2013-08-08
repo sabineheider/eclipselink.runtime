@@ -356,19 +356,19 @@ public class CriteriaBuilderImpl implements JpaCriteriaBuilder, Serializable {
             yp = (CompoundExpressionImpl)y;
         }
         
-        
-        if (yp.isPredicate() && yp.getCurrentNode() == null){
-            if (yp.isNegated()){
-                return yp;
+        //bug 413084
+        if (yp.isJunction()){
+            if ( ((PredicateImpl)yp).getJunctionValue()){
+                return xp;//yp is true and so can be ignored/extracted
             }else{
-                return xp;
+                return yp;//yp is false so the statement is false
             }
         }
-        if (xp.isPredicate() && xp.getCurrentNode() == null){
-            if (xp.isNegated()){
-                return xp;
-            }else{
+        if (xp.isJunction()){
+            if (((PredicateImpl)xp).getJunctionValue()){
                 return yp;
+            }else{
+                return xp;
             }
         }
         org.eclipse.persistence.expressions.Expression currentNode = xp.getCurrentNode().and(yp.getCurrentNode());
@@ -400,15 +400,18 @@ public class CriteriaBuilderImpl implements JpaCriteriaBuilder, Serializable {
         }else{
             yp = (CompoundExpressionImpl)y;
         }
-        if (yp.isPredicate() && yp.getCurrentNode() == null){
-            if (yp.isNegated()){
+        //bug 413084
+        if (yp.isJunction()){
+            if (((PredicateImpl)yp).getJunctionValue()){
+                return yp;//yp is true so the statement is true
+            }
+            return xp;//yp is false so can be extracted.
+        }
+        if (xp.isJunction()){
+            if (((PredicateImpl)xp).getJunctionValue()){
                 return xp;
             }
-        }
-        if (xp.isPredicate() && xp.getCurrentNode() == null){
-            if (xp.isNegated()){
-                return yp;
-            }
+            return yp;
         }
         org.eclipse.persistence.expressions.Expression parentNode = xp.getCurrentNode().or(yp.getCurrentNode());
         xp.setParentNode(parentNode);
@@ -2460,10 +2463,10 @@ public class CriteriaBuilderImpl implements JpaCriteriaBuilder, Serializable {
 
     public <X, T, V extends T> Join<X, V> treat(Join<X, T> join, Class<V> type) {
         JoinImpl parentJoin = (JoinImpl)join;
-        Join joinImpl = new JoinImpl<X, V>(parentJoin, this.metamodel.managedType(type), this.metamodel, 
+        JoinImpl joinImpl = new JoinImpl<X, V>(parentJoin, this.metamodel.managedType(type), this.metamodel, 
                 type, parentJoin.currentNode.treat(type), parentJoin.getModel(), parentJoin.getJoinType());
         parentJoin.joins.add(joinImpl);
-        ((FromImpl)joinImpl).isJoin = parentJoin.isJoin;
+        joinImpl.isJoin = parentJoin.isJoin;
         parentJoin.isJoin = false;
         return joinImpl;
     }
@@ -2539,6 +2542,7 @@ public class CriteriaBuilderImpl implements JpaCriteriaBuilder, Serializable {
         newPath.currentNode = newPath.currentNode.treat(type);
         newPath.pathParent = parentPath;
         newPath.javaType = type;
+        newPath.modelArtifact = this.metamodel.managedType(type);
         return newPath;
     }
 

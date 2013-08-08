@@ -14,8 +14,8 @@ package org.eclipse.persistence.oxm.record;
 
 import java.io.CharArrayWriter;
 import java.io.IOException;
+
 import org.eclipse.persistence.exceptions.XMLMarshalException;
-import org.eclipse.persistence.internal.helper.Helper;
 import org.eclipse.persistence.internal.oxm.Constants;
 import org.eclipse.persistence.internal.oxm.NamespaceResolver;
 import org.eclipse.persistence.internal.oxm.XPathFragment;
@@ -52,6 +52,7 @@ public class FormattedWriterRecord extends WriterRecord {
     private int numberOfTabs;
     private boolean complexType;
     private boolean isLastEventText;
+    private final String cr = Constants.cr();
 
     public FormattedWriterRecord() {
         super();
@@ -75,7 +76,7 @@ public class FormattedWriterRecord extends WriterRecord {
     public void startDocument(String encoding, String version) {
         super.startDocument(encoding, version);
         try{
-            writer.write(Helper.cr());
+            writer.write(cr);
         } catch (IOException e) {
             throw XMLMarshalException.marshalException(e);
         }
@@ -86,7 +87,7 @@ public class FormattedWriterRecord extends WriterRecord {
      */
     public void endDocument() {
         try {
-            writer.write(Helper.cr());
+            writer.write(cr);
         } catch (IOException e) {
             throw XMLMarshalException.marshalException(e);
         }
@@ -98,7 +99,7 @@ public class FormattedWriterRecord extends WriterRecord {
     public void writeHeader() {
         try {
             writer.write(getMarshaller().getXmlHeader());
-            writer.write(Helper.cr());
+            writer.write(cr);
         } catch (IOException e) {
             throw XMLMarshalException.marshalException(e);
         }
@@ -115,7 +116,7 @@ public class FormattedWriterRecord extends WriterRecord {
             }
             if (!isLastEventText) {
                 if (numberOfTabs > 0) {
-                    writer.write(Helper.cr());
+                    writer.write(cr);
                 }
                 for (int x = 0; x < numberOfTabs; x++) {
                     writer.write(tab());
@@ -124,6 +125,9 @@ public class FormattedWriterRecord extends WriterRecord {
             isStartElementOpen = true;
             writer.write('<');
             writer.write(getNameForFragment(xPathFragment));
+            if(xPathFragment.isGeneratedPrefix()){
+    		    namespaceDeclaration(xPathFragment.getPrefix(), xPathFragment.getNamespaceURI());
+    	    }
             numberOfTabs++;
             isLastEventText = false;
         } catch (IOException e) {
@@ -141,7 +145,7 @@ public class FormattedWriterRecord extends WriterRecord {
                 writer.write('>');
                 isStartElementOpen = false;
             }
-            writer.write(Helper.cr());
+            writer.write(Constants.cr());
             for (int x = 0; x < numberOfTabs; x++) {
             	writer.write(tab());
             }
@@ -165,7 +169,7 @@ public class FormattedWriterRecord extends WriterRecord {
                 return;
             }
             if (complexType) {
-                writer.write(Helper.cr());
+                writer.write(cr);
                 for (int x = 0; x < numberOfTabs; x++) {
                 	writer.write(tab());
                 }
@@ -261,7 +265,7 @@ public class FormattedWriterRecord extends WriterRecord {
                     writer.write('>');
                 }
                 if (!isLastEventText) {
-                    writer.write(Helper.cr());
+                    writer.write(cr);
                     for (int x = 0; x < numberOfTabs; x++) {
                     	writer.write(tab());
                     }
@@ -292,7 +296,7 @@ public class FormattedWriterRecord extends WriterRecord {
                     return;
                 }
                 if (complexType) {
-                    writer.write(Helper.cr());
+                    writer.write(cr);
                     for (int x = 0; x < numberOfTabs; x++) {
                     	writer.write(tab());
                     }
@@ -323,7 +327,7 @@ public class FormattedWriterRecord extends WriterRecord {
             try {
                 if (isStartElementOpen) {
                     writer.write('>');
-                    writer.write(Helper.cr());
+                    writer.write(cr);
                     isStartElementOpen = false;
                 }
                 writeComment(ch, start, length);

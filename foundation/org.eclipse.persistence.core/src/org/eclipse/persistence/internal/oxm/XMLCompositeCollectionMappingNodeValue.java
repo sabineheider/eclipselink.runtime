@@ -88,7 +88,7 @@ public class XMLCompositeCollectionMappingNodeValue extends XMLRelationshipMappi
         } else {
         	return marshalRecord.emptyCollection(xPathFragment, namespaceResolver, xmlCompositeCollectionMapping.getWrapperNullPolicy() != null);
         }
-        marshalRecord.startCollection(); 
+        
         
         int size =marshalRecord.getCycleDetectionStack().size(); 
         //when writing the collection need to see if any of the objects we are writing are in the parent collection inverse ref
@@ -98,6 +98,7 @@ public class XMLCompositeCollectionMappingNodeValue extends XMLRelationshipMappi
         		return false;
         	}
          }
+        marshalRecord.startCollection(); 
         iterator = cp.iteratorFor(collection);
         while (cp.hasNext(iterator)) {
             Object objectValue = cp.next(iterator, session);
@@ -148,7 +149,7 @@ public class XMLCompositeCollectionMappingNodeValue extends XMLRelationshipMappi
                 UnmarshalKeepAsElementPolicy policy = xmlCompositeCollectionMapping.getKeepAsElementPolicy();
                 if (policy != null && ((xmlDescriptor == null && policy.isKeepUnknownAsElement()) || policy.isKeepAllAsElement())) {
                     if(unmarshalRecord.getTypeQName() != null){
-                        Class theClass = (Class)((XMLConversionManager) unmarshalRecord.getSession().getDatasourcePlatform().getConversionManager()).getDefaultXMLTypes().get(unmarshalRecord.getTypeQName());
+                        Class theClass = unmarshalRecord.getConversionManager().javaType(unmarshalRecord.getTypeQName());
                         if(theClass == null){
                             setupHandlerForKeepAsElementPolicy(unmarshalRecord, xPathFragment, atts);
                             return true;
@@ -210,7 +211,7 @@ public class XMLCompositeCollectionMappingNodeValue extends XMLRelationshipMappi
                               
                if (null != keepAsElementPolicy && (keepAsElementPolicy.isKeepUnknownAsElement() || keepAsElementPolicy.isKeepAllAsElement()) && builder.getNodes().size() > 1) {
                    if(unmarshalRecord.getTypeQName() != null){
-                       Class theClass = (Class)((XMLConversionManager) unmarshalRecord.getSession().getDatasourcePlatform().getConversionManager()).getDefaultXMLTypes().get(unmarshalRecord.getTypeQName());
+                       Class theClass = unmarshalRecord.getConversionManager().javaType(unmarshalRecord.getTypeQName());
                        if(theClass != null){
                            //handle simple text
                            endElementProcessText(unmarshalRecord, xmlCompositeCollectionMapping, xPathFragment, collection);
@@ -300,12 +301,7 @@ public class XMLCompositeCollectionMappingNodeValue extends XMLRelationshipMappi
             marshalRecord.beforeContainmentMarshal(value);
 
             ObjectBuilder objectBuilder = (ObjectBuilder)descriptor.getObjectBuilder();
-            xPathNode.startElement(marshalRecord, xPathFragment, object, session, namespaceResolver, objectBuilder, value);            
 
-            List extraNamespaces = objectBuilder.addExtraNamespacesToNamespaceResolver(descriptor, marshalRecord, session,true, false);
-            writeExtraNamespaces(extraNamespaces, marshalRecord, session);
-
-            marshalRecord.addXsiTypeAndClassIndicatorIfRequired(descriptor, (Descriptor) xmlCompositeCollectionMapping.getReferenceDescriptor(), (Field)xmlCompositeCollectionMapping.getField(), false);
             CoreAttributeGroup group = marshalRecord.getCurrentAttributeGroup();
             CoreAttributeGroup nestedGroup = XMLRecord.DEFAULT_ATTRIBUTE_GROUP;
             CoreAttributeItem item = group.getItem(getMapping().getAttributeName());
@@ -318,6 +314,14 @@ public class XMLCompositeCollectionMappingNodeValue extends XMLRelationshipMappi
                 }
             }
             marshalRecord.pushAttributeGroup(nestedGroup);
+            
+            xPathNode.startElement(marshalRecord, xPathFragment, object, session, namespaceResolver, objectBuilder, value);            
+
+            List extraNamespaces = objectBuilder.addExtraNamespacesToNamespaceResolver(descriptor, marshalRecord, session,true, false);
+            writeExtraNamespaces(extraNamespaces, marshalRecord, session);
+
+            marshalRecord.addXsiTypeAndClassIndicatorIfRequired(descriptor, (Descriptor) xmlCompositeCollectionMapping.getReferenceDescriptor(), (Field)xmlCompositeCollectionMapping.getField(), false);
+
             objectBuilder.buildRow(marshalRecord, value, session, marshaller, xPathFragment);
             marshalRecord.afterContainmentMarshal(object, value);
             marshalRecord.popAttributeGroup();

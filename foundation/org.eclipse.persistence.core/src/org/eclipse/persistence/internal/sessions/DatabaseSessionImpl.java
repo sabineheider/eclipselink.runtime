@@ -50,6 +50,7 @@ import org.eclipse.persistence.platform.server.NoServerPlatform;
 import org.eclipse.persistence.platform.server.ServerPlatformBase;
 import org.eclipse.persistence.queries.AttributeGroup;
 import org.eclipse.persistence.queries.DatabaseQuery;
+import org.eclipse.persistence.queries.ObjectLevelReadQuery;
 import org.eclipse.persistence.queries.QueryResultsCachePolicy;
 import org.eclipse.persistence.queries.ReadQuery;
 
@@ -307,6 +308,7 @@ public class DatabaseSessionImpl extends AbstractSession implements org.eclipse.
     public DatabaseSessionImpl() {
         super();
         this.setServerPlatform(new NoServerPlatform(this));
+        this.shouldOptimizeResultSetAccess = ObjectLevelReadQuery.isResultSetAccessOptimizedQueryDefault;
     }
 
     /**
@@ -333,6 +335,7 @@ public class DatabaseSessionImpl extends AbstractSession implements org.eclipse.
     public DatabaseSessionImpl(org.eclipse.persistence.sessions.Project project) {
         super(project);
         this.setServerPlatform(new NoServerPlatform(this));
+        this.shouldOptimizeResultSetAccess = ObjectLevelReadQuery.isResultSetAccessOptimizedQueryDefault;
     }
 
     /**

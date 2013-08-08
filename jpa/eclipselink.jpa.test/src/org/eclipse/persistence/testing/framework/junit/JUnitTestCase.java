@@ -100,6 +100,12 @@ public abstract class JUnitTestCase extends TestCase {
     /** Allow OSGi specific behavior. */
     public static boolean isOSGi = false;
     
+    /** Indicates whether SOP should be used */
+    public static Boolean usesSOP;
+
+    /** Indicates whether SOP should be recoverable. Ignored unless useSOP is true */
+    public static Boolean isSOPRecoverable;
+    
     /**
      * This is a hack to enable weaving in Spring tests.
      * The Spring agent does not load persistence units in premain
@@ -253,6 +259,26 @@ public abstract class JUnitTestCase extends TestCase {
      */
     public boolean isHermesParser() {
         return getDatabaseSession().getQueryBuilder().getClass().getName().indexOf("Hermes") != -1;
+    }
+    
+    /**
+     * Indicates whether SOP should be used.
+     */
+    public static boolean usesSOP() {
+    	if (usesSOP == null) {
+    		usesSOP = Boolean.valueOf(System.getProperty("sop"));
+    	}
+		return usesSOP;
+    }
+    
+    /**
+     * Indicates whether SOP should be recoverable. Ignored unless useSOP is true.
+     */
+    public static boolean isSOPRecoverable() {
+    	if (isSOPRecoverable == null) {
+    		isSOPRecoverable = Boolean.valueOf(System.getProperty("sop.recoverable"));
+    	}
+		return isSOPRecoverable;
     }
     
     /**
@@ -488,6 +514,7 @@ public abstract class JUnitTestCase extends TestCase {
     }
     
     public static EntityManagerFactory getEntityManagerFactory(String persistenceUnitName, Map properties, List<ClassDescriptor> descriptors) {
+        //properties.put("eclipselink.tuning", "ExaLogic");
         if (isOnServer()) {
             return getServerPlatform().getEntityManagerFactory(persistenceUnitName);
         } else {
@@ -733,11 +760,19 @@ public abstract class JUnitTestCase extends TestCase {
         AbstractSession dbs = getDatabaseSession(persistenceUnit); 
         Object readObject = dbs.readObject(writtenObject);
         if (!dbs.compareObjects(readObject, writtenObject)) {
+            int level = dbs.getLogLevel();
+            dbs.setLogLevel(SessionLog.FINEST);
+            dbs.compareObjects(readObject, writtenObject);
+            dbs.setLogLevel(level);
             fail("Object from cache: " + readObject + " does not match object that was written: " + writtenObject + ". See log (on finest) for what did not match.");
         }
         dbs.getIdentityMapAccessor().initializeAllIdentityMaps();
         readObject = dbs.readObject(writtenObject);
         if (!dbs.compareObjects(readObject, writtenObject)) {
+            int level = dbs.getLogLevel();
+            dbs.setLogLevel(SessionLog.FINEST);
+            dbs.compareObjects(readObject, writtenObject);
+            dbs.setLogLevel(level);
             fail("Object from database: " + readObject + " does not match object that was written: " + writtenObject + ". See log (on finest) for what did not match.");
         }
     }

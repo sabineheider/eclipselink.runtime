@@ -23,14 +23,13 @@ import java.util.Map.Entry;
 import java.util.Set;
 
 import org.eclipse.persistence.exceptions.XMLMarshalException;
-import org.eclipse.persistence.internal.helper.Helper;
+import org.eclipse.persistence.internal.oxm.CharacterEscapeHandler;
 import org.eclipse.persistence.internal.oxm.Constants;
 import org.eclipse.persistence.internal.oxm.NamespaceResolver;
 import org.eclipse.persistence.internal.oxm.XMLMarshaller;
 import org.eclipse.persistence.internal.oxm.XPathFragment;
 import org.eclipse.persistence.internal.oxm.record.ExtendedContentHandler;
 import org.eclipse.persistence.internal.oxm.record.XMLFragmentReader;
-import org.eclipse.persistence.oxm.CharacterEscapeHandler;
 import org.w3c.dom.Attr;
 import org.w3c.dom.Node;
 import org.xml.sax.Attributes;
@@ -129,6 +128,9 @@ public class WriterRecord extends MarshalRecord<XMLMarshaller> {
             isStartElementOpen = true;
             writer.write('<');
             writer.write(getNameForFragment(xPathFragment));
+            if(xPathFragment.isGeneratedPrefix()){
+    		    namespaceDeclaration(xPathFragment.getPrefix(), xPathFragment.getNamespaceURI());
+    	    }
         } catch (IOException e) {
             throw XMLMarshalException.marshalException(e);
         }
@@ -313,7 +315,6 @@ public class WriterRecord extends MarshalRecord<XMLMarshaller> {
             if (getNamespaceResolver() != null) {
                 resolverPfx = this.getNamespaceResolver().resolveNamespaceURI(attr.getNamespaceURI());
             } 
-            String namespaceURI = attr.getNamespaceURI();
             // If the namespace resolver contains a prefix for the attribute's URI,
             // use it instead of what is set on the attribute
             if (resolverPfx != null) {
@@ -531,6 +532,15 @@ public class WriterRecord extends MarshalRecord<XMLMarshaller> {
     public void setMarshaller(XMLMarshaller marshaller) {
         super.setMarshaller(marshaller);
         encoder = Charset.forName(marshaller.getEncoding()).newEncoder();
+    }
+
+    @Override
+    public void flush() {
+        try {
+            writer.flush();
+        } catch(IOException e) {
+            throw XMLMarshalException.marshalException(e);
+        }
     }
 
 }
