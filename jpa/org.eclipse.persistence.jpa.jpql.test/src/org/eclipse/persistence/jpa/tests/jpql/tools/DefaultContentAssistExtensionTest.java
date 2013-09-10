@@ -14,17 +14,28 @@
 package org.eclipse.persistence.jpa.tests.jpql.tools;
 
 import java.util.Collections;
+import java.util.List;
 import org.eclipse.persistence.jpa.jpql.tools.ContentAssistExtension;
 import org.eclipse.persistence.jpa.jpql.tools.ContentAssistProposals.ClassType;
+import org.eclipse.persistence.jpa.tests.jpql.UniqueSignature;
 
 /**
  * Unit-test for {@link ContentAssistExtension} when the JPQL grammar is based on the JPA spec.
  *
- * @version 2.5
+ * @version 2.5.1
  * @since 2.5
  * @author Pascal Filion
  */
+@UniqueSignature
 public final class DefaultContentAssistExtensionTest extends AbstractContentAssistExtensionTest {
+
+	/**
+	 * {@inheritDoc}
+	 */
+	@Override
+	protected Class<?> acceptableType(String identifier) {
+		return defaultAcceptableType(identifier);
+	}
 
 	/**
 	 * {@inheritDoc}
@@ -45,5 +56,37 @@ public final class DefaultContentAssistExtensionTest extends AbstractContentAssi
 				return Collections.emptyList();
 			}
 		};
+	}
+
+	/**
+	 * {@inheritDoc}
+	 */
+	@Override
+	protected List<String> classNames() {
+		return Collections.emptyList();
+	}
+
+	/**
+	 * {@inheritDoc}
+	 */
+	@Override
+	protected List<String> columnNames(String tableName) {
+		return Collections.emptyList();
+	}
+
+	/**
+	 * {@inheritDoc}
+	 */
+	@Override
+	protected List<String> enumTypes() {
+		return Collections.emptyList();
+	}
+
+	/**
+	 * {@inheritDoc}
+	 */
+	@Override
+	protected List<String> tableNames() {
+		return Collections.emptyList();
 	}
 }

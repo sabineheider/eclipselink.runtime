@@ -38,6 +38,7 @@
         <class>org.eclipse.persistence.testing.models.jpa21.advanced.converters.LevelConverter</class>
         <class>org.eclipse.persistence.testing.models.jpa21.advanced.converters.LongToStringConverter</class>
         <class>org.eclipse.persistence.testing.models.jpa21.advanced.converters.RunningStatusConverter</class>
+        <class>org.eclipse.persistence.testing.models.jpa21.advanced.converters.TagConverter</class>
         <class>org.eclipse.persistence.testing.models.jpa21.advanced.converters.TimeConverter</class>
         <class>org.eclipse.persistence.testing.models.jpa21.advanced.converters.ResponsibilityConverter</class>
         
@@ -70,6 +71,7 @@
         <class>org.eclipse.persistence.testing.models.jpa21.advanced.ddl.Endorser</class>
         <class>org.eclipse.persistence.testing.models.jpa21.advanced.ddl.Athlete</class>
         <class>org.eclipse.persistence.testing.models.jpa21.advanced.ddl.Race</class>
+        <class>org.eclipse.persistence.testing.models.jpa21.advanced.ddl.Coach</class>
         <class>org.eclipse.persistence.testing.models.jpa21.advanced.converters.AccomplishmentConverter</class>
         <class>org.eclipse.persistence.testing.models.jpa21.advanced.converters.AgeConverter</class>
         <class>org.eclipse.persistence.testing.models.jpa21.advanced.converters.DateConverter</class>

@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2012 Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, 2013 Oracle and/or its affiliates. All rights reserved.
  * This program and the accompanying materials are made available under the 
  * terms of the Eclipse Public License v1.0 and Eclipse Distribution License v. 1.0 
  * which accompanies this distribution. 
@@ -14,6 +14,7 @@ package org.eclipse.persistence.internal.weaving;
 
 import java.util.List;
 
+import org.eclipse.persistence.internal.jpa.rs.metadata.model.ItemLinks;
 import org.eclipse.persistence.internal.jpa.rs.metadata.model.Link;
 
 /**
@@ -23,7 +24,14 @@ import org.eclipse.persistence.internal.jpa.rs.metadata.model.Link;
  */
 public interface PersistenceWeavedRest {
     public List<RelationshipInfo> _persistence_getRelationships();
+
     public void _persistence_setRelationships(List<RelationshipInfo> relationships);
+
     Link _persistence_getHref();
+
     void _persistence_setHref(Link href);
+
+    public ItemLinks _persistence_getLinks();
+
+    public void _persistence_setLinks(ItemLinks links);
 }

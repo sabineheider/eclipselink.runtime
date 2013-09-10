@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 1998, 2012 Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1998, 2013 Oracle and/or its affiliates. All rights reserved.
  * This program and the accompanying materials are made available under the 
  * terms of the Eclipse Public License v1.0 and Eclipse Distribution License v. 1.0 
  * which accompanies this distribution. 
@@ -18,6 +18,9 @@ import static javax.persistence.GenerationType.TABLE;
 import java.util.ArrayList;
 import java.util.List;
 
+import javax.persistence.CollectionTable;
+import javax.persistence.Column;
+import javax.persistence.ElementCollection;
 import javax.persistence.Entity;
 import javax.persistence.GeneratedValue;
 import javax.persistence.Id;
@@ -53,7 +56,15 @@ public class ContractedPersonel {
         inverseJoinColumns=@JoinColumn(name="CLUB_ID", referencedColumnName="ID")
     )
     private List<SocialClub> socialClubs = new ArrayList<SocialClub>();
-    
+
+    @ElementCollection
+    @CollectionTable(
+        name="TPC_NICKNAMES",
+        joinColumns=@JoinColumn(name="PERSONEL_ID", referencedColumnName="ID")
+    )
+    @Column(name="NICKNAME")
+    private List<String> nicknames = new ArrayList<String>();
+
     @Version
     private Integer version;
     
@@ -87,6 +98,14 @@ public class ContractedPersonel {
     
     public void setVersion(Integer version) {
         this.version = version;
+    }
+    
+    public List<String> getNicknames() {
+        return nicknames;
+    }
+
+    public void setNicknames(List<String> nicknames) {
+        this.nicknames = nicknames;
     }
 }
 

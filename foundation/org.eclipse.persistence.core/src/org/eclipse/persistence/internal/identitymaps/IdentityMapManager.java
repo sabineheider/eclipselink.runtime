@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 1998, 2012 Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1998, 2013 Oracle and/or its affiliates. All rights reserved.
  * Some parts Copyright (c) 2010 Mark Wolochuk
  * This program and the accompanying materials are made available under the 
  * terms of the Eclipse Public License v1.0 and Eclipse Distribution License v. 1.0 
@@ -573,6 +573,19 @@ public class IdentityMapManager implements Serializable, Cloneable {
      */
     public Map<Object, Object> getAllFromIdentityMapWithEntityPK(Object[] pkList, ClassDescriptor descriptor, AbstractSession session){
         return getIdentityMap(descriptor).getAllFromIdentityMapWithEntityPK(pkList, descriptor, session);
+    }
+
+    /**
+     * ADVANCED:
+     * Using a list of Entity PK this method will attempt to bulk load the entire list from the cache.
+     * In certain circumstances this can have large performance improvements over loading each item individually.
+     * @param pkList List of Entity PKs to extract from the cache
+     * @param ClassDescriptor Descriptor type to be retrieved.
+     * @return Map of Entity PKs associated to the Entities that were retrieved
+     * @throws QueryException
+     */
+    public Map<Object, CacheKey> getAllCacheKeysFromIdentityMapWithEntityPK(Object[] pkList, ClassDescriptor descriptor, AbstractSession session){
+        return getIdentityMap(descriptor).getAllCacheKeysFromIdentityMapWithEntityPK(pkList, descriptor, session);
     }
 
     /**

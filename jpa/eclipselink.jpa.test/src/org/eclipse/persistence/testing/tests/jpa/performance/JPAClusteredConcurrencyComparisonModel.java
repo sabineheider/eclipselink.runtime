@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 1998, 2012 Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1998, 2013 Oracle and/or its affiliates. All rights reserved.
  * This program and the accompanying materials are made available under the 
  * terms of the Eclipse Public License v1.0 and Eclipse Distribution License v. 1.0 
  * which accompanies this distribution. 
@@ -27,10 +27,10 @@ public class JPAClusteredConcurrencyComparisonModel extends TestModel {
     public void addTests() {
         addTest(buildClusterValidationTest());
         addTest(buildComputeLagTest());
-        //addTest(new JPAClusteredEJBConcurrencyComparisonTest());
-        //addTest(new JPAClusteredEJBConcurrencyComparisonTest(0.5));
-        //addTest(new JPAClusteredEJBConcurrencyComparisonTest(0.1));
-        //addTest(new JPAClusteredEJBConcurrencyComparisonTest(0.0));
+        addTest(new JPAClusteredEJBConcurrencyComparisonTest());
+        addTest(new JPAClusteredEJBConcurrencyComparisonTest(0.5));
+        addTest(new JPAClusteredEJBConcurrencyComparisonTest(0.1));
+        addTest(new JPAClusteredEJBConcurrencyComparisonTest(0.0));
     }
     
     /**
@@ -57,19 +57,19 @@ public class JPAClusteredConcurrencyComparisonModel extends TestModel {
                 EmployeeService service = test.nextEmployeeService();
                 Employee employee = (Employee)service.findAll().get(0);
                 
-                for (int index = 0; index < 5; index++) {
+                for (int index = 0; index < 15; index++) {
                     service = test.nextEmployeeService();
                     employee = service.findById(employee.getId());
                 }
 
-                for (int index = 0; index < 5; index++) {
+                for (int index = 0; index < 15; index++) {
                     service = test.nextEmployeeService();
                     int random = (int)(Math.random() * 1000000);
                     employee = service.findById(employee.getId());
                     employee.setLastName(String.valueOf(random));
                     service.update(employee);
                     try {
-                        Thread.sleep(2000);
+                        Thread.sleep(5000);
                     }
                     catch (Exception ignore) {}
                 }
@@ -99,7 +99,7 @@ public class JPAClusteredConcurrencyComparisonModel extends TestModel {
                 boolean success = false;
                 boolean failed = false;
                 while (!success && (sleep < sleeps.length)) {
-                    for (int index = 0; index < 10; index++) {
+                    for (int index = 0; index < 15; index++) {
                         service = test.nextEmployeeService();
                         int random = (int)(Math.random() * 1000000);
                         employee = service.findById(employee.getId());

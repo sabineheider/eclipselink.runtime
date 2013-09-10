@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2012 Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, 2013 Oracle and/or its affiliates. All rights reserved.
  * This program and the accompanying materials are made available under the
  * terms of the Eclipse Public License v1.0 and Eclipse Distribution License v. 1.0
  * which accompanies this distribution.
@@ -70,6 +70,7 @@ import org.eclipse.persistence.internal.queries.ContainerPolicy;
 import org.eclipse.persistence.jaxb.JAXBContextFactory;
 import org.eclipse.persistence.jaxb.MarshallerProperties;
 import org.eclipse.persistence.jaxb.UnmarshallerProperties;
+import org.eclipse.persistence.oxm.JSONWithPadding;
 
 /**
  * <p>This is an implementation of <i>MessageBodyReader</i>/<i>MessageBodyWriter
@@ -194,11 +195,13 @@ import org.eclipse.persistence.jaxb.UnmarshallerProperties;
  * </pre>
  * @since 2.4
  */
-@Produces({MediaType.APPLICATION_JSON, MediaType.WILDCARD})
+@Produces({MediaType.APPLICATION_JSON, MediaType.WILDCARD, "application/x-javascript"})
 @Consumes({MediaType.APPLICATION_JSON, MediaType.WILDCARD})
 public class MOXyJsonProvider implements MessageBodyReader<Object>, MessageBodyWriter<Object>{
  
+    private static final String APPLICATION_XJAVASCRIPT = "application/x-javascript";
     private static final String CHARSET = "charset";
+    private static final QName EMPTY_STRING_QNAME = new QName("");
     private static final String JSON = "json";
     private static final String PLUS_JSON = "+json";
 
@@ -213,6 +216,7 @@ public class MOXyJsonProvider implements MessageBodyReader<Object>, MessageBodyW
     private Map<String, String> namespacePrefixMapper;
     private char namespaceSeperator = Constants.DOT;
     private String valueWrapper;
+    private boolean wrapperAsArrayName = false;
 
     /**
      * The value that will be prepended to all keys that are mapped to an XML
@@ -234,6 +238,9 @@ public class MOXyJsonProvider implements MessageBodyReader<Object>, MessageBodyW
      * @return The corresponding domain class.
      */
     protected Class<?> getDomainClass(Type genericType) {
+        if(null == genericType) {
+            return Object.class;
+        }
         if(genericType instanceof Class && genericType != JAXBElement.class) {
             Class<?> clazz = (Class<?>) genericType;
             if(clazz.isArray()) {
@@ -288,7 +295,10 @@ public class MOXyJsonProvider implements MessageBodyReader<Object>, MessageBodyW
         if(null != jaxbContext) {
             return jaxbContext;
         }
-        ContextResolver<JAXBContext> resolver = providers.getContextResolver(JAXBContext.class, mediaType);
+        ContextResolver<JAXBContext> resolver = null;
+        if(null != providers) {
+            resolver = providers.getContextResolver(JAXBContext.class, mediaType);
+        }
         if(null == resolver || null == (jaxbContext = resolver.getContext(domainClass))) {
             jaxbContext = JAXBContextFactory.createContext(new Class[] {domainClass}, null);
             contextCache.put(domainClass, jaxbContext);
@@ -299,6 +309,19 @@ public class MOXyJsonProvider implements MessageBodyReader<Object>, MessageBodyW
             jaxbContext = JAXBContextFactory.createContext(new Class[] {domainClass}, null);
             contextCache.put(domainClass, jaxbContext);
             return jaxbContext;
+        }
+    }
+
+    private JAXBContext getJAXBContext(Class<?> type, Type genericType, Annotation[] annotations, MediaType mediaType) {
+        if(null == genericType) {
+            genericType = type;
+        }
+
+        try {
+            Class<?> domainClass = getDomainClass(genericType);
+            return getJAXBContext(domainClass, annotations, mediaType, null);
+        } catch(JAXBException e) {
+            return null;
         }
     }
 
@@ -372,12 +395,13 @@ public class MOXyJsonProvider implements MessageBodyReader<Object>, MessageBodyW
      * @return true indicating that <i>MOXyJsonProvider</i> will
      * be used for the JSON binding if the media type is of the following 
      * patterns *&#47;json or *&#47;*+json, and the type is not assignable from 
-     * any of the the following:
+     * any of (or a Collection or JAXBElement of) the following:
      * <ul>
      * <li>byte[]</li>
      * <li>java.io.File</li>
      * <li>java.io.InputStream</li>
      * <li>java.io.Reader</li>
+     * <li>java.lang.Object</li>
      * <li>java.lang.String</li>
      * <li>javax.activation.DataSource</li>
      * </ul>
@@ -395,26 +419,83 @@ public class MOXyJsonProvider implements MessageBodyReader<Object>, MessageBodyW
             return false;
         } else if(Reader.class.isAssignableFrom(type)) {
             return false;
+        } else if(Object.class == type) {
+            return false;
+        } else if(JAXBElement.class.isAssignableFrom(type)) {
+            Class domainClass = getDomainClass(genericType);
+            return isReadable(domainClass, null, annotations, mediaType) || String.class == domainClass;
+        } else if(Collection.class.isAssignableFrom(type)) {
+            Class domainClass = getDomainClass(genericType);
+            return isReadable(domainClass, null, annotations, mediaType) || String.class == domainClass;
         } else {
-            return true;
+            return null != getJAXBContext(type, genericType, annotations, mediaType);
         }
     }
- 
+
+    /**
+     * If true the grouping element will be used as the JSON key.
+     * 
+     * <p><b>Example</b></p>
+     * <p>Given the following class:</p>
+     * <pre>
+     * &#64;XmlAccessorType(XmlAccessType.FIELD)
+     * public class Customer {
+     * 
+     *     &#64;XmlElementWrapper(name="phone-numbers")
+     *     &#64;XmlElement(name="phone-number")
+     *     private List<PhoneNumber> phoneNumbers;
+     * 
+     * }
+     * </pre>
+     * <p>If the property is set to false (the default) the JSON output will be:</p>
+     * <pre>
+     * {
+     *     "phone-numbers" : {
+     *         "phone-number" : [ {
+     *             ...
+     *         }, {
+     *             ...
+     *         }]
+     *     }
+     * }
+     * </pre>
+     * <p>And if the property is set to true, then the JSON output will be:</p>
+     * <pre>
+     * {
+     *     "phone-numbers" : [ {
+     *         ...
+     *     }, {
+     *         ...
+     *     }]
+     * }
+     * </pre>
+     * @since 2.4.2
+     * @see org.eclipse.persistence.jaxb.JAXBContextProperties.JSON_WRAPPER_AS_ARRAY_NAME
+     * @see org.eclipse.persistence.jaxb.MarshallerProperties.JSON_WRAPPER_AS_ARRAY_NAME
+     * @see org.eclipse.persistence.jaxb.UnmarshallerProperties.JSON_WRAPPER_AS_ARRAY_NAME
+     */
+    public boolean isWrapperAsArrayName() {
+        return wrapperAsArrayName;
+    }
 
     /**
      * @return true indicating that <i>MOXyJsonProvider</i> will
      * be used for the JSON binding if the media type is of the following 
      * patterns *&#47;json or *&#47;*+json, and the type is not assignable from 
-     * any of the the following:
+     * any of (or a Collection or JAXBElement of) the the following:
      * <ul>
      * <li>byte[]</li>
      * <li>java.io.File</li>
+     * <li>java.lang.Object</li>
      * <li>java.lang.String</li>
      * <li>javax.activation.DataSource</li>
      * <li>javax.ws.rs.core.StreamingOutput</li>
      * </ul>
      */
     public boolean isWriteable(Class<?> type, Type genericType, Annotation[] annotations, MediaType mediaType) {
+        if(type == JSONWithPadding.class && APPLICATION_XJAVASCRIPT.equals(mediaType.toString())) {
+            return true;
+        }
         if(!supportsMediaType(mediaType)) {
             return false;
         } else if(CoreClassConstants.APBYTE == type || CoreClassConstants.STRING == type) {
@@ -425,8 +506,16 @@ public class MOXyJsonProvider implements MessageBodyReader<Object>, MessageBodyW
             return false;
         } else if(StreamingOutput.class.isAssignableFrom(type)) {
             return false;
-        } else {
-            return true;
+        } else if(Object.class == type) {
+            return false;
+        } else if(JAXBElement.class.isAssignableFrom(type)) {
+            Class domainClass = getDomainClass(genericType);
+            return isWriteable(domainClass, null, annotations, mediaType) || domainClass == String.class;
+        } else if(Collection.class.isAssignableFrom(type)) {
+            Class domainClass = getDomainClass(genericType);
+            return isWriteable(domainClass, null, annotations, mediaType) || domainClass == String.class;
+         } else {
+             return null != getJAXBContext(type, genericType, annotations, mediaType);
         }
     }
 
@@ -489,11 +578,15 @@ public class MOXyJsonProvider implements MessageBodyReader<Object>, MessageBodyW
             if(null != valueWrapper) {
                 unmarshaller.setProperty(UnmarshallerProperties.JSON_VALUE_WRAPPER, valueWrapper);
             }
+            unmarshaller.setProperty(UnmarshallerProperties.JSON_WRAPPER_AS_ARRAY_NAME, wrapperAsArrayName);
             preReadFrom(type, genericType, annotations, mediaType, httpHeaders, unmarshaller);
 
             StreamSource jsonSource;
-            Map<String, String> mediaTypeParameters = mediaType.getParameters();
-            if(mediaTypeParameters.containsKey(CHARSET)) {
+            Map<String, String> mediaTypeParameters = null;
+            if(null != mediaType) {
+                mediaTypeParameters = mediaType.getParameters();
+            }
+            if(null != mediaTypeParameters && mediaTypeParameters.containsKey(CHARSET)) {
                 String charSet = mediaTypeParameters.get(CHARSET);
                 Reader entityReader = new InputStreamReader(entityStream, charSet);
                 jsonSource = new StreamSource(entityReader);
@@ -508,19 +601,18 @@ public class MOXyJsonProvider implements MessageBodyReader<Object>, MessageBodyW
                 Object value = jaxbElement.getValue();
                 if(value instanceof ArrayList) {
                     if(type.isArray()) {
-                        ArrayList<JAXBElement> arrayList = (ArrayList<JAXBElement>) value;
+                        ArrayList<Object> arrayList = (ArrayList<Object>) value;
                         int arrayListSize = arrayList.size();
+                        boolean wrapItemInJAXBElement = wrapItemInJAXBElement(genericType);
                         Object array;
-                        if(genericType instanceof GenericArrayType) {
+                        if(wrapItemInJAXBElement) {
                             array = Array.newInstance(JAXBElement.class, arrayListSize);
-                            for(int x=0; x<arrayListSize; x++) {
-                                Array.set(array, x, arrayList.get(x));
-                            }
                         } else {
                             array = Array.newInstance(domainClass, arrayListSize);
-                            for(int x=0; x<arrayListSize; x++) {
-                                Array.set(array, x, arrayList.get(x).getValue());
-                            }
+                        }
+                        for(int x=0; x<arrayListSize; x++) {
+                            Object element = handleJAXBElement(arrayList.get(x), domainClass, wrapItemInJAXBElement);
+                            Array.set(array, x, element);
                         }
                         return array;
                     } else {
@@ -537,23 +629,10 @@ public class MOXyJsonProvider implements MessageBodyReader<Object>, MessageBodyW
                             containerPolicy = new CollectionContainerPolicy(type);
                         }
                         Object container = containerPolicy.containerInstance();
-                        boolean wrapItemInJAXBElement = false;
-                        if(genericType instanceof ParameterizedType) {
-                            Type actualType = ((ParameterizedType) genericType).getActualTypeArguments()[0];
-                            if(actualType instanceof ParameterizedType) {
-                                Type rawType = ((ParameterizedType) actualType).getRawType();
-                                wrapItemInJAXBElement = rawType == JAXBElement.class;
-                            }
-                        }
+                        boolean wrapItemInJAXBElement = wrapItemInJAXBElement(genericType);
                         for(Object element : (Collection<Object>) value) {
-                            if(wrapItemInJAXBElement) {
-                                if(!(element instanceof JAXBElement)) {
-                                    element = new JAXBElement(new QName(""), domainClass, element);
-                                } 
-                                containerPolicy.addInto(element, container, null);
-                            } else {
-                                containerPolicy.addInto(JAXBIntrospector.getValue(element), container, null);
-                            }
+                            element = handleJAXBElement(element, domainClass, wrapItemInJAXBElement);
+                            containerPolicy.addInto(element, container, null);
                         }
                         return container;
                     }
@@ -566,6 +645,32 @@ public class MOXyJsonProvider implements MessageBodyReader<Object>, MessageBodyW
             throw new WebApplicationException(builder.build());
         } catch(JAXBException jaxbException) {
             throw new WebApplicationException(jaxbException);
+        }
+    }
+
+    private boolean wrapItemInJAXBElement(Type genericType) {
+        if(genericType == JAXBElement.class) {
+            return true;
+        } else if(genericType instanceof GenericArrayType) {
+            return wrapItemInJAXBElement(((GenericArrayType) genericType).getGenericComponentType());
+        } else if(genericType instanceof ParameterizedType) {
+            ParameterizedType parameterizedType = (ParameterizedType) genericType;
+            Type actualType = parameterizedType.getActualTypeArguments()[0];
+            return wrapItemInJAXBElement(parameterizedType.getOwnerType()) || wrapItemInJAXBElement(parameterizedType.getRawType()) || wrapItemInJAXBElement(actualType);
+        } else {
+            return false;
+        }
+    }
+
+    private Object handleJAXBElement(Object element, Class domainClass, boolean wrapItemInJAXBElement) {
+        if(wrapItemInJAXBElement) {
+            if(element instanceof JAXBElement) {
+                return element;
+            } else {
+                return new JAXBElement(EMPTY_STRING_QNAME, domainClass, element);
+            }
+        } else {
+            return JAXBIntrospector.getValue(element);
         }
     }
 
@@ -633,6 +738,52 @@ public class MOXyJsonProvider implements MessageBodyReader<Object>, MessageBodyW
     }
 
     /**
+     * If true the grouping element will be used as the JSON key.
+     * 
+     * <p><b>Example</b></p>
+     * <p>Given the following class:</p>
+     * <pre>
+     * &#64;XmlAccessorType(XmlAccessType.FIELD)
+     * public class Customer {
+     * 
+     *     &#64;XmlElementWrapper(name="phone-numbers")
+     *     &#64;XmlElement(name="phone-number")
+     *     private List<PhoneNumber> phoneNumbers;
+     * 
+     * }
+     * </pre>
+     * <p>If the property is set to false (the default) the JSON output will be:</p>
+     * <pre>
+     * {
+     *     "phone-numbers" : {
+     *         "phone-number" : [ {
+     *             ...
+     *         }, {
+     *             ...
+     *         }]
+     *     }
+     * }
+     * </pre>
+     * <p>And if the property is set to true, then the JSON output will be:</p>
+     * <pre>
+     * {
+     *     "phone-numbers" : [ {
+     *         ...
+     *     }, {
+     *         ...
+     *     }]
+     * }
+     * </pre>
+     * @since 2.4.2
+     * @see org.eclipse.persistence.jaxb.JAXBContextProperties.JSON_WRAPPER_AS_ARRAY_NAME
+     * @see org.eclipse.persistence.jaxb.MarshallerProperties.JSON_WRAPPER_AS_ARRAY_NAME
+     * @see org.eclipse.persistence.jaxb.UnmarshallerProperties.JSON_WRAPPER_AS_ARRAY_NAME
+     */
+    public void setWrapperAsArrayName(boolean wrapperAsArrayName) {
+        this.wrapperAsArrayName = wrapperAsArrayName;
+    }
+
+    /**
      * Specify the key that will correspond to the property mapped with
      * @XmlValue.  This key will only be used if there are other mapped
      * properties.
@@ -673,10 +824,14 @@ public class MOXyJsonProvider implements MessageBodyReader<Object>, MessageBodyW
             if(null != valueWrapper) {
                 marshaller.setProperty(MarshallerProperties.JSON_VALUE_WRAPPER, valueWrapper);
             }
+            marshaller.setProperty(MarshallerProperties.JSON_WRAPPER_AS_ARRAY_NAME, wrapperAsArrayName);
             marshaller.setProperty(MarshallerProperties.NAMESPACE_PREFIX_MAPPER, namespacePrefixMapper);
 
-            Map<String, String> mediaTypeParameters = mediaType.getParameters();
-            if(mediaTypeParameters.containsKey(CHARSET)) {
+            Map<String, String> mediaTypeParameters = null;
+            if(null != mediaType) {
+                mediaTypeParameters = mediaType.getParameters();
+            }
+            if(null != mediaTypeParameters && mediaTypeParameters.containsKey(CHARSET)) {
                 String charSet = mediaTypeParameters.get(CHARSET);
                 marshaller.setProperty(Marshaller.JAXB_ENCODING, charSet);
             }

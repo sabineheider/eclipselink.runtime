@@ -14,9 +14,12 @@
 package org.eclipse.persistence.jpa.tests.jpql.tools;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import org.eclipse.persistence.jpa.jpql.EclipseLinkVersion;
 import org.eclipse.persistence.jpa.jpql.parser.EclipseLinkJPQLGrammar2_4;
+import org.eclipse.persistence.jpa.jpql.utility.CollectionTools;
+import org.eclipse.persistence.jpa.tests.jpql.EclipseLinkVersionTools;
 import org.junit.Test;
 import static org.eclipse.persistence.jpa.jpql.parser.Expression.*;
 
@@ -24,7 +27,7 @@ import static org.eclipse.persistence.jpa.jpql.parser.Expression.*;
  * This unit-test tests the JPQL content assist at various position within the JPQL query and with
  * complete and incomplete queries and make sure the EclipseLink additional support works correctly.
  *
- * @version 2.5
+ * @version 2.5.1
  * @since 2.5
  * @author Pascal Filion
  */
@@ -35,19 +38,170 @@ public final class EclipseLinkContentAssistTest2_5 extends AbstractContentAssist
 	 * {@inheritDoc}
 	 */
 	@Override
-	protected void addClauseIdentifiers(String afterIdentifier,
-	                                    String beforeIdentifier,
-	                                    List<String> proposals) {
+	protected List<String> classNames() {
+		return Collections.emptyList();
+	}
 
-		super.addClauseIdentifiers(afterIdentifier, beforeIdentifier, proposals);
+	/**
+	 * {@inheritDoc}
+	 */
+	@Override
+	protected List<String> clauses(String afterIdentifier, String beforeIdentifier, boolean subquery) {
 
-		if (afterIdentifier != SELECT &&
-		    beforeIdentifier == null) {
+		List<String> proposals = super.clauses(afterIdentifier, beforeIdentifier, subquery);
 
-			proposals.add(EXCEPT);
-			proposals.add(INTERSECT);
-			proposals.add(UNION);
+		if (subquery) {
+			return proposals;
 		}
+
+		if (afterIdentifier == SELECT) {
+
+			if (beforeIdentifier != FROM     &&
+			    beforeIdentifier != WHERE    &&
+			    beforeIdentifier != GROUP_BY &&
+			    beforeIdentifier != HAVING   &&
+			    beforeIdentifier != ORDER_BY &&
+			    beforeIdentifier != UNION    &&
+			    beforeIdentifier != EXCEPT   &&
+			    beforeIdentifier != INTERSECT) {
+
+				proposals.add(UNION);
+				proposals.add(EXCEPT);
+				proposals.add(INTERSECT);
+			}
+		}
+		else if (afterIdentifier == FROM) {
+
+			if (beforeIdentifier != WHERE    &&
+			    beforeIdentifier != GROUP_BY &&
+			    beforeIdentifier != HAVING   &&
+			    beforeIdentifier != ORDER_BY &&
+			    beforeIdentifier != UNION    &&
+			    beforeIdentifier != EXCEPT   &&
+			    beforeIdentifier != INTERSECT) {
+
+				proposals.add(UNION);
+				proposals.add(EXCEPT);
+				proposals.add(INTERSECT);
+			}
+		}
+		else if (afterIdentifier == WHERE) {
+
+			if (beforeIdentifier != GROUP_BY &&
+			    beforeIdentifier != HAVING   &&
+			    beforeIdentifier != ORDER_BY &&
+			    beforeIdentifier != UNION    &&
+			    beforeIdentifier != EXCEPT   &&
+			    beforeIdentifier != INTERSECT) {
+
+				proposals.add(UNION);
+				proposals.add(EXCEPT);
+				proposals.add(INTERSECT);
+			}
+		}
+		else if (afterIdentifier == GROUP_BY) {
+
+			if (beforeIdentifier != HAVING   &&
+			    beforeIdentifier != ORDER_BY &&
+			    beforeIdentifier != UNION    &&
+			    beforeIdentifier != EXCEPT   &&
+			    beforeIdentifier != INTERSECT) {
+
+				proposals.add(UNION);
+				proposals.add(EXCEPT);
+				proposals.add(INTERSECT);
+			}
+		}
+		else if (afterIdentifier == HAVING) {
+
+			if (beforeIdentifier != ORDER_BY &&
+			    beforeIdentifier != UNION    &&
+			    beforeIdentifier != EXCEPT   &&
+			    beforeIdentifier != INTERSECT) {
+
+				proposals.add(UNION);
+				proposals.add(EXCEPT);
+				proposals.add(INTERSECT);
+			}
+		}
+		else if (afterIdentifier == ORDER_BY) {
+
+			if (beforeIdentifier != UNION  &&
+			    beforeIdentifier != EXCEPT &&
+			    beforeIdentifier != INTERSECT) {
+
+				proposals.add(UNION);
+				proposals.add(EXCEPT);
+				proposals.add(INTERSECT);
+			}
+		}
+
+		return proposals;
+	}
+
+	/**
+	 * {@inheritDoc}
+	 */
+	@Override
+	protected List<String> columnNames(String tableName) {
+		return Collections.emptyList();
+	}
+
+	/**
+	 * {@inheritDoc}
+	 */
+	@Override
+	protected List<String> enumConstants() {
+		return Collections.emptyList();
+	}
+
+	/**
+	 * {@inheritDoc}
+	 */
+	@Override
+	protected List<String> enumTypes() {
+		return Collections.emptyList();
+	}
+
+	/**
+	 * {@inheritDoc}
+	 */
+	@Override
+	protected List<String> fromClauseInternalClauses(String afterIdentifier) {
+
+		if (EclipseLinkVersionTools.isNewerThan2_4(getGrammar())) {
+			List<String> proposals = new ArrayList<String>();
+
+			if (afterIdentifier == FROM) {
+				proposals.addAll(super.fromClauseInternalClauses(FROM));
+				proposals.add(START_WITH);
+				proposals.add(CONNECT_BY);
+				proposals.add(ORDER_SIBLINGS_BY);
+				proposals.add(AS_OF);
+			}
+			else if (afterIdentifier == JOIN) {
+				proposals.add(START_WITH);
+				proposals.add(CONNECT_BY);
+				proposals.add(ORDER_SIBLINGS_BY);
+				proposals.add(AS_OF);
+			}
+			else if (afterIdentifier == START_WITH) {
+				proposals.add(CONNECT_BY);
+				proposals.add(ORDER_SIBLINGS_BY);
+				proposals.add(AS_OF);
+			}
+			else if (afterIdentifier == CONNECT_BY) {
+				proposals.add(ORDER_SIBLINGS_BY);
+				proposals.add(AS_OF);
+			}
+			else if (afterIdentifier == ORDER_SIBLINGS_BY) {
+				proposals.add(AS_OF);
+			}
+
+			return proposals;
+		}
+
+		return super.fromClauseInternalClauses(afterIdentifier);
 	}
 
 	/**
@@ -57,6 +211,14 @@ public final class EclipseLinkContentAssistTest2_5 extends AbstractContentAssist
 	protected boolean isJoinFetchIdentifiable() {
 		EclipseLinkVersion currentVersion = EclipseLinkVersion.value(getGrammar().getProviderVersion());
 		return currentVersion.isNewerThanOrEqual(EclipseLinkJPQLGrammar2_4.VERSION);
+	}
+
+	/**
+	 * {@inheritDoc}
+	 */
+	@Override
+	protected List<String> tableNames() {
+		return Collections.emptyList();
 	}
 
 	@Test
@@ -104,7 +266,7 @@ public final class EclipseLinkContentAssistTest2_5 extends AbstractContentAssist
 
 		String jpqlQuery = "select e from Employee e AS O";
 		int position = jpqlQuery.length();
-		testHasTheseProposals(jpqlQuery, position, AS_OF);
+		testHasOnlyTheseProposals(jpqlQuery, position, AS_OF);
 	}
 
 	@Test
@@ -112,7 +274,7 @@ public final class EclipseLinkContentAssistTest2_5 extends AbstractContentAssist
 
 		String jpqlQuery = "select e from Employee e AS OF";
 		int position = jpqlQuery.length();
-		testHasTheseProposals(jpqlQuery, position, AS_OF);
+		testHasOnlyTheseProposals(jpqlQuery, position, AS_OF);
 	}
 
 	@Test
@@ -197,7 +359,7 @@ public final class EclipseLinkContentAssistTest2_5 extends AbstractContentAssist
 		proposals.add(SCN);
 		proposals.add(TIMESTAMP);
 		proposals.add("e");
-		addAll(proposals, bnfAccessor.scalarExpressionFunctions());
+		CollectionTools.addAll(proposals, bnfAccessor.scalarExpressionFunctions());
 
 		testHasOnlyTheseProposals(jpqlQuery, position, proposals);
 	}
@@ -210,7 +372,7 @@ public final class EclipseLinkContentAssistTest2_5 extends AbstractContentAssist
 
 		List<String> proposals = new ArrayList<String>();
 		proposals.add("e");
-		addAll(proposals, bnfAccessor.scalarExpressionFunctions());
+		CollectionTools.addAll(proposals, bnfAccessor.scalarExpressionFunctions());
 
 		testHasOnlyTheseProposals(jpqlQuery, position, proposals);
 	}
@@ -220,7 +382,7 @@ public final class EclipseLinkContentAssistTest2_5 extends AbstractContentAssist
 
 		String jpqlQuery = "select e from Employee e AS OF SCN";
 		int position = jpqlQuery.length();
-		testHasOnlyTheseProposals(jpqlQuery, position, SCN);
+		testHasOnlyTheseProposals(jpqlQuery, position, SCN, TIMESTAMP);
 	}
 
 	@Test
@@ -228,7 +390,7 @@ public final class EclipseLinkContentAssistTest2_5 extends AbstractContentAssist
 
 		String jpqlQuery = "select e from Employee e AS OF TIMESTAMP";
 		int position = jpqlQuery.length();
-		testHasOnlyTheseProposals(jpqlQuery, position, TIMESTAMP);
+		testHasOnlyTheseProposals(jpqlQuery, position, SCN, TIMESTAMP);
 	}
 
 	@Test
@@ -239,7 +401,7 @@ public final class EclipseLinkContentAssistTest2_5 extends AbstractContentAssist
 
 		List<String> proposals = new ArrayList<String>();
 		proposals.add("e");
-		addAll(proposals, bnfAccessor.scalarExpressionFunctions());
+		CollectionTools.addAll(proposals, bnfAccessor.scalarExpressionFunctions());
 
 		testHasOnlyTheseProposals(jpqlQuery, position, proposals);
 	}
@@ -276,7 +438,7 @@ public final class EclipseLinkContentAssistTest2_5 extends AbstractContentAssist
 
 		List<String> proposals = new ArrayList<String>();
 		proposals.add("e");
-		addAll(proposals, bnfAccessor.scalarExpressionFunctions());
+		CollectionTools.addAll(proposals, bnfAccessor.scalarExpressionFunctions());
 
 		testHasOnlyTheseProposals(jpqlQuery, position, proposals);
 	}
@@ -369,7 +531,7 @@ public final class EclipseLinkContentAssistTest2_5 extends AbstractContentAssist
 
 		List<String> proposals = new ArrayList<String>();
 		proposals.add("e");
-		addAll(proposals, bnfAccessor.collectionValuedPathExpressionFunctions());
+		CollectionTools.addAll(proposals, bnfAccessor.collectionValuedPathExpressionFunctions());
 
 		testHasOnlyTheseProposals(jpqlQuery, position, proposals);
 	}
@@ -462,7 +624,7 @@ public final class EclipseLinkContentAssistTest2_5 extends AbstractContentAssist
 
 		List<String> proposals = new ArrayList<String>();
 		proposals.add("e");
-		addAll(proposals, bnfAccessor.collectionValuedPathExpressionFunctions());
+		CollectionTools.addAll(proposals, bnfAccessor.collectionValuedPathExpressionFunctions());
 
 		testHasTheseProposals(jpqlQuery, position, proposals);
 	}
@@ -475,7 +637,7 @@ public final class EclipseLinkContentAssistTest2_5 extends AbstractContentAssist
 
 		List<String> proposals = new ArrayList<String>();
 		proposals.add("k");
-		addAll(proposals, filter(bnfAccessor.collectionValuedPathExpressionFunctions(), "K"));
+		CollectionTools.addAll(proposals, filter(bnfAccessor.collectionValuedPathExpressionFunctions(), "K"));
 
 		testHasTheseProposals(jpqlQuery, position, proposals);
 	}
@@ -487,7 +649,8 @@ public final class EclipseLinkContentAssistTest2_5 extends AbstractContentAssist
 		int position = jpqlQuery.length();
 
 		List<String> proposals = new ArrayList<String>();
-		addAll(proposals, filter(bnfAccessor.conditionalExpressionsFunctions(), "C"));
+		proposals.add("e");
+		CollectionTools.addAll(proposals, bnfAccessor.conditionalExpressionsFunctions());
 
 		testHasOnlyTheseProposals(jpqlQuery, position, proposals);
 	}
@@ -499,7 +662,7 @@ public final class EclipseLinkContentAssistTest2_5 extends AbstractContentAssist
 		int position = jpqlQuery.length();
 
 		List<String> proposals = new ArrayList<String>();
-		addAll(proposals, filter(bnfAccessor.conditionalExpressionsFunctions(), "C"));
+		CollectionTools.addAll(proposals, filter(bnfAccessor.conditionalExpressionsFunctions(), "C"));
 
 		testHasOnlyTheseProposals(jpqlQuery, position, proposals);
 	}
@@ -511,7 +674,7 @@ public final class EclipseLinkContentAssistTest2_5 extends AbstractContentAssist
 		int position = jpqlQuery.length();
 
 		List<String> proposals = new ArrayList<String>();
-		addAll(proposals, filter(bnfAccessor.conditionalExpressionsFunctions(), "C"));
+		CollectionTools.addAll(proposals, filter(bnfAccessor.conditionalExpressionsFunctions(), "O"));
 
 		testHasOnlyTheseProposals(jpqlQuery, position, proposals);
 	}
@@ -523,14 +686,8 @@ public final class EclipseLinkContentAssistTest2_5 extends AbstractContentAssist
 		int position = jpqlQuery.length();
 
 		List<String> proposals = new ArrayList<String>();
-		proposals.add(ORDER_SIBLINGS_BY);
-		proposals.add(AS_OF);
-		proposals.add(GROUP_BY);
-		proposals.add(HAVING);
-		proposals.add(ORDER_BY);
-		proposals.add(UNION);
-		proposals.add(INTERSECT);
-		proposals.add(EXCEPT);
+		CollectionTools.addAll(proposals, fromClauseInternalClauses(CONNECT_BY));
+		CollectionTools.addAll(proposals, clauses(FROM, null, false));
 
 		testHasOnlyTheseProposals(jpqlQuery, position, proposals);
 	}
@@ -539,11 +696,11 @@ public final class EclipseLinkContentAssistTest2_5 extends AbstractContentAssist
 	public void test_HierarchicalQueryClause_05() {
 
 		String jpqlQuery = "select e from Employee e START WITH  CONNECT BY";
-		int position = jpqlQuery.length();
+		int position = "select e from Employee e START WITH ".length();
 
 		List<String> proposals = new ArrayList<String>();
 		proposals.add("e");
-		addAll(proposals, bnfAccessor.conditionalExpressionsFunctions());
+		CollectionTools.addAll(proposals, bnfAccessor.conditionalExpressionsFunctions());
 
 		testHasOnlyTheseProposals(jpqlQuery, position, proposals);
 	}
@@ -555,8 +712,8 @@ public final class EclipseLinkContentAssistTest2_5 extends AbstractContentAssist
 		int position = jpqlQuery.length();
 
 		List<String> proposals = new ArrayList<String>();
-		proposals.add(ORDER_BY);
-		proposals.add(ORDER_SIBLINGS_BY);
+		CollectionTools.addAll(proposals, filter(fromClauseInternalClauses(CONNECT_BY), "O"));
+		CollectionTools.addAll(proposals, filter(clauses(FROM, null, false), "O"));
 
 		testHasOnlyTheseProposals(jpqlQuery, position, proposals);
 	}
@@ -567,6 +724,48 @@ public final class EclipseLinkContentAssistTest2_5 extends AbstractContentAssist
 		String jpqlQuery = "select e from Employee e CONNECT BY e.name O WHERE e.name = 'JPQL'";
 		int position = "select e from Employee e CONNECT BY e.name O".length();
 		testHasOnlyTheseProposals(jpqlQuery, position, ORDER_SIBLINGS_BY);
+	}
+
+	@Test
+	public final void test_Invalid_001() {
+		String jpqlQuery = "SELECT e FROM Employee CONNECT BY e.name O";
+		int position = "SELECT e FROM Employee CONNECT BY e.name O".length();
+		testHasOnlyTheseProposals(jpqlQuery, position, ORDER_SIBLINGS_BY, ORDER_BY);
+	}
+
+	@Test
+	public final void test_Invalid_002() {
+		String jpqlQuery = "SELECT e FROM Employee CONNECT BY e.name O WHERE e.name IS e.name";
+		int position = "SELECT e FROM Employee CONNECT BY e.name O WHERE".length();
+		testHasOnlyTheseProposals(jpqlQuery, position, WHERE);
+	}
+
+	@Test
+	public final void test_Invalid_003() {
+		String jpqlQuery = "SELECT e FROM Employee CONNECT BY e.name O WHERE e.name IS e.name";
+		int position = "SELECT e FROM Employee CONNECT BY e.name O WHERE e.name IS e".length();
+		testHasNoProposals(jpqlQuery, position);
+	}
+
+	@Test
+	public final void test_Invalid_004() {
+		String jpqlQuery = "SELECT e FROM Employee CONNECT BY e.name O WHERE e.name IS e.name";
+		int position = jpqlQuery.length();
+		testHasNoProposals(jpqlQuery, position);
+	}
+
+	@Test
+	public final void test_Invalid_005() {
+		String jpqlQuery = "SELECT e FROM Employee CONNECT BY e.name O WHERE e.name IS e.name IS ";
+		int position = jpqlQuery.length();
+		testHasNoProposals(jpqlQuery, position);
+	}
+
+	@Test
+	public final void test_Invalid_006() {
+		String jpqlQuery = "SELECT e FROM Employee CONNECT BY e.name O WHERE e.name IS e.name WHERE";
+		int position = jpqlQuery.length();
+		testHasNoProposals(jpqlQuery, position);
 	}
 
 	@Test
@@ -657,7 +856,7 @@ public final class EclipseLinkContentAssistTest2_5 extends AbstractContentAssist
 
 		List<String> proposals = new ArrayList<String>();
 		proposals.add("e");
-		addAll(proposals, bnfAccessor.conditionalExpressionsFunctions());
+		CollectionTools.addAll(proposals, bnfAccessor.conditionalExpressionsFunctions());
 
 		testHasOnlyTheseProposals(jpqlQuery, position, proposals);
 	}
@@ -745,12 +944,12 @@ public final class EclipseLinkContentAssistTest2_5 extends AbstractContentAssist
 	@Test
 	public void test_StartWithClause_22() {
 
-		String jpqlQuery = "select e from Employee e connect by e.name + WHERE e.name = 'JPQL'";
-		int position = "select e from Employee e connect by e.name + ".length();
+		String jpqlQuery = "select e from Employee e start with e.name + WHERE e.name = 'JPQL'";
+		int position = "select e from Employee e start with e.name + ".length();
 
 		List<String> proposals = new ArrayList<String>();
 		proposals.add("e");
-		addAll(proposals, bnfAccessor.scalarExpressionFunctions());
+		CollectionTools.addAll(proposals, bnfAccessor.arithmeticTermFunctions());
 
 		testHasOnlyTheseProposals(jpqlQuery, position, proposals);
 	}

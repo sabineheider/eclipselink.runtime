@@ -40,10 +40,12 @@ import org.eclipse.persistence.testing.jaxb.jaxbelement.simple.JAXBElementBase64
 import org.eclipse.persistence.testing.jaxb.jaxbelement.simple.JAXBElementDataHandlerTestCases;
 import org.eclipse.persistence.testing.jaxb.jaxbelement.simple.JAXBElementSimpleTestCases;
 import org.eclipse.persistence.testing.jaxb.jaxbelement.subclass.JAXBElementSubclassEnumTestCases;
+import org.eclipse.persistence.testing.jaxb.jaxbelement.subclass.JAXBElementSubclassObjectTestCases;
 import org.eclipse.persistence.testing.jaxb.jaxbelement.subclass.JAXBElementSubclassTestCases;
 import org.eclipse.persistence.testing.jaxb.jaxbelement.enumeration.JAXBElementEnumTestCases;
 import org.eclipse.persistence.testing.jaxb.xmlenum.InvalidEnumValueTestCases;
 import org.eclipse.persistence.testing.jaxb.xmlenum.XmlEnumRootElemTestCases;
+import org.eclipse.persistence.testing.jaxb.xmlenum.xmlvalue.XmlEnumXmlValueTestCases;
 import org.eclipse.persistence.testing.jaxb.xmlidref.XmlIdRefTestCases;
 import org.eclipse.persistence.testing.jaxb.xmlidref.array.XmlIdRefArrayTestCases;
 import org.eclipse.persistence.testing.jaxb.xmlidref.inheritance.XmlIdRefInheritanceTestCases;
@@ -94,6 +96,8 @@ public class JAXBTestSuite2 extends TestCase {
         suite.addTestSuite(org.eclipse.persistence.testing.jaxb.xmlenum.XmlValueAnnotationWithEnumTestCases.class);
         suite.addTestSuite(org.eclipse.persistence.testing.jaxb.xmlenum.XmlEnumChoiceObjectTestCases.class);
         suite.addTestSuite(org.eclipse.persistence.testing.jaxb.xmlenum.XmlEnumChoiceCollectionTestCases.class);
+        suite.addTestSuite(org.eclipse.persistence.testing.jaxb.xmlenum.SpaceTestCases.class);
+        suite.addTestSuite(XmlEnumXmlValueTestCases.class);
         suite.addTestSuite(TextNodeTestCases.class);
         suite.addTestSuite(ElementTestCases.class);
         suite.addTestSuite(JAXBElementSimpleTestCases.class);
@@ -110,6 +114,7 @@ public class JAXBTestSuite2 extends TestCase {
         suite.addTestSuite(JAXBElementDataHandlerTestCases.class);
         suite.addTestSuite(JAXBElementSubclassTestCases.class);
         suite.addTestSuite(JAXBElementSubclassEnumTestCases.class);
+        suite.addTestSuite(JAXBElementSubclassObjectTestCases.class);
         suite.addTestSuite(RootWithCompositeObjectTestCases.class);
         suite.addTestSuite(JAXBElementEnumTestCases.class);
         suite.addTestSuite(JAXBInheritanceTestCases.class);
@@ -120,6 +125,7 @@ public class JAXBTestSuite2 extends TestCase {
         suite.addTestSuite(JAXBInheritanceSubTypeParentRootOnlyTestCases.class);
         suite.addTestSuite(JAXBInheritanceNSSeparatorTestCases.class);
         suite.addTestSuite(org.eclipse.persistence.testing.jaxb.events.RootWithCompositeCollectionTestCases.class);
+        suite.addTestSuite(org.eclipse.persistence.testing.jaxb.events.ClassLoaderTestCases.class);
         suite.addTestSuite(ExternalMetadataTestCases.class);
         suite.addTestSuite(JAXBElementTestCases.class);
         suite.addTest(JAXBDOMTestSuite.suite());
@@ -140,6 +146,7 @@ public class JAXBTestSuite2 extends TestCase {
         suite.addTestSuite(org.eclipse.persistence.testing.jaxb.namespaceuri.twopackages.BATestCases.class);
         suite.addTestSuite(org.eclipse.persistence.testing.jaxb.events.sessionevents.SessionEventTestCases.class);
         suite.addTestSuite(org.eclipse.persistence.testing.jaxb.jaxbcontext.JaxbContextCreationTests.class);        
+        suite.addTestSuite(org.eclipse.persistence.testing.jaxb.jaxbcontext.notext.NoTextMappingErrorTests.class);        
         suite.addTest(org.eclipse.persistence.testing.jaxb.jaxbcontext.ByXPathTestSuite.suite());
         suite.addTestSuite(org.eclipse.persistence.testing.jaxb.jaxbcontext.JaxbContextReturnTypesTests.class);
         suite.addTestSuite(org.eclipse.persistence.testing.jaxb.jaxbcontext.JaxbTypeToSchemaTypeTestCases.class);

@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 1998, 2012 Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1998, 2013 Oracle and/or its affiliates. All rights reserved.
  * This program and the accompanying materials are made available under the 
  * terms of the Eclipse Public License v1.0 and Eclipse Distribution License v. 1.0 
  * which accompanies this distribution. 
@@ -54,6 +54,28 @@ public class RMIRemoteCommandConnectionImpl extends UnicastRemoteObject implemen
             // Log the problem
             Object[] args = { Helper.getShortClassName(command), Helper.printStackTraceToString(e) };
             rcm.logWarning("error_executing_remote_command", args);
+            // Return the string in case the exception doesn't exist on the other side
+            return e.toString();
+        }
+
+        // Success - return null
+        return null;
+    }
+
+    /**
+     * INTERNAL:
+     * No support currently exists for returning the result of the command execution.
+     * Currently only null is returned on success. On failure an error string is
+     * returned (to avoid returning an object/exception that may not exist on the
+     * sending side).
+     */
+    public Object executeCommand(byte[] command) throws RemoteException {
+        try {
+            this.rcm.processCommandFromRemoteConnection(command);
+        } catch (Exception e) {
+            // Log the problem
+            Object[] args = { Helper.getShortClassName(command), Helper.printStackTraceToString(e) };
+            this.rcm.logWarning("error_executing_remote_command", args);
             // Return the string in case the exception doesn't exist on the other side
             return e.toString();
         }

@@ -16,12 +16,15 @@ import org.eclipse.persistence.testing.jaxb.annotations.xmlaccessmethods.XmlAcce
 import org.eclipse.persistence.testing.jaxb.annotations.xmlclassextractor.XmlClassExtractorTestCases;
 import org.eclipse.persistence.testing.jaxb.annotations.xmlidref.XmlIdRefMissingIdEventHandlerTestCases;
 import org.eclipse.persistence.testing.jaxb.annotations.xmlidref.XmlIdRefMissingIdTestCases;
+import org.eclipse.persistence.testing.jaxb.annotations.xmlidref.self.XmlIdRefSelfTestCases;
+import org.eclipse.persistence.testing.jaxb.annotations.xmlinversereference.InverseRefChoiceAdapterTestCases;
 import org.eclipse.persistence.testing.jaxb.annotations.xmlinversereference.InverseReferenceAdapterTestCases;
 import org.eclipse.persistence.testing.jaxb.annotations.xmlinversereference.InverseReferenceWithRefTestCases;
 import org.eclipse.persistence.testing.jaxb.annotations.xmllocation.XmlLocationTestSuite;
 import org.eclipse.persistence.testing.jaxb.annotations.xmlnametransformer.JAXBDefaultNameTransformerTestCases;
 import org.eclipse.persistence.testing.jaxb.annotations.xmlnametransformer.classlevel.upper.JAXBClassLevelUpperNameTransformerTestCases;
 import org.eclipse.persistence.testing.jaxb.annotations.xmlnametransformer.upper.JAXBUpperNameTransformerTestCases;
+import org.eclipse.persistence.testing.jaxb.annotations.xmlnullpolicy.DefaultNoNodeTestCases;
 import org.eclipse.persistence.testing.jaxb.annotations.xmlnullpolicy.XmlNullPolicyNoXmlElementTestCases;
 import org.eclipse.persistence.testing.jaxb.annotations.xmlnullpolicy.XmlNullPolicyTestCases;
 import org.eclipse.persistence.testing.jaxb.annotations.xmlpath.predicate.PredicateTestSuite;
@@ -62,6 +65,7 @@ public class AnnotationsTestSuite extends TestSuite {
         suite.addTestSuite(org.eclipse.persistence.testing.jaxb.annotations.xmlpath.enumtype.EnumTestCases.class);
         suite.addTestSuite(XmlPathsOverrideTestCases.class);
         suite.addTestSuite(XmlNullPolicyTestCases.class);
+        suite.addTestSuite(DefaultNoNodeTestCases.class);
         suite.addTestSuite(XmlNullPolicyNoXmlElementTestCases.class);
         suite.addTestSuite(JAXBDefaultNameTransformerTestCases.class);
         suite.addTestSuite(JAXBUpperNameTransformerTestCases.class);
@@ -88,9 +92,12 @@ public class AnnotationsTestSuite extends TestSuite {
         suite.addTestSuite(org.eclipse.persistence.testing.jaxb.annotations.xmlinlinebinarydata.XmlInlineBinaryDataTestCases.class);
         suite.addTestSuite(XmlIdRefMissingIdTestCases.class);
         suite.addTestSuite(XmlIdRefMissingIdEventHandlerTestCases.class);
+        suite.addTestSuite(XmlIdRefSelfTestCases.class);
         suite.addTest(org.eclipse.persistence.testing.jaxb.annotations.xmltransient.XmlTransientTestSuite.suite());
         suite.addTestSuite(org.eclipse.persistence.testing.jaxb.annotations.xmlelementdecl.qualified.QualfiedTestCases.class);
         suite.addTestSuite(org.eclipse.persistence.testing.jaxb.annotations.xmlelementdecl.noxmlrootelement.NoRootElementTestCases.class);
+        suite.addTestSuite(org.eclipse.persistence.testing.jaxb.annotations.xmlelementdecl.qname.XmlElementDeclQNameTestCases.class);
+        suite.addTestSuite(org.eclipse.persistence.testing.jaxb.annotations.xmlelementdecl.qname.XmlElementDeclQNameNSTestCases.class);
         suite.addTestSuite(org.eclipse.persistence.testing.jaxb.annotations.xmlelementdecl.emptystringns.EmptyStringNSTestCases.class);
         suite.addTestSuite(org.eclipse.persistence.testing.jaxb.annotations.xmlelementdecl.unqualified.UnqualfiedTestCases.class);
         suite.addTest(XmlLocationTestSuite.suite());
@@ -98,6 +105,7 @@ public class AnnotationsTestSuite extends TestSuite {
         suite.addTestSuite(CustomerTestCases.class);
         suite.addTestSuite(InverseReferenceWithRefTestCases.class);
         suite.addTestSuite(InverseReferenceAdapterTestCases.class);
+        suite.addTestSuite(InverseRefChoiceAdapterTestCases.class);
 
         return suite;
     }

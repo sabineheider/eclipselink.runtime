@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2012 Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, 2013 Oracle and/or its affiliates. All rights reserved.
  * This program and the accompanying materials are made available under the 
  * terms of the Eclipse Public License v1.0 and Eclipse Distribution License v. 1.0 
  * which accompanies this distribution. 
@@ -20,6 +20,13 @@
  *       - 389090: JPA 2.1 DDL Generation Support (foreign key metadata support)
  *     01/23/2013-2.5 Guy Pelletier 
  *       - 350487: JPA 2.1 Specification defined support for Stored Procedure Calls
+ *     02/28/2013-2.5 Chris Delahunt
+ *       - 402029: Application exceptions need to be wrapped in PersistenceException
+ *     06/03/2013-2.5.1 Guy Pelletier    
+ *       - 402380: 3 jpa21/advanced tests failed on server with 
+ *         "java.lang.NoClassDefFoundError: org/eclipse/persistence/testing/models/jpa21/advanced/enums/Gender" 
+ *     07/16/2013-2.5.1 Guy Pelletier 
+ *       - 412384: Applying Converter for parameterized basic-type for joda-time's DateTime does not work
  ******************************************************************************/  
 package org.eclipse.persistence.testing.tests.jpa21.advanced;
 
@@ -32,7 +39,8 @@ import junit.framework.TestSuite;
 import junit.framework.Test;
 
 import org.eclipse.persistence.descriptors.ClassDescriptor;
-import org.eclipse.persistence.internal.jpa.metadata.converters.ConverterClass;
+import org.eclipse.persistence.mappings.converters.ConverterClass;
+import org.eclipse.persistence.mappings.converters.SerializedObjectConverter;
 
 import org.eclipse.persistence.mappings.DatabaseMapping;
 import org.eclipse.persistence.mappings.DirectToFieldMapping;
@@ -48,54 +56,64 @@ import org.eclipse.persistence.testing.models.jpa21.advanced.Runner;
 import org.eclipse.persistence.testing.models.jpa21.advanced.RunnerInfo;
 import org.eclipse.persistence.testing.models.jpa21.advanced.RunnerStatus;
 import org.eclipse.persistence.testing.models.jpa21.advanced.Employee;
+import org.eclipse.persistence.testing.models.jpa21.advanced.converters.ResponsibilityConverter;
 import org.eclipse.persistence.testing.models.jpa21.advanced.enums.Health;
 import org.eclipse.persistence.testing.models.jpa21.advanced.enums.Level;
 import org.eclipse.persistence.testing.models.jpa21.advanced.enums.RunningStatus;
 
 public class ConverterTestSuite extends JUnitTestCase {
     public ConverterTestSuite() {}
-    
+
     public ConverterTestSuite(String name) {
         super(name);
         setPuName("MulitPU-1");
     }
-    
+
     public static Test suite() {
         TestSuite suite = new TestSuite();
         suite.setName("ConverterTestSuite");
-        
+
         suite.addTest(new ConverterTestSuite("testAutoApplyConverter"));
         suite.addTest(new ConverterTestSuite("testAnnotationConverters"));
-        
-        
+        suite.addTest(new ConverterTestSuite("testConverterExceptionWrapping1"));
+        suite.addTest(new ConverterTestSuite("testConverterExceptionWrapping2"));
+
         return suite;
     }
-    
+
     /**
      * Test that an attribute picks up an auto apply converter. 
      */
     public void testAutoApplyConverter() {
         ServerSession session = getPersistenceUnitServerSession();
-        
+
         ClassDescriptor employeeDescriptor = session.getDescriptor(Employee.class);
         DirectToFieldMapping salaryMapping = (DirectToFieldMapping) employeeDescriptor.getMappingForAttributeName("salary");
-        
         assertNotNull("Salary mapping did not have the auto apply converter", salaryMapping.getConverter());
-        
+
         DirectToFieldMapping previousSalaryMapping = (DirectToFieldMapping) employeeDescriptor.getMappingForAttributeName("previousSalary");
-        
         assertNull("Salary mapping did not have the auto apply converter", previousSalaryMapping.getConverter());
+        
+        ClassDescriptor runnerDescriptor = session.getDescriptor(Runner.class);
+        
+        DirectToFieldMapping tagsMapping = (DirectToFieldMapping) runnerDescriptor.getMappingForAttributeName("tags");
+        assertTrue("Tags mapping did not have a converter", tagsMapping.hasConverter());
+        assertTrue("Serials mappings did not have a SerializedObjectConverter", tagsMapping.getConverter() instanceof ConverterClass);
+        
+        DirectToFieldMapping serialsMapping = (DirectToFieldMapping) runnerDescriptor.getMappingForAttributeName("serials");
+        assertTrue("Serials mapping did not have a converter", serialsMapping.hasConverter());
+        assertTrue("Serials mappings did not have a SerializedObjectConverter", serialsMapping.getConverter() instanceof SerializedObjectConverter);
     }  
-    
+
     /**
      * Test that converters are set.
      */
     public void testAnnotationConverters() {
         EntityManager em = createEntityManager();
-            
+
         try {
             beginTransaction(em);
-            
+
             Runner runner = new Runner();
             runner.setAge(53);
             runner.setIsFemale();
@@ -103,6 +121,7 @@ public class ConverterTestSuite extends JUnitTestCase {
             runner.setLastName("Day");
             runner.addPersonalBest("10 KM", "47:34");
             runner.addPersonalBest("5", "26:41");
+            runner.addTag("tag1");
             runner.addAccomplishment("Ran 100KM without stopping", new Date(System.currentTimeMillis()));
             RunnerInfo runnerInfo = new RunnerInfo();
             runnerInfo.setHealth(Health.H);
@@ -111,30 +130,30 @@ public class ConverterTestSuite extends JUnitTestCase {
             runnerStatus.setRunningStatus(RunningStatus.D);
             runnerInfo.setStatus(runnerStatus);
             runner.setInfo(runnerInfo);
-            
+
             Race race = new Race();
             race.setName("The Ultimate Marathon");
             race.addRunner(runner);
-            
+
             Organizer organizer = new Organizer();
             organizer.setName("Joe Organ");
             organizer.setRace(race);
-            
+
             Responsibility responsibility = new Responsibility();
             responsibility.setUniqueIdentifier(new Long(System.currentTimeMillis()));
             responsibility.setDescription("Raise funds");
-            
+
             race.addOrganizer(organizer, responsibility);
-            
+
             em.persist(race);
             em.persist(organizer);
             em.persist(runner);
-            commitTransaction(em);
-                
+            em.flush();
+
             // Clear the cache
             em.clear();
             clearCache();
-    
+
             Runner runnerRefreshed = em.find(Runner.class, runner.getId());
             assertTrue("The age conversion did not work.", runnerRefreshed.getAge() == 52);
             assertTrue("The embeddable health conversion did not work.", runnerRefreshed.getInfo().getHealth().equals(Health.HEALTHY));
@@ -145,30 +164,127 @@ public class ConverterTestSuite extends JUnitTestCase {
             assertTrue("Distance (map key) conversion did not work.", runnerRefreshed.getPersonalBests().keySet().contains("5K"));
             assertTrue("Time (map value) conversion did not work.", runnerRefreshed.getPersonalBests().values().contains("47:34.0"));
             assertTrue("Time (map value) conversion did not work.", runnerRefreshed.getPersonalBests().values().contains("26:41.0"));
-            
+
             Race raceRefreshed = em.find(Race.class, race.getId());
             Map<Responsibility, Organizer> organizers = raceRefreshed.getOrganizers();
             assertFalse("No race organizers returned.", organizers.isEmpty());
             assertTrue("More than one race organizer returned.", organizers.size() == 1);
-            
+
             Responsibility resp = organizers.keySet().iterator().next();
             assertTrue("Responsibility was not uppercased by the converter", resp.getDescription().equals("RAISE FUNDS"));
-            
+
             for (String accomplishment : runnerRefreshed.getAccomplishments().keySet()) {
                 assertTrue("Accomplishment (map key) conversion did not work.", accomplishment.endsWith("!!!"));
             }
-        } catch (RuntimeException e) {
-            if (isTransactionActive(em)){
-                rollbackTransaction(em);
-            } 
-                
-            throw e;
         } finally {
-            closeEntityManager(em);
+            closeEntityManagerAndTransaction(em);
+        }
+    }
+
+    /**
+     * Test that application exceptions thrown from the converter's convertToEntityAttribute method get 
+     * wrapped in a PersistenceException.
+     * Added for bug 402029: Application exceptions need to be wrapped in PersistenceException
+     */
+    public void testConverterExceptionWrapping1() {
+        EntityManager em = createEntityManager();
+
+        try {
+            beginTransaction(em);
+            // setup
+            Race race = new Race();
+            race.setName("Just Another Marathon");
+
+            Organizer organizer = new Organizer();
+            organizer.setName("John Smith");
+            organizer.setRace(race);
+
+            Responsibility responsibility = new Responsibility();
+            responsibility.setUniqueIdentifier(new Long(System.currentTimeMillis()));
+            //This string causes an exception to be thrown from the ResponsibilityConverter.convertToEntityAttribute method
+            responsibility.setDescription(ResponsibilityConverter.THROW_EXCEPTION_IN_TO_ENTITY_ATTRIBUTE);
+
+            race.addOrganizer(organizer, responsibility);
+
+            try {
+                em.persist(race);
+                em.persist(organizer);
+                em.flush();
+
+                // Clear the cache
+                em.clear();
+                clearCache();
+
+                race = em.find(Race.class, race.getId());
+                //trigger indirection
+                race.getOrganizers().get(responsibility);
+            } catch (javax.persistence.PersistenceException pe) {
+                if (pe.getCause() == null || 
+                        !ResponsibilityConverter.THROW_EXCEPTION_IN_TO_ENTITY_ATTRIBUTE.equals(pe.getCause().getMessage())) {
+                    //rethrow this exception because it does not contain the expected application generated RuntimeException
+                    throw pe;
+                }//else this error is expected and can be ignored
+            } catch (RuntimeException unexpected) {
+                if (ResponsibilityConverter.THROW_EXCEPTION_IN_TO_ENTITY_ATTRIBUTE.equals(unexpected.getMessage())) {
+                    this.fail("Application exception thrown from convertToEntityAttribute was not wrapped in a PersistenceException");
+                }
+                throw unexpected;
+            }
+
+        } finally {
+            closeEntityManagerAndTransaction(em);
+        }
+    }
+
+    /**
+     * Test that application exceptions thrown from the converter's convertToDatabaseColumn method get 
+     * wrapped in a PersistenceException.
+     * Added for bug 402029: Application exceptions need to be wrapped in PersistenceException
+     */
+    public void testConverterExceptionWrapping2() {
+        EntityManager em = createEntityManager();
+
+        try {
+            beginTransaction(em);
+            // setup
+            Race race = new Race();
+            race.setName("Just Another Marathon");
+
+            Organizer organizer = new Organizer();
+            organizer.setName("John Smith");
+            organizer.setRace(race);
+
+            Responsibility responsibility = new Responsibility();
+            responsibility.setUniqueIdentifier(new Long(System.currentTimeMillis()));
+            //This string causes an exception to be thrown from the ResponsibilityConverter.convertToDatabaseColumn method
+            responsibility.setDescription(ResponsibilityConverter.THROW_EXCEPTION_IN_TO_DATABASE_COLUMN);
+
+            race.addOrganizer(organizer, responsibility);
+
+            try {
+                em.persist(race);
+                em.persist(organizer);
+                em.flush();
+            } catch (javax.persistence.PersistenceException pe) {
+                if (pe.getCause() == null || 
+                        !ResponsibilityConverter.THROW_EXCEPTION_IN_TO_DATABASE_COLUMN.equals(pe.getCause().getMessage())) {
+                    //rethrow this exception because it does not contain the expected application generated RuntimeException
+                    throw pe;
+                }//else this error is expected and can be ignored
+
+            } catch (RuntimeException unexpected) {
+                if (ResponsibilityConverter.THROW_EXCEPTION_IN_TO_DATABASE_COLUMN.equals(unexpected.getMessage())) {
+                    this.fail("Application exception thrown from convertToDatabaseColumn was not wrapped in a PersistenceException");
+                }
+                throw unexpected;
+            }
+
+        } finally {
+            closeEntityManagerAndTransaction(em);
         }
     }
     @Override
     public String getPersistenceUnitName() {
-       return "MulitPU-1";
+        return "MulitPU-1";
     }
 }

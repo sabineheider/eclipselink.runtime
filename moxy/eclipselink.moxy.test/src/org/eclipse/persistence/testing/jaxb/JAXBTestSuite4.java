@@ -17,15 +17,25 @@ import org.eclipse.persistence.testing.jaxb.defaultvalue.DefaultValueTestSuite;
 import org.eclipse.persistence.testing.jaxb.employee.JAXBEmployeeNSTestCases;
 import org.eclipse.persistence.testing.jaxb.employee.JAXBEmployeeNoWrapperTestCases;
 import org.eclipse.persistence.testing.jaxb.employee.JAXBEmployeeTestCases;
+import org.eclipse.persistence.testing.jaxb.inheritance.override.InheritanceOverrideTestCases;
+import org.eclipse.persistence.testing.jaxb.inheritance.typeElem.InheritanceTypeElementTestCases;
 import org.eclipse.persistence.testing.jaxb.jaxbfragment.JAXBFragmentTestCases;
 import org.eclipse.persistence.testing.jaxb.map.MapElementWrapperExternalTestCases;
 import org.eclipse.persistence.testing.jaxb.map.MapElementWrapperTestCases;
 import org.eclipse.persistence.testing.jaxb.map.MapNamespaceBarTestCases;
 import org.eclipse.persistence.testing.jaxb.map.MapNamespaceFooTestCases;
 import org.eclipse.persistence.testing.jaxb.map.MapTestCases;
+import org.eclipse.persistence.testing.jaxb.objectgraph.ObjectGraphBasicTestCases;
+import org.eclipse.persistence.testing.jaxb.objectgraph.ObjectGraphBindingsTestCases;
+import org.eclipse.persistence.testing.jaxb.objectgraph.ObjectGraphDynamicTestCases;
+import org.eclipse.persistence.testing.jaxb.objectgraph.ObjectGraphInheritanceTestCases;
+import org.eclipse.persistence.testing.jaxb.objectgraph.ObjectGraphRefSubTestCases;
 import org.eclipse.persistence.testing.jaxb.refresh.RefreshTestSuite;
+import org.eclipse.persistence.testing.jaxb.xmlelementrefs.adapter.XmlElementRefsAdapterTestCases;
 import org.eclipse.persistence.testing.jaxb.xmlgregoriancalendar.XMLGregorianCalendarObjectTestCases;
+import org.eclipse.persistence.testing.jaxb.xmlinverseref.XmlInverseRefBidirectionalTestSuite;
 import org.eclipse.persistence.testing.jaxb.xmlschematype.XSDSchemaTypesTestCases;
+import org.eclipse.persistence.testing.jaxb.xmlvariablenode.AllVariableElementTestCases;
 
 import junit.framework.Test;
 import junit.framework.TestSuite;
@@ -53,6 +63,16 @@ public class JAXBTestSuite4 {
         suite.addTestSuite(MapNamespaceFooTestCases.class);      
         suite.addTestSuite(XMLGregorianCalendarObjectTestCases.class);
         suite.addTestSuite(XSDSchemaTypesTestCases.class);
+        suite.addTest(XmlInverseRefBidirectionalTestSuite.suite());
+        suite.addTestSuite(ObjectGraphBasicTestCases.class);
+        suite.addTestSuite(ObjectGraphBindingsTestCases.class);
+        suite.addTestSuite(ObjectGraphDynamicTestCases.class);
+        suite.addTestSuite(ObjectGraphRefSubTestCases.class);
+        suite.addTestSuite(ObjectGraphInheritanceTestCases.class);
+        suite.addTestSuite(XmlElementRefsAdapterTestCases.class);
+        suite.addTest(AllVariableElementTestCases.suite());
+        suite.addTestSuite(InheritanceOverrideTestCases.class);
+        suite.addTestSuite(InheritanceTypeElementTestCases.class);
 	    
 	    return suite;
 	}

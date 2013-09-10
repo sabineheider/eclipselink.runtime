@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 1998, 2012 Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1998, 2013 Oracle and/or its affiliates. All rights reserved.
  * This program and the accompanying materials are made available under the 
  * terms of the Eclipse Public License v1.0 and Eclipse Distribution License v. 1.0 
  * which accompanies this distribution. 
@@ -28,9 +28,9 @@ import org.xml.sax.ext.LexicalHandler;
 import javax.xml.validation.ValidatorHandler;
 
 import org.eclipse.persistence.internal.core.sessions.CoreAbstractSession;
+import org.eclipse.persistence.internal.oxm.ConversionManager;
 import org.eclipse.persistence.internal.oxm.Constants;
 import org.eclipse.persistence.internal.oxm.MediaType;
-import org.eclipse.persistence.internal.oxm.XMLConversionManager;
 import org.eclipse.persistence.internal.oxm.mappings.Field;
 import org.eclipse.persistence.internal.oxm.mappings.Mapping;
 import org.eclipse.persistence.oxm.mappings.nullpolicy.AbstractNullPolicy;
@@ -134,8 +134,8 @@ public class XMLReader implements org.xml.sax.XMLReader {
      * INTERNAL:
      * @since 2.4
      */
-    public Object convertValueBasedOnSchemaType(Field xmlField, Object value, XMLConversionManager xmlConversionManager, AbstractUnmarshalRecord record) {
-    	return xmlField.convertValueBasedOnSchemaType(value, xmlConversionManager, record);    	
+    public Object convertValueBasedOnSchemaType(Field xmlField, Object value, ConversionManager conversionManager, AbstractUnmarshalRecord record) {
+    	return xmlField.convertValueBasedOnSchemaType(value, conversionManager, record);    	
     }
 
     public DTDHandler getDTDHandler () {

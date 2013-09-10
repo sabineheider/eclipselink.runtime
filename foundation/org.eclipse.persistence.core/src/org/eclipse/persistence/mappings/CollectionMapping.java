@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 1998, 2012 Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1998, 2013 Oracle and/or its affiliates. All rights reserved.
  * This program and the accompanying materials are made available under the 
  * terms of the Eclipse Public License v1.0 and Eclipse Distribution License v. 1.0 
  * which accompanies this distribution. 
@@ -258,8 +258,11 @@ public abstract class CollectionMapping extends ForeignReferenceMapping implemen
         while (this.containerPolicy.hasNext(valuesIterator)) {
             Object originalValue = this.containerPolicy.next(valuesIterator, group.getSession());
             Object copyValue = originalValue;
+            Object originalKey = this.containerPolicy.keyFromIterator(valuesIterator); 
+            Object copyKey = originalKey;
             if (group.shouldCascadeAllParts() || (group.shouldCascadePrivateParts() && isPrivateOwned()) || group.shouldCascadeTree()) {
-                copyValue = group.getSession().copyInternal(originalValue, group);
+                copyValue = copyElement(originalValue, group);
+                copyKey = group.getSession().copyInternal(originalKey, group);
             } else {
                 // Check for backrefs to copies.
                 copyValue = group.getCopies().get(originalValue);
@@ -267,11 +270,19 @@ public abstract class CollectionMapping extends ForeignReferenceMapping implemen
                     copyValue = originalValue;
                 }
             }
-            this.containerPolicy.addInto(copyValue, attributeValue, group.getSession());
+            this.containerPolicy.addInto(copyKey, copyValue, attributeValue, group.getSession());
         }
         // if value holder is used, then the value holder shared with original substituted for a new ValueHolder.
         getIndirectionPolicy().reset(copy);
         setRealAttributeValueInObject(copy, attributeValue);
+    }
+    
+    /**
+     * INTERNAL:
+     * Copies member's value
+     */
+    protected Object copyElement(Object original, CopyGroup group) {
+        return group.getSession().copyInternal(original, group);
     }
 
     /**
@@ -1338,16 +1349,41 @@ public abstract class CollectionMapping extends ForeignReferenceMapping implemen
      * Force instantiation of the load group.
      */
     @Override
-    public void load(final Object object, AttributeItem item, final AbstractSession session) {
+    public void load(final Object object, AttributeItem item, final AbstractSession session, final boolean fromFetchGroup) {
         instantiateAttribute(object, session);
-        if (item.getGroup() != null) {
+        if (item.getGroup() != null && (!fromFetchGroup || session.isUnitOfWork()) ){
+            //if UOW make sure the nested attributes are loaded as the clones will not be instantiated
             Object value = getRealAttributeValueFromObject(object, session);
             ContainerPolicy cp = this.containerPolicy;
             for (Object iterator = cp.iteratorFor(value); cp.hasNext(iterator);) {
                 Object wrappedObject = cp.nextEntry(iterator, session);
                 Object nestedObject = cp.unwrapIteratorResult(wrappedObject);
-                session.load(nestedObject, item.getGroup(nestedObject.getClass()));
+                session.load(nestedObject, item.getGroup(nestedObject.getClass()), getReferenceDescriptor(), fromFetchGroup);
             }
+        }
+    }
+    
+    /**
+     * Force instantiation of all indirections.
+     */
+    @Override
+    public void loadAll(Object object, AbstractSession session, IdentityHashSet loaded) {
+        instantiateAttribute(object, session);
+        ClassDescriptor referenceDescriptor = getReferenceDescriptor();
+        if (referenceDescriptor != null) {
+        	boolean hasInheritance = referenceDescriptor.hasInheritance() || referenceDescriptor.hasTablePerClassPolicy();
+	        Object value = getRealAttributeValueFromObject(object, session);
+	        ContainerPolicy cp = this.containerPolicy;
+	        for (Object iterator = cp.iteratorFor(value); cp.hasNext(iterator);) {
+	            Object wrappedObject = cp.nextEntry(iterator, session);
+	            Object nestedObject = cp.unwrapIteratorResult(wrappedObject);
+	            if (hasInheritance && !nestedObject.getClass().equals(referenceDescriptor.getJavaClass())){
+	                ClassDescriptor concreteReferenceDescriptor = referenceDescriptor.getInheritancePolicy().getDescriptor(nestedObject.getClass());
+	                concreteReferenceDescriptor.getObjectBuilder().loadAll(nestedObject, session, loaded);
+	            } else {
+	            	referenceDescriptor.getObjectBuilder().loadAll(nestedObject, session, loaded);
+	            }
+	        }
         }
     }
     
@@ -2064,7 +2100,7 @@ public abstract class CollectionMapping extends ForeignReferenceMapping implemen
             ClassDescriptor descriptor;
 
             //PERF: Use referenceDescriptor if it does not have inheritance
-            if (!getReferenceDescriptor().hasInheritance()) {
+            if (!getReferenceDescriptor().hasInheritance() && !getReferenceDescriptor().hasTablePerClassPolicy()) {
                 descriptor = getReferenceDescriptor();
             } else {
                 descriptor = uow.getDescriptor(newValue);
@@ -2524,6 +2560,11 @@ public abstract class CollectionMapping extends ForeignReferenceMapping implemen
             }
             
             // For each rows, extract the target row and build the target object and add to the collection.
+            ObjectBuilder referenceBuilder = getReferenceDescriptor().getObjectBuilder();
+            JoinedAttributeManager referenceJoinManager = null;
+            if (nestedQuery.hasJoining()) {
+                referenceJoinManager = nestedQuery.getJoinedAttributeManager();
+            }
             for (int index = 0; index < size; index++) {
                 AbstractRecord sourceRow = rows.get(index);
                 AbstractRecord targetRow = sourceRow;
@@ -2534,7 +2575,7 @@ public abstract class CollectionMapping extends ForeignReferenceMapping implemen
                 
                 // Partial object queries must select the primary key of the source and related objects.
                 // If the target joined rows in null (outerjoin) means an empty collection.
-                Object targetKey = getReferenceDescriptor().getObjectBuilder().extractPrimaryKeyFromRow(targetRow, executionSession);
+                Object targetKey = referenceBuilder.extractPrimaryKeyFromRow(targetRow, executionSession);
                 if (targetKey == null) {
                     // A null primary key means an empty collection returned as nulls from an outerjoin.
                     return this.indirectionPolicy.valueFromRow(value);
@@ -2544,7 +2585,7 @@ public abstract class CollectionMapping extends ForeignReferenceMapping implemen
                 if (!targetPrimaryKeys.contains(targetKey)) {
                     nestedQuery.setTranslationRow(targetRow);
                     targetPrimaryKeys.add(targetKey);
-                    Object targetObject = getReferenceDescriptor().getObjectBuilder().buildObject(nestedQuery, targetRow);
+                    Object targetObject = referenceBuilder.buildObject(nestedQuery, targetRow, referenceJoinManager);
                     Object targetMapKey = this.containerPolicy.buildKeyFromJoinedRow(targetRow, joinManager, nestedQuery, parentCacheKey, executionSession, isTargetProtected);
                     nestedQuery.setTranslationRow(null);
                     if (targetMapKey == null){

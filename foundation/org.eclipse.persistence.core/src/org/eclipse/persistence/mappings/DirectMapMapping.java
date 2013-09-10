@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 1998, 2012 Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1998, 2013 Oracle and/or its affiliates. All rights reserved.
  * This program and the accompanying materials are made available under the 
  * terms of the Eclipse Public License v1.0 and Eclipse Distribution License v. 1.0 
  * which accompanies this distribution. 
@@ -364,10 +364,10 @@ public class DirectMapMapping extends DirectCollectionMapping implements MapComp
     @Override
     public void initialize(AbstractSession session) throws DescriptorException {
         getMappedKeyMapContainerPolicy().setDescriptorForKeyMapping(this.getDescriptor());
-        super.initialize(session);
-        if (getValueConverter() != null) {
-            getValueConverter().initialize(this, session);
+        if (getKeyConverter() != null) {
+            getKeyConverter().initialize(this, session);
         }
+        super.initialize(session);
     }
 
     @Override

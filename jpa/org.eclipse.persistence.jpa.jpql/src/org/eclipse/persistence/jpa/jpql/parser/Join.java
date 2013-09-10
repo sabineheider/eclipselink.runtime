@@ -29,8 +29,12 @@ import org.eclipse.persistence.jpa.jpql.WordParser;
  * <p>
  * <div nowrap><b>BNF:</b> <code>fetch_join ::= join_spec FETCH join_association_path_expression</code>
  * <p>
+ * EclipseLink 2.4
+ * <p>
+ * <div nowrap><b>BNF:</b> <code>join_spec { abstract_schema_name | join_association_path_expression } [AS] identification_variable [join_condition]</code>
+ * <p>
  *
- * @version 2.4
+ * @version 2.5
  * @since 2.3
  * @author Pascal Filion
  */
@@ -181,6 +185,27 @@ public final class Join extends AbstractExpression {
 		if (onClause != null) {
 			children.add(onClause);
 		}
+	}
+
+	/**
+	 * {@inheritDoc}
+	 */
+	@Override
+	public JPQLQueryBNF findQueryBNF(Expression expression) {
+
+		if ((joinAssociationPath != null) && joinAssociationPath.isAncestor(expression)) {
+			return getQueryBNF(JoinAssociationPathExpressionBNF.ID);
+		}
+
+		if ((identificationVariable != null) && identificationVariable.isAncestor(expression)) {
+			return getQueryBNF(IdentificationVariableBNF.ID);
+		}
+
+		if ((onClause != null) && onClause.isAncestor(expression)) {
+			return getQueryBNF(OnClauseBNF.ID);
+		}
+
+		return super.findQueryBNF(expression);
 	}
 
 	/**

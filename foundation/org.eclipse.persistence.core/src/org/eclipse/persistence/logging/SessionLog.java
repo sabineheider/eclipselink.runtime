@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 1998, 2012 Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1998, 2013 Oracle and/or its affiliates. All rights reserved.
  * This program and the accompanying materials are made available under the 
  * terms of the Eclipse Public License v1.0 and Eclipse Distribution License v. 1.0 
  * which accompanies this distribution. 
@@ -112,6 +112,8 @@ public interface SessionLog extends Cloneable {
     public static final String DMS = "dms";
     public static final String METADATA = "metadata";
     public static final String MONITORING = "monitoring";
+    public static final String MISC = "misc";
+    
     /**
      * @deprecated use {@link #METADATA}
      */
@@ -124,7 +126,27 @@ public interface SessionLog extends Cloneable {
     public static final String DDL = "ddl";
     public static final String JPARS = "jpars";
     
-    public final String[] loggerCatagories = new String[] { SQL ,TRANSACTION ,EVENT ,CONNECTION ,QUERY ,CACHE ,PROPAGATION ,SEQUENCING ,EJB ,DMS ,METADATA, METAMODEL, WEAVER ,PROPERTIES ,SERVER, JPARS};
+    public final String[] loggerCatagories = new String[] { 
+        SQL,
+        TRANSACTION,
+        EVENT,
+        CONNECTION,
+        QUERY,
+        CACHE,
+        PROPAGATION,
+        SEQUENCING, 
+        JPA, 
+        EJB, 
+        DMS, 
+        METADATA,
+        MONITORING,
+        METAMODEL, 
+        WEAVER,
+        PROPERTIES,
+        SERVER,
+        DDL,
+        JPARS
+    };
 
     /**
      * PUBLIC:

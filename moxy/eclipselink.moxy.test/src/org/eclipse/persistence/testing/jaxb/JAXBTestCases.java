@@ -364,6 +364,7 @@ public abstract class JAXBTestCases extends XMLMappingTestCases {
             	JAXBContext jaxbContextFromJSONBindings = createJaxbContextFromJSONBindings();
                	Unmarshaller jaxbUnmarshallerFromJSONBindings = jaxbContextFromJSONBindings.createUnmarshaller();
                	jaxbUnmarshallerFromJSONBindings.setAttachmentUnmarshaller(jaxbUnmarshaller.getAttachmentUnmarshaller());
+               	jaxbUnmarshallerFromJSONBindings.setProperty(UnmarshallerProperties.OBJECT_GRAPH, jaxbUnmarshaller.getProperty(UnmarshallerProperties.OBJECT_GRAPH));
                	jaxbUnmarshallerFromJSONBindings.setProperty(UnmarshallerProperties.JSON_NAMESPACE_PREFIX_MAPPER, jaxbMarshaller.getProperty(UnmarshallerProperties.JSON_NAMESPACE_PREFIX_MAPPER));
             	Object testObject2 = null;
            	     log("************test with JSON bindings*********");
@@ -430,8 +431,12 @@ public abstract class JAXBTestCases extends XMLMappingTestCases {
 
         int sizeBefore = getNamespaceResolverSize(desc);
         jaxbMarshaller.setProperty(MarshallerProperties.MEDIA_TYPE, "application/xml");
-        jaxbMarshaller.marshal(objectToWrite, stream);
-
+        try {
+            jaxbMarshaller.marshal(objectToWrite, stream);
+        } catch(Exception e) {
+            assertMarshalException(e);
+            return;
+        }
         int sizeAfter = getNamespaceResolverSize(desc);
 
         assertEquals(sizeBefore, sizeAfter);
@@ -454,7 +459,7 @@ public abstract class JAXBTestCases extends XMLMappingTestCases {
         	 
         	 
      		 jaxbMarshallerFromJSONBindings.setProperty(MarshallerProperties.NAMESPACE_PREFIX_MAPPER, jaxbMarshaller.getProperty(MarshallerProperties.NAMESPACE_PREFIX_MAPPER));
-    		 
+    		 jaxbMarshallerFromJSONBindings.setProperty(MarshallerProperties.OBJECT_GRAPH, jaxbMarshaller.getProperty(MarshallerProperties.OBJECT_GRAPH));
 
         	 
              jaxbMarshallerFromJSONBindings.marshal(objectToWrite, stream2);        	         	 
@@ -482,7 +487,12 @@ public abstract class JAXBTestCases extends XMLMappingTestCases {
         int sizeBefore = getNamespaceResolverSize(desc);
         String originalEncoding = (String)jaxbMarshaller.getProperty(Marshaller.JAXB_ENCODING);
         jaxbMarshaller.setProperty(Marshaller.JAXB_ENCODING, "US-ASCII");
-        jaxbMarshaller.marshal(objectToWrite, stream);
+        try {
+            jaxbMarshaller.marshal(objectToWrite, stream);
+        } catch(Exception e) {
+            assertMarshalException(e);
+            return;
+        }
         jaxbMarshaller.setProperty(Marshaller.JAXB_ENCODING, originalEncoding);
         int sizeAfter = getNamespaceResolverSize(desc);
 
@@ -529,9 +539,13 @@ public abstract class JAXBTestCases extends XMLMappingTestCases {
 
         int sizeBefore = getNamespaceResolverSize(desc);
         jaxbMarshaller.setProperty(MarshallerProperties.MEDIA_TYPE, "application/xml");
-
-        jaxbMarshaller.marshal(objectToWrite, writer);
-
+        
+        try {
+            jaxbMarshaller.marshal(objectToWrite, writer);
+        } catch(Exception e) {
+            assertMarshalException(e);
+            return;
+        }
         int sizeAfter = getNamespaceResolverSize(desc);
 
         assertEquals(sizeBefore, sizeAfter);
@@ -561,8 +575,12 @@ public abstract class JAXBTestCases extends XMLMappingTestCases {
             jaxbMarshaller.setProperty(MarshallerProperties.MEDIA_TYPE, "application/xml");
 
             int sizeBefore = getNamespaceResolverSize(desc);
-            jaxbMarshaller.marshal(objectToWrite, streamWriter);
-
+            try {
+                jaxbMarshaller.marshal(objectToWrite, streamWriter);
+            } catch(Exception e) {
+                assertMarshalException(e);
+                return;
+            }
             streamWriter.flush();
             int sizeAfter = getNamespaceResolverSize(desc);
 
@@ -593,8 +611,12 @@ public abstract class JAXBTestCases extends XMLMappingTestCases {
 
             int sizeBefore = getNamespaceResolverSize(desc);
             XMLStreamWriterRecord record = new XMLStreamWriterRecord(streamWriter);
-            ((org.eclipse.persistence.jaxb.JAXBMarshaller)jaxbMarshaller).marshal(objectToWrite, record);
-
+            try {
+                ((org.eclipse.persistence.jaxb.JAXBMarshaller)jaxbMarshaller).marshal(objectToWrite, record);
+            } catch(Exception e) {
+                assertMarshalException(e);
+                return;
+            }
             streamWriter.flush();
             int sizeAfter = getNamespaceResolverSize(desc);
 
@@ -625,8 +647,12 @@ public abstract class JAXBTestCases extends XMLMappingTestCases {
             jaxbMarshaller.setProperty(MarshallerProperties.MEDIA_TYPE, "application/xml");
 
             int sizeBefore = getNamespaceResolverSize(desc);
-            jaxbMarshaller.marshal(objectToWrite, eventWriter);
-
+            try {
+                jaxbMarshaller.marshal(objectToWrite, eventWriter);
+            } catch(Exception e) {
+                assertMarshalException(e);
+                return;
+            }
             eventWriter.flush();
             int sizeAfter = getNamespaceResolverSize(desc);
 
@@ -649,8 +675,12 @@ public abstract class JAXBTestCases extends XMLMappingTestCases {
         int sizeBefore = getNamespaceResolverSize(desc);
         jaxbMarshaller.setProperty(MarshallerProperties.MEDIA_TYPE, "application/xml");
 
-        jaxbMarshaller.marshal(objectToWrite, builder);
-
+        try {
+            jaxbMarshaller.marshal(objectToWrite, builder);
+        } catch(Exception e) {
+            assertMarshalException(e);
+            return;
+        }
         int sizeAfter = getNamespaceResolverSize(desc);
 
         assertEquals(sizeBefore, sizeAfter);
@@ -767,7 +797,12 @@ public abstract class JAXBTestCases extends XMLMappingTestCases {
 
         int sizeBefore = getNamespaceResolverSize(desc);
         Document testDocument = XMLPlatformFactory.getInstance().getXMLPlatform().createDocument();
-        jaxbMarshaller.marshal(objectToWrite, testDocument);
+        try {
+            jaxbMarshaller.marshal(objectToWrite, testDocument);
+        } catch(Exception e) {
+            assertMarshalException(e);
+            return;
+        }
         int sizeAfter = getNamespaceResolverSize(desc);
         assertEquals(sizeBefore, sizeAfter);
         objectToXMLDocumentTest(testDocument);

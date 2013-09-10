@@ -95,6 +95,8 @@
  *       - 389090: JPA 2.1 DDL Generation Support (index metadata support)
  *     02/12/2013-2.5 Guy Pelletier 
  *       - 397772: JPA 2.1 Entity Graph Support (XML support)
+ *     07/16/2013-2.5.1 Guy Pelletier 
+ *       - 412384: Applying Converter for parameterized basic-type for joda-time's DateTime does not work
  ******************************************************************************/
 package org.eclipse.persistence.internal.jpa.metadata;
 
@@ -139,8 +141,8 @@ import org.eclipse.persistence.internal.jpa.metadata.converters.AbstractConverte
 import org.eclipse.persistence.internal.jpa.metadata.converters.StructConverterMetadata;
 import org.eclipse.persistence.internal.jpa.metadata.listeners.EntityListenerMetadata;
 import org.eclipse.persistence.internal.jpa.metadata.partitioning.AbstractPartitioningMetadata;
-import org.eclipse.persistence.internal.jpa.metadata.queries.NamedQueryMetadata;
 import org.eclipse.persistence.internal.jpa.metadata.queries.ComplexTypeMetadata;
+import org.eclipse.persistence.internal.jpa.metadata.queries.NamedQueryMetadata;
 import org.eclipse.persistence.internal.jpa.metadata.queries.SQLResultSetMappingMetadata;
 import org.eclipse.persistence.internal.jpa.metadata.sequencing.GeneratedValueMetadata;
 import org.eclipse.persistence.internal.jpa.metadata.sequencing.SequenceGeneratorMetadata;
@@ -287,7 +289,7 @@ public class MetadataProject {
     
     // The converter accessors for this project
     private Map<String, ConverterAccessor> m_converterAccessors;
-    private Map<MetadataClass, ConverterAccessor> m_autoApplyConvertAccessors;
+    private Map<String, ConverterAccessor> m_autoApplyConvertAccessors;
     
     // Store PLSQL record and table types, Oracle object types,
     // array types and XMLType types by name, to allow reuse.
@@ -369,7 +371,7 @@ public class MetadataProject {
         m_uuidGenerators = new HashMap<String, UuidGeneratorMetadata>();
         m_converters = new HashMap<String, AbstractConverterMetadata>();
         m_converterAccessors = new HashMap<String, ConverterAccessor>();
-        m_autoApplyConvertAccessors = new HashMap<MetadataClass, ConverterAccessor>();
+        m_autoApplyConvertAccessors = new HashMap<String, ConverterAccessor>();
         m_partitioningPolicies = new HashMap<String, AbstractPartitioningMetadata>();
         m_complexMetadataTypes = new HashMap<String, ComplexTypeMetadata>();
         m_metamodelMappedSuperclasses = new HashMap<String, MappedSuperclassAccessor>();
@@ -988,7 +990,7 @@ public class MetadataProject {
      * Return the converter for the auto apply class type.
      */
     public ConverterAccessor getAutoApplyConverter(MetadataClass cls) {
-        return m_autoApplyConvertAccessors.get(cls);
+        return m_autoApplyConvertAccessors.get(cls.getName());
     }
     
     /**
@@ -1315,7 +1317,7 @@ public class MetadataProject {
      * Return true if there is an auto-apply converter for the given cls.
      */
     public boolean hasAutoApplyConverter(MetadataClass cls) {
-        return m_autoApplyConvertAccessors.containsKey(cls);
+        return m_autoApplyConvertAccessors.containsKey(cls.getName());
     }
     
     /**
@@ -1751,7 +1753,16 @@ public class MetadataProject {
         // 3 - Build our global converter and auto-apply lists first
         for (ConverterAccessor converterAccessor : getConverterAccessors().values()) {
             if (converterAccessor.autoApply()) {
-                m_autoApplyConvertAccessors.put(converterAccessor.getAttributeClassification(), converterAccessor);
+                m_autoApplyConvertAccessors.put(converterAccessor.getAttributeClassification().getName(), converterAccessor);
+            }
+        }
+        
+        // 4 - Pre-process the embeddables.
+        for (EmbeddableAccessor embeddable : getEmbeddableAccessors()) {
+            // If the accessor hasn't been processed yet, then process it. An
+            // EmbeddableAccessor is normally fast tracked if it is a reference.
+            if (! embeddable.isPreProcessed()) {
+                embeddable.preProcess();
             }
         }
     }
@@ -1999,7 +2010,19 @@ public class MetadataProject {
      */
     public boolean usesMultitenantSharedEmf() {
         return m_multitenantSharedEmf;
-    }    
+    }
+
+    /**
+     * INTERNAL:
+     * Return true if the entity manager factory for this project has any virtual classes
+     * 
+     */
+    public boolean hasVirtualClasses() {
+        if ((m_virtualClasses != null) && (!m_virtualClasses.isEmpty())) {
+            return true;
+        }
+        return false;
+    }
  }
 
 

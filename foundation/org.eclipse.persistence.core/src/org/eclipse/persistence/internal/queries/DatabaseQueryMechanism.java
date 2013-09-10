@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 1998, 2012 Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1998, 2013 Oracle and/or its affiliates. All rights reserved.
  * This program and the accompanying materials are made available under the 
  * terms of the Eclipse Public License v1.0 and Eclipse Distribution License v. 1.0 
  * which accompanies this distribution. 
@@ -34,6 +34,7 @@ import org.eclipse.persistence.queries.*;
 import org.eclipse.persistence.exceptions.*;
 import org.eclipse.persistence.mappings.DatabaseMapping.WriteType;
 import org.eclipse.persistence.internal.sessions.AbstractRecord;
+import org.eclipse.persistence.internal.sessions.RepeatableWriteUnitOfWork;
 import org.eclipse.persistence.internal.sessions.UnitOfWorkImpl;
 import org.eclipse.persistence.internal.sessions.AbstractSession;
 import org.eclipse.persistence.descriptors.ClassDescriptor;
@@ -465,6 +466,9 @@ public abstract class DatabaseQueryMechanism implements Cloneable, Serializable 
                 writeQuery.setPrimaryKey(descriptor.getObjectBuilder().extractPrimaryKeyFromObject(object, session));
             }
             addWriteLockFieldForInsert();
+            if (descriptor.hasSerializedObjectPolicy()) {
+                descriptor.getSerializedObjectPolicy().putObjectIntoRow(modifyRow, object, session);
+            }
 
             // CR#3237
             // Store the size of the modify row so we can determine if the user has added to the row in the insert.
@@ -923,6 +927,9 @@ public abstract class DatabaseQueryMechanism implements Cloneable, Serializable 
                     ((VersionLockingPolicy)policy).writeLockValueIntoRow(writeQuery, object);
                 }
             }
+            if (descriptor.hasSerializedObjectPolicy()) {
+                descriptor.getSerializedObjectPolicy().putObjectIntoRow(getModifyRow(), object, session);
+            }
 
             // PERF: Avoid events if no listeners.
             if (eventManager.hasAnyEventListeners()) {
@@ -1033,15 +1040,29 @@ public abstract class DatabaseQueryMechanism implements Cloneable, Serializable 
             // Update the write lock field if required.
             if (lockingPolicy != null) {
                 lockingPolicy.addLockValuesToTranslationRow(writeQuery);
-                // update the row and object if shouldModifyVersionField is non null and has a value of true (a forced update),
-                // or if there is no forced update and modifyRow has modifications
-                if ((shouldModifyVersionField != null && shouldModifyVersionField) || (shouldModifyVersionField == null && !getModifyRow().isEmpty())) {
-                    // Update the row with newer lock value.
-                    lockingPolicy.updateRowAndObjectForUpdate(writeQuery, object);
-                } else if (!shouldModifyVersionField && (lockingPolicy instanceof VersionLockingPolicy)) {
-                    // Add the existing write lock value to the for a "read" lock (requires something to update).
-                    ((VersionLockingPolicy)lockingPolicy).writeLockValueIntoRow(writeQuery, object);
+                // Do not lock an object that has previously been optimistically locked within the RWUoW
+                boolean existingOptimisticLock = false;
+                if (session instanceof RepeatableWriteUnitOfWork) {
+                    RepeatableWriteUnitOfWork uow = (RepeatableWriteUnitOfWork)session;
+                    if (uow.getOptimisticReadLockObjects().get(object) != null && uow.getCumulativeUOWChangeSet() != null 
+                            && uow.getCumulativeUOWChangeSet().getObjectChangeSetForClone(object) != null) {
+                        existingOptimisticLock = true;
+                    }
                 }
+                if (!existingOptimisticLock) {
+                    // update the row and object if shouldModifyVersionField is non null and has a value of true (a forced update),
+                    // or if there is no forced update and modifyRow has modifications
+                    if ((shouldModifyVersionField != null && shouldModifyVersionField) || !getModifyRow().isEmpty()) {
+                        // Update the row with newer lock value.
+                        lockingPolicy.updateRowAndObjectForUpdate(writeQuery, object);
+                    } else if (!shouldModifyVersionField && (lockingPolicy instanceof VersionLockingPolicy)) {
+                        // Add the existing write lock value to the for a "read" lock (requires something to update).
+                        ((VersionLockingPolicy)lockingPolicy).writeLockValueIntoRow(writeQuery, object);
+                    }
+                }
+            }
+            if (descriptor.hasSerializedObjectPolicy()) {
+                descriptor.getSerializedObjectPolicy().putObjectIntoRow(getModifyRow(), object, session);
             }
 
             // PERF: Avoid events if no listeners.

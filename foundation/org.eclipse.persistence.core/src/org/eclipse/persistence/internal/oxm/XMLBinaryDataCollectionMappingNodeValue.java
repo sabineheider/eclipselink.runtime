@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 1998, 2012 Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1998, 2013 Oracle and/or its affiliates. All rights reserved.
  * This program and the accompanying materials are made available under the 
  * terms of the Eclipse Public License v1.0 and Eclipse Distribution License v. 1.0 
  * which accompanies this distribution. 
@@ -59,11 +59,16 @@ public class XMLBinaryDataCollectionMappingNodeValue extends MappingNodeValue im
     }
 
     protected String getValueToWrite(QName schemaType, Object value, CoreAbstractSession session) {
-        return (String) ((XMLConversionManager) session.getDatasourcePlatform().getConversionManager()).convertObject(value, CoreClassConstants.STRING, schemaType);
+        return (String) ((ConversionManager) session.getDatasourcePlatform().getConversionManager()).convertObject(value, CoreClassConstants.STRING, schemaType);
     }
 
     public boolean isOwningNode(XPathFragment xPathFragment) {
         return xPathFragment.getNextFragment() == null || xPathFragment.isAttribute();
+    }
+
+    @Override
+    public boolean isWrapperAllowedAsCollectionName() {
+        return true;
     }
 
     public boolean marshal(XPathFragment xPathFragment, MarshalRecord marshalRecord, Object object, CoreAbstractSession session, NamespaceResolver namespaceResolver) {
@@ -126,13 +131,13 @@ public class XMLBinaryDataCollectionMappingNodeValue extends MappingNodeValue im
                             fieldValue = unmarshalRecord.getUnmarshaller().getAttachmentUnmarshaller().getAttachmentAsByteArray(value);
                         }
                         xmlBinaryDataCollectionMapping.setAttributeValueInObject(unmarshalRecord.getCurrentObject(), XMLBinaryDataHelper.getXMLBinaryDataHelper().convertObject(fieldValue, xmlBinaryDataCollectionMapping.getAttributeClassification(),
-                                unmarshalRecord.getSession()));
+                                unmarshalRecord.getSession(), xmlBinaryDataCollectionMapping.getContainerPolicy()));
                     }
                 } else {
                     //value should be base64 binary string
-                    fieldValue = ((XMLConversionManager) unmarshalRecord.getSession().getDatasourcePlatform().getConversionManager()).convertSchemaBase64ToByteArray(value);
+                    fieldValue = ((ConversionManager) unmarshalRecord.getSession().getDatasourcePlatform().getConversionManager()).convertSchemaBase64ToByteArray(value);
                     xmlBinaryDataCollectionMapping.setAttributeValueInObject(unmarshalRecord.getCurrentObject(), XMLBinaryDataHelper.getXMLBinaryDataHelper().convertObject(fieldValue, xmlBinaryDataCollectionMapping.getAttributeClassification(),
-                            unmarshalRecord.getSession()));
+                            unmarshalRecord.getSession(),xmlBinaryDataCollectionMapping.getContainerPolicy()));
                 }
             }
             return true;
@@ -178,8 +183,10 @@ public class XMLBinaryDataCollectionMappingNodeValue extends MappingNodeValue im
             return true;
         }
         String mimeType = this.xmlBinaryDataCollectionMapping.getMimeType(object);
+        String attachmentType = mimeType;
         if(mimeType == null) {
             mimeType = Constants.EMPTY_STRING;
+            attachmentType = "application/octet-stream";
         }
         Marshaller marshaller = marshalRecord.getMarshaller();
         objectValue = xmlBinaryDataCollectionMapping.convertObjectValueToDataValue(objectValue, session, marshaller);
@@ -211,7 +218,7 @@ public class XMLBinaryDataCollectionMappingNodeValue extends MappingNodeValue im
                 byte[] bytes = null;
                 if (objectValue.getClass() == CoreClassConstants.APBYTE) {
                     bytes = (byte[]) objectValue;
-                    c_id = marshaller.getAttachmentMarshaller().addMtomAttachment(bytes, 0, bytes.length, this.xmlBinaryDataCollectionMapping.getMimeType(object), lastFrag.getLocalName(), lastFrag.getNamespaceURI());
+                    c_id = marshaller.getAttachmentMarshaller().addMtomAttachment(bytes, 0, bytes.length, attachmentType, lastFrag.getLocalName(), lastFrag.getNamespaceURI());
                 } else if (xmlBinaryDataCollectionMapping.getAttributeElementClass() == XMLBinaryDataHelper.getXMLBinaryDataHelper().DATA_HANDLER) {
                     c_id = marshaller.getAttachmentMarshaller().addMtomAttachment((DataHandler) objectValue, lastFrag.getLocalName(), lastFrag.getNamespaceURI());
                 } else {

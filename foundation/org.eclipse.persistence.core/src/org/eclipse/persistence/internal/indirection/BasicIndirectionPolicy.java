@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 1998, 2012 Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1998, 2013 Oracle and/or its affiliates. All rights reserved.
  * This program and the accompanying materials are made available under the 
  * terms of the Eclipse Public License v1.0 and Eclipse Distribution License v. 1.0 
  * which accompanies this distribution. 
@@ -60,12 +60,15 @@ public class BasicIndirectionPolicy extends IndirectionPolicy {
         //no need to check if the attribute is a valueholder because closeAttribute
         // should always be called first
         ValueHolderInterface valueHolder = (ValueHolderInterface)attributeValue;// cast the value
-        ValueHolder result = new ValueHolder();
-
+        ValueHolderInterface result = null;
         // delay instantiation until absolutely necessary
         if ((!(valueHolder instanceof UnitOfWorkValueHolder)) || valueHolder.isInstantiated()) {
+            result = new ValueHolder();
             result.setValue(super.backupCloneAttribute(valueHolder.getValue(), clone, backup, unitOfWork));
         } else {
+            // Backup value holder will be instantiated when uow vh is, to get original value,
+            // backup must also know about the uow vh, in case it needs to get its value.
+            result = new BackupValueHolder(valueHolder);
             ((UnitOfWorkValueHolder)valueHolder).setBackupValueHolder(result);
         }
 

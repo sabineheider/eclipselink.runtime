@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 1998, 2012 Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1998, 2013 Oracle and/or its affiliates. All rights reserved.
  * This program and the accompanying materials are made available under the 
  * terms of the Eclipse Public License v1.0 and Eclipse Distribution License v. 1.0 
  * which accompanies this distribution. 
@@ -477,6 +477,11 @@ public class VariableOneToOneMapping extends ObjectReferenceMapping implements R
         super.initialize(session);
         initializeForeignKeys(session);
         setFields(collectFields());
+        if (usesIndirection()) {
+            for (DatabaseField field : this.fields) {
+                field.setKeepInRow(true);
+            }
+        }
         if (getTypeField() != null) {
             setTypeField(getDescriptor().buildField(getTypeField()));
         }
@@ -739,6 +744,9 @@ public class VariableOneToOneMapping extends ObjectReferenceMapping implements R
             } else if (!this.isCacheable && !isTargetProtected && cacheKey != null) {
                 return this.indirectionPolicy.buildIndirectObject(new ValueHolder(null));
             }
+        }
+        if (row.hasSopObject()) {
+            return getAttributeValueFromObject(row.getSopObject());
         }
         // If any field in the foreign key is null then it means there are no referenced objects
         for (DatabaseField field : getFields()) {

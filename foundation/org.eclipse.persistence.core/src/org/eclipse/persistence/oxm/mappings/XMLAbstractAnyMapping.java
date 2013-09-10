@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 1998, 2012 Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1998, 2013 Oracle and/or its affiliates. All rights reserved.
  * This program and the accompanying materials are made available under the 
  * terms of the Eclipse Public License v1.0 and Eclipse Distribution License v. 1.0 
  * which accompanies this distribution. 
@@ -19,7 +19,7 @@ import org.eclipse.persistence.descriptors.ClassDescriptor;
 import org.eclipse.persistence.exceptions.DescriptorException;
 import org.eclipse.persistence.exceptions.XMLMarshalException;
 import org.eclipse.persistence.internal.descriptors.ObjectBuilder;
-import org.eclipse.persistence.internal.oxm.XMLConversionManager;
+import org.eclipse.persistence.internal.oxm.ConversionManager;
 import org.eclipse.persistence.internal.queries.ContainerPolicy;
 import org.eclipse.persistence.internal.queries.JoinedAttributeManager;
 import org.eclipse.persistence.internal.sessions.AbstractSession;
@@ -151,9 +151,10 @@ public abstract class XMLAbstractAnyMapping extends DatabaseMapping {
             if ((stringValue != null) && stringValue.length() > 0) {
                 Object convertedValue = stringValue;
                 if (schemaTypeQName != null) {
-                    Class theClass = (Class) XMLConversionManager.getDefaultXMLTypes().get(schemaTypeQName);
+                    ConversionManager conversionManager = (ConversionManager) session.getDatasourcePlatform().getConversionManager();
+                    Class theClass = conversionManager.javaType(schemaTypeQName);
                     if (theClass != null) {
-                        convertedValue = ((XMLConversionManager) session.getDatasourcePlatform().getConversionManager()).convertObject(convertedValue, theClass, schemaTypeQName);
+                        convertedValue = conversionManager.convertObject(convertedValue, theClass, schemaTypeQName);
                     }
                 }
                 if (converter != null) {

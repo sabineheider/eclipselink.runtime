@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2011, 2012 Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2011, 2013 Oracle and/or its affiliates. All rights reserved.
  * This program and the accompanying materials are made available under the 
  * terms of the Eclipse Public License v1.0 and Eclipse Distribution License v. 1.0 
  * which accompanies this distribution. 
@@ -97,6 +97,12 @@ public class CachePolicy implements Cloneable, Serializable {
         
     /** This flag controls how the MergeManager should merge an Entity when merging into the shared cache.*/
     protected boolean fullyMergeEntity;
+    
+    /**
+     * In certain cases and cache types it is more efficient to preFetch the cache keys from the cache when 
+     * building the results of the query.  Set this flag to true to prefetch the results. 
+     */
+    protected boolean prefetchCacheKeys;
     
     protected Map<List<DatabaseField>, CacheIndex> cacheIndexes;
 
@@ -874,6 +880,28 @@ public class CachePolicy implements Cloneable, Serializable {
 
     /**
      * INTERNAL:
+     * Index the object by index in the cache using the object.
+     */
+    public void indexObjectInCache(CacheKey cacheKey, Object object, ClassDescriptor descriptor, AbstractSession session, boolean refresh) {
+        if (!hasCacheIndexes()) {
+            return;
+        }
+        for (CacheIndex index : this.cacheIndexes.values()) {
+            if (!refresh || index.isUpdateable()) {
+                List<DatabaseField> fields = index.getFields();
+                int size = fields.size();
+                Object[] values = new Object[size];
+                for (int count = 0; count < size; count++) {
+                    values[count] = descriptor.getObjectBuilder().extractValueFromObjectForField(object, fields.get(count), session);
+                }
+                CacheId indexValues = new CacheId(values);
+                session.getIdentityMapAccessorInstance().putCacheKeyByIndex(index, indexValues, cacheKey, descriptor);
+            }
+        }
+    }
+
+    /**
+     * INTERNAL:
      * Index the object by index in the cache using its changeSet.
      */
     public void indexObjectInCache(ObjectChangeSet changeSet, Object object, ClassDescriptor descriptor, AbstractSession session) {
@@ -1012,5 +1040,13 @@ public class CachePolicy implements Cloneable, Serializable {
      */
     public void useWeakIdentityMap() {
         setIdentityMapClass(ClassConstants.WeakIdentityMap_Class);
+    }
+
+    public void setPrefetchCacheKeys(boolean prefetchCacheKeys) {
+        this.prefetchCacheKeys = prefetchCacheKeys;
+    }
+
+    public boolean shouldPrefetchCacheKeys() {
+        return this.prefetchCacheKeys ;
     }
 }

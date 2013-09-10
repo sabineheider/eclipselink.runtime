@@ -374,7 +374,7 @@ public class LoggingLocalizationResource extends ListResourceBundle {
         { "broadcast_remote_command_wrong_type", "Warning: {0}: received message {1} containg an object of type {2} instead of expected type RemoteCommand." },
         { "broadcast_ignored_command_while_closing_connection", "Warning: {0}: ignoring request to publish command while connection is closing." },
         { "broadcast_listening_sleep_on_error", "Warning: {0}: Exception {1} was thrown. The thread will sleep for {2} milliseconds before resuming listening." },
-        { "dbPlatformHelper_defaultingPlatform", "Not able to detect platform for vendor name [{0}]. Defaulting to [{1}]. The database dialect used may not match with the database you are using. Please explicitly provide a platform using property 'eclipselink.platform.class.name'."},
+        { "dbPlatformHelper_defaultingPlatform", "Not able to detect platform for vendor name [{0}]. Defaulting to [{1}]. The database dialect used may not match with the database you are using. Please explicitly provide a platform using property 'eclipselink.target-database'."},
         { "dbPlatformHelper_noMappingFound", "Can not load resource [{0}] that loads mapping from vendor name to database platform. Autodetection of database platform will not work."},
         
         { "sessions_xml_path_where_session_load_from", "The session info is loaded from [{0}]."},
@@ -466,6 +466,11 @@ public class LoggingLocalizationResource extends ListResourceBundle {
         { "jpars_could_bootstrap_persistence_context", "Persistence Context: [{0}] could not be bootstrapped."},
         { "entity_not_available_during_merge", "Max tries exceeded.  Unable to find value of locked cacheKey.  Class [{0}] ID:[{1}] This Thread: [{2}] Owning Thread:[{3}]"},        
         { "ddl_generation_unknown_property_value", "Unknown {0} value provided [{1}] for the persistence unit [{2}]. Valid options are: [{3}]" },
+        // SOP:
+        { "sop_object_deserialze_failed", "Failed to deserialize sopObject from [{0}] in [{1}]"},
+        { "sop_object_not_found", "Serialized sopObject is not found in [{0}] in [{1}]"},
+        { "sop_object_wrong_version", "Removing serialized sopObject from the row because it has a wrong version [{0}] in [{1}] in [{2}]"},
+        { "sop_object_wrong_pk", "Removing serialized sopObject from the row because it has a wrong primary key [{0}] in [{1}] in [{2}]"},
         
         // MESSAGES end
         

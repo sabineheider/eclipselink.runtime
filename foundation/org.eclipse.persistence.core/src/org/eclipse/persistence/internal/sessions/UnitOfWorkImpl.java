@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 1998, 2012 Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1998, 2013 Oracle and/or its affiliates. All rights reserved.
  * This program and the accompanying materials are made available under the 
  * terms of the Eclipse Public License v1.0 and Eclipse Distribution License v. 1.0 
  * which accompanies this distribution. 
@@ -261,8 +261,8 @@ public class UnitOfWorkImpl extends AbstractSession implements org.eclipse.persi
     /** Determine if does-exist should be performed on persist. */
     protected boolean shouldValidateExistence;
     
-    /** Allow updates to be ordered by id to avoid possible deadlocks. */
-    protected boolean shouldOrderUpdates;
+    /** Allow updates and deletes to be ordered by id or changes to avoid possible deadlocks. */
+    protected CommitOrderType commitOrder;
 
     /** This stored the reference mode for this UOW.  If the reference mode is
      * weak then this unit of work will retain only weak references to non new, 
@@ -279,13 +279,13 @@ public class UnitOfWorkImpl extends AbstractSession implements org.eclipse.persi
     protected Map<Object, Object> unregisteredDeletedObjectsCloneToBackupAndOriginal;
     
     /** This attribute records when the preDelete stage of Commit has completed */
-    protected boolean preDeleteComplete = false;
+    protected boolean preDeleteComplete;
     
     /** Stores all of the private owned objects that have been removed and may need to cascade deletion */
     protected Map<DatabaseMapping, List<Object>> deletedPrivateOwnedObjects;
 
     /** temporarily holds a reference to a merge manager that is calling this UnitOfWork during merge **/
-    protected transient MergeManager mergeManagerForActiveMerge = null;
+    protected transient MergeManager mergeManagerForActiveMerge;
 
     /** Set of objects that were deleted by database cascade delete constraints. */
     protected Set<Object> cascadeDeleteObjects;
@@ -323,7 +323,9 @@ public class UnitOfWorkImpl extends AbstractSession implements org.eclipse.persi
         this.exceptionHandler = parent.exceptionHandler;
         this.pessimisticLockTimeoutDefault = parent.pessimisticLockTimeoutDefault;
         this.queryTimeoutDefault = parent.queryTimeoutDefault;
-        this.isConcurrent = parent.isConcurrent();
+        this.shouldOptimizeResultSetAccess = parent.shouldOptimizeResultSetAccess;
+        this.serializer = parent.serializer;
+        this.isConcurrent = parent.isConcurrent;
         // Initialize the readOnlyClasses variable.
         this.setReadOnlyClasses(parent.copyReadOnlyClasses());
         this.validationLevel = Partial;
@@ -342,10 +344,10 @@ public class UnitOfWorkImpl extends AbstractSession implements org.eclipse.persi
         this.descriptors = parent.getDescriptors();
         incrementProfile(SessionProfiler.UowCreated);
         // PERF: Cache the write-lock check to avoid cost of checking in every register/clone.
-        this.shouldCheckWriteLock = getParent().getDatasourceLogin().shouldSynchronizedReadOnWrite() || getParent().getDatasourceLogin().shouldSynchronizeWrites();
+        this.shouldCheckWriteLock = parent.getDatasourceLogin().shouldSynchronizedReadOnWrite() || parent.getDatasourceLogin().shouldSynchronizeWrites();
         
         // Order updates by id
-        this.shouldOrderUpdates = true;
+        this.commitOrder = CommitOrderType.ID;
         
         // Copy down the table per tenant information.
         this.tablePerTenantDescriptors = parent.tablePerTenantDescriptors;
@@ -3321,16 +3323,11 @@ public class UnitOfWorkImpl extends AbstractSession implements org.eclipse.persi
                     if (hasObjectsDeletedDuringCommit()) {
                         uowChangeSet.addDeletedObjects(getObjectsDeletedDuringCommit(), this);
                     }
-                    boolean hasData = false;
                     if (uowChangeSet.hasChanges()) {
-                        MergeChangeSetCommand command = new MergeChangeSetCommand();
-                        command.setChangeSet(uowChangeSet);
-                        try {
-                            hasData = command.convertChangeSetToByteArray(this);
-                        } catch (java.io.IOException exception) {
-                            throw CommunicationException.unableToPropagateChanges("", exception);
-                        }
-                        if (hasData) {
+                        UnitOfWorkChangeSet remoteChangeSet = uowChangeSet.buildCacheCoordinationMergeChangeSet(this);
+                        if (remoteChangeSet != null) {
+                            MergeChangeSetCommand command = new MergeChangeSetCommand();
+                            command.setChangeSet(remoteChangeSet);
                             this.parent.getCommandManager().propagateCommand(command);
                         }
                     }
@@ -5668,6 +5665,14 @@ public class UnitOfWorkImpl extends AbstractSession implements org.eclipse.persi
     public boolean isPessimisticLocked(Object clone) {
         return (this.pessimisticLockedObjects != null )&& this.pessimisticLockedObjects.containsKey(clone);
     }
+    
+    /**
+     * INTERNAL:
+     * Return true if there are any pessimistic locked objects in this unit of work, false otherwise.
+     */
+    public boolean hasPessimisticLockedObjects() {
+        return (this.pessimisticLockedObjects != null) && (this.pessimisticLockedObjects.size() != 0);
+    }
 
     /**
      * @return the preDeleteComplete
@@ -5959,7 +5964,7 @@ public class UnitOfWorkImpl extends AbstractSession implements org.eclipse.persi
      * Return if updates should be ordered by primary key to avoid possible database deadlocks.
      */
     public boolean shouldOrderUpdates() {
-        return shouldOrderUpdates;
+        return this.commitOrder != CommitOrderType.NONE;
     }
 
     /**
@@ -5967,7 +5972,11 @@ public class UnitOfWorkImpl extends AbstractSession implements org.eclipse.persi
      * Set updates should be ordered by primary key to avoid possible database deadlocks.
      */
     public void setShouldOrderUpdates(boolean shouldOrderUpdates) {
-        this.shouldOrderUpdates = shouldOrderUpdates;
+        if (shouldOrderUpdates) {
+            this.commitOrder = CommitOrderType.ID;
+        } else {
+            this.commitOrder = CommitOrderType.NONE;            
+        }
     }
 
     @Override
@@ -6019,6 +6028,22 @@ public class UnitOfWorkImpl extends AbstractSession implements org.eclipse.persi
             return null;
         }
         return this.deletionDependencies.get(deletedObject);
+    }
+    
+    /**
+     * ADVANCED:
+     * Return the commit order.
+     */
+    public CommitOrderType getCommitOrder() {
+        return commitOrder; 
+    }
+    
+    /**
+     * ADVANCED:
+     * Set the commit order.
+     */
+    public void setCommitOrder(CommitOrderType order) {
+        this.commitOrder = order;
     }
 
 }

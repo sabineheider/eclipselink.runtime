@@ -224,7 +224,7 @@ public final class DefaultContentAssistProposals implements ContentAssistProposa
 	 *
 	 * @param abstractSchemaType The abstract schema type that is a valid proposal
 	 */
-	public void addAbstractSchemaType(IEntity abstractSchemaType) {
+	public void addEntity(IEntity abstractSchemaType) {
 		entities.add(abstractSchemaType);
 	}
 
@@ -291,12 +291,10 @@ public final class DefaultContentAssistProposals implements ContentAssistProposa
 	 * Adds the given range identification variable that is mapping the given abstract schema type.
 	 *
 	 * @param identificationVariable The range identification variable mapping the abstract schema name
-	 * @param abstractSchemaType The abstract type name that identifies the type of the variable
+	 * @param entity The abstract type name that identifies the type of the variable
 	 */
-	public void addRangeIdentificationVariable(String identificationVariable,
-	                                           IEntity abstractSchemaType) {
-
-		rangeIdentificationVariables.put(identificationVariable, abstractSchemaType);
+	public void addRangeIdentificationVariable(String identificationVariable, IEntity entity) {
+		rangeIdentificationVariables.put(identificationVariable, entity);
 	}
 
 	/**
@@ -722,6 +720,15 @@ public final class DefaultContentAssistProposals implements ContentAssistProposa
 	}
 
 	/**
+	 * Removes the given JPQL identifier.
+	 *
+	 * @param identifier The identifier that was added but actually needs to be removed
+	 */
+	protected void removeIdentifier(String identifier) {
+		identifiers.remove(identifier);
+	}
+
+	/**
 	 * Adds the given prefix that will be used to filter the list of possible class names.
 	 *
 	 * @param tableNamePrefix The prefix that is used to filter the list of class names
@@ -810,6 +817,14 @@ public final class DefaultContentAssistProposals implements ContentAssistProposa
 				sb.append(", ");
 			}
 			sb.append(identificationVariables);
+		}
+
+		// Range identification variables
+		if (!rangeIdentificationVariables.isEmpty()) {
+			if (sb.length() > 0) {
+				sb.append(", ");
+			}
+			sb.append(rangeIdentificationVariables);
 		}
 
 		// Mappings

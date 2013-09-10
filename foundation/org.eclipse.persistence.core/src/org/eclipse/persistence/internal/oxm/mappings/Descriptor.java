@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2012 Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, 2013 Oracle and/or its affiliates. All rights reserved.
  * This program and the accompanying materials are made available under the
  * terms of the Eclipse Public License v1.0 and Eclipse Distribution License v. 1.0
  * which accompanies this distribution.
@@ -21,10 +21,11 @@ import javax.xml.namespace.QName;
 import org.eclipse.persistence.core.descriptors.CoreInheritancePolicy;
 import org.eclipse.persistence.core.mappings.CoreAttributeAccessor;
 import org.eclipse.persistence.core.mappings.CoreMapping;
+import org.eclipse.persistence.core.queries.CoreAttributeGroup;
 import org.eclipse.persistence.internal.core.descriptors.CoreInstantiationPolicy;
 import org.eclipse.persistence.internal.core.descriptors.CoreObjectBuilder;
 import org.eclipse.persistence.internal.core.helper.CoreField;
-import org.eclipse.persistence.internal.helper.DatabaseTable;
+import org.eclipse.persistence.internal.core.helper.CoreTable;
 import org.eclipse.persistence.internal.oxm.NamespaceResolver;
 import org.eclipse.persistence.internal.oxm.Unmarshaller;
 import org.eclipse.persistence.internal.oxm.record.UnmarshalRecord;
@@ -38,6 +39,7 @@ public interface Descriptor <
     INSTANTIATION_POLICY extends CoreInstantiationPolicy,
     NAMESPACE_RESOLVER extends NamespaceResolver,
     OBJECT_BUILDER extends CoreObjectBuilder,
+    TABLE extends CoreTable,
     UNMARSHAL_RECORD extends UnmarshalRecord,
     UNMARSHALLER extends Unmarshaller> {
 	
@@ -169,7 +171,7 @@ public interface Descriptor <
       * INTERNAL:
       * Return all the tables.
       */
-     public Vector<DatabaseTable> getTables();
+     public Vector<TABLE> getTables();
      
      /**
       * INTERNAL:
@@ -299,5 +301,7 @@ public interface Descriptor <
 		  * @return object
 		  */
 		 public Object wrapObjectInXMLRoot(UNMARSHAL_RECORD unmarshalRecord, boolean forceWrap);
+
+        public CoreAttributeGroup getAttributeGroup(String subgraph);
         
 }

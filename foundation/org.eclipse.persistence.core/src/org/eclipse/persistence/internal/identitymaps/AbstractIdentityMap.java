@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 1998, 2012 Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1998, 2013 Oracle and/or its affiliates. All rights reserved.
  * This program and the accompanying materials are made available under the 
  * terms of the Eclipse Public License v1.0 and Eclipse Distribution License v. 1.0 
  * which accompanies this distribution. 
@@ -275,6 +275,28 @@ public abstract class AbstractIdentityMap implements IdentityMap, Serializable, 
             cachedObject = getCacheKey(pk, false);
             if ((cachedObject != null && cachedObject.getObject() != null && !descriptor.getCacheInvalidationPolicy().isInvalidated(cachedObject, currentTime))){
                 map.put(pk, cachedObject.getObject());
+            }
+        }
+        return map;
+    }
+
+    /**
+     * ADVANCED:
+     * Using a list of Entity PK this method will attempt to bulk load the entire list from the cache.
+     * In certain circumstances this can have large performance improvements over loading each item individually.
+     * @param pkList List of Entity PKs to extract from the cache
+     * @param ClassDescriptor Descriptor type to be retrieved.
+     * @return Map of Entity PKs associated to the Entities that were retrieved
+     * @throws QueryException
+     */
+    public Map<Object, CacheKey> getAllCacheKeysFromIdentityMapWithEntityPK(Object[] pkList, ClassDescriptor descriptor, AbstractSession session){
+        HashMap<Object, CacheKey> map = new HashMap<Object, CacheKey>();
+        CacheKey cachedObject = null;
+        long currentTime = System.currentTimeMillis();
+        for (Object pk : pkList){
+            cachedObject = getCacheKey(pk, false);
+            if ((cachedObject != null && cachedObject.getObject() != null && !descriptor.getCacheInvalidationPolicy().isInvalidated(cachedObject, currentTime))){
+                map.put(pk, cachedObject);
             }
         }
         return map;

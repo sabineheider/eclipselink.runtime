@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 1998, 2012 Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1998, 2013 Oracle and/or its affiliates. All rights reserved.
  * This program and the accompanying materials are made available under the 
  * terms of the Eclipse Public License v1.0 and Eclipse Distribution License v. 1.0 
  * which accompanies this distribution. 
@@ -52,6 +52,9 @@ public class RemoteCommandManagerException extends org.eclipse.persistence.excep
     public static final int ERROR_RECEIVED_JMS_MESSAGE_IS_NULL = 22116;
     //JMS PUBLISHING 
     public static final int RCM_UNINITIALIZED_OR_CLOSED = 22117;
+
+    // JGroups
+    public static final int ERROR_CREATING_JGROUPS_CONNECTION = 22118;
 
     public RemoteCommandManagerException() {
         super();
@@ -178,6 +181,16 @@ public class RemoteCommandManagerException extends org.eclipse.persistence.excep
         Object[] args = { topicName, topicFactory };
         RemoteCommandManagerException ex = new RemoteCommandManagerException(ExceptionMessageGenerator.buildMessage(RemoteCommandManagerException.class, ERROR_CREATING_LOCAL_JMS_CONNECTION, args));
         ex.setErrorCode(ERROR_CREATING_LOCAL_JMS_CONNECTION);
+        if (internalEx != null) {
+            ex.setInternalException(internalEx);
+        }
+        return ex;
+    }
+
+    public static RemoteCommandManagerException errorCreatingJGroupsConnection(String configFile, Throwable internalEx) {
+        Object[] args = { configFile };
+        RemoteCommandManagerException ex = new RemoteCommandManagerException(ExceptionMessageGenerator.buildMessage(RemoteCommandManagerException.class, ERROR_CREATING_JGROUPS_CONNECTION, args));
+        ex.setErrorCode(ERROR_CREATING_JGROUPS_CONNECTION);
         if (internalEx != null) {
             ex.setInternalException(internalEx);
         }

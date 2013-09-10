@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 1998, 2012 Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1998, 2013 Oracle and/or its affiliates. All rights reserved.
  * This program and the accompanying materials are made available under the 
  * terms of the Eclipse Public License v1.0 and Eclipse Distribution License v. 1.0 
  * which accompanies this distribution. 
@@ -36,7 +36,7 @@ import org.eclipse.persistence.oxm.mappings.nullpolicy.XMLNullRepresentationType
 
 import java.util.Iterator;
 
-public class XMLChoiceCollectionMappingMarshalNodeValue extends NodeValue implements ContainerValue {
+public class XMLChoiceCollectionMappingMarshalNodeValue extends MappingNodeValue implements ContainerValue {
     private ChoiceCollectionMapping xmlChoiceCollectionMapping;
     private Map<Field, NodeValue> fieldToNodeValues;
     private Map<Class, NodeValue> classToNodeValues;
@@ -127,7 +127,7 @@ public class XMLChoiceCollectionMappingMarshalNodeValue extends NodeValue implem
         	return marshalRecord.emptyCollection(xPathFragment, namespaceResolver, xmlChoiceCollectionMapping.getWrapperNullPolicy() != null);
         }
         
-        if(marshalRecord.getMarshaller().getMediaType().isApplicationJSON()){
+        if(marshalRecord.getMarshaller().isApplicationJSON()){
         	List<NodeValue> nodeValues = new ArrayList();
             List<List> values = new ArrayList<List>();
             
@@ -368,6 +368,11 @@ public class XMLChoiceCollectionMappingMarshalNodeValue extends NodeValue implem
     }
     
     public boolean isUnmarshalNodeValue() {
+        return false;
+    }
+
+    @Override
+    public boolean isWrapperAllowedAsCollectionName() {
         return false;
     }
 

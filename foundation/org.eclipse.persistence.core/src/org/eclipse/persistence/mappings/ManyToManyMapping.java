@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 1998, 2012 Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1998, 2013 Oracle and/or its affiliates. All rights reserved.
  * This program and the accompanying materials are made available under the 
  * terms of the Eclipse Public License v1.0 and Eclipse Distribution License v. 1.0 
  * which accompanies this distribution. 
@@ -481,13 +481,6 @@ public class ManyToManyMapping extends CollectionMapping implements RelationalMa
         initializeDeleteAllQuery(session);
         if (getHistoryPolicy() != null) {
             getHistoryPolicy().initialize(session);
-        }
-        
-        if (getReferenceDescriptor() != null && getReferenceDescriptor().hasTablePerClassPolicy()) {
-            // This will do nothing if we have already prepared for this 
-            // source mapping or if the source mapping does not require
-            // any special prepare logic.
-            getReferenceDescriptor().getTablePerClassPolicy().prepareChildrenSelectionQuery(this, session);              
         }
     }
 

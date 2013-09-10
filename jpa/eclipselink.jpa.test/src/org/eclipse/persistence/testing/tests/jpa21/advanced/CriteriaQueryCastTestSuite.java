@@ -94,18 +94,17 @@ public class CriteriaQueryCastTestSuite extends JUnitTestCase {
         suite.addTest(new CriteriaQueryCastTestSuite("testDowncastRelationshipTraversal"));
         suite.addTest(new CriteriaQueryCastTestSuite("testDoubleDowncastOneToOne"));
         suite.addTest(new CriteriaQueryCastTestSuite("testSelectCast"));
-        //treat use cases not yet supported:
-        //suite.addTest(new CriteriaQueryCastTestSuite("testCastInSubselect"));
-        //suite.addTest(new CriteriaQueryCastTestSuite("testDowncastWithFetchJoin"));
-        //suite.addTest(new CriteriaQueryCastTestSuite("testDoubleTreatOnRoot"));
-        //suite.addTest(new CriteriaQueryCastTestSuite("testDoubleTreatOnRootSTI"));
-        //suite.addTest(new CriteriaQueryCastTestSuite("testTreatInFrom"));
-        //suite.addTest(new CriteriaQueryCastTestSuite("testTreatInFromSTI"));
-        //suite.addTest(new CriteriaQueryCastTestSuite("testTreatInWhere"));
-        //suite.addTest(new CriteriaQueryCastTestSuite("testTreatInWhereSTI"));
-        //suite.addTest(new CriteriaQueryCastTestSuite("testTreatUsingAndOr"));
-        //suite.addTest(new CriteriaQueryCastTestSuite("testTreatUsingAndOrSTI"));
-        //suite.addTest(new CriteriaQueryCastTestSuite("testTreatUsingJoinOverDowncastRelationship"));
+        suite.addTest(new CriteriaQueryCastTestSuite("testCastInSubselect"));
+        suite.addTest(new CriteriaQueryCastTestSuite("testDowncastWithFetchJoin"));
+        suite.addTest(new CriteriaQueryCastTestSuite("testDoubleTreatOnRoot"));
+        suite.addTest(new CriteriaQueryCastTestSuite("testDoubleTreatOnRootSTI"));
+        suite.addTest(new CriteriaQueryCastTestSuite("testTreatInFrom"));
+        suite.addTest(new CriteriaQueryCastTestSuite("testTreatInFromSTI"));
+        suite.addTest(new CriteriaQueryCastTestSuite("testTreatInWhere"));
+        suite.addTest(new CriteriaQueryCastTestSuite("testTreatInWhereSTI"));
+        suite.addTest(new CriteriaQueryCastTestSuite("testTreatUsingAndOr"));
+        suite.addTest(new CriteriaQueryCastTestSuite("testTreatUsingAndOrSTI"));
+        suite.addTest(new CriteriaQueryCastTestSuite("testTreatUsingJoinOverDowncastRelationship"));
         return suite;
     }
     
@@ -120,15 +119,12 @@ public class CriteriaQueryCastTestSuite extends JUnitTestCase {
         if (getPersistenceUnitServerSession().getPlatform().isPostgreSQL()) {
             getPersistenceUnitServerSession().getLogin().setShouldForceFieldNamesToUpperCase(true);
         }
-        getPersistenceUnitServerSession().setLogLevel(0);
     }
 
     public void testDowncastOneToManyLeafQueryKey(){
         EntityManager em = createEntityManager();
-        getPersistenceUnitServerSession().setLogLevel(0);
         beginTransaction(em);
         try {
-
             Company company = new Company();
             company.setName("Acme");
             em.persist(company);
@@ -911,10 +907,9 @@ public class CriteriaQueryCastTestSuite extends JUnitTestCase {
             closeEntityManager(em);
         }
     }
-    
-    //last spec example, known not to work.
+
+    //last spec example
     public void testDoubleTreatOnRoot(){
-        System.out.println("Begin test testDoubleTreatOnRoot");
         EntityManager em = createEntityManager();
 
         beginTransaction(em);
@@ -958,9 +953,8 @@ public class CriteriaQueryCastTestSuite extends JUnitTestCase {
         }
     }
     
-  //last spec example, known not to work.
+  //last spec example
     public void testDoubleTreatOnRootSTI(){
-        System.out.println("Begin test testDoubleTreatOnRootSTI");
         EntityManager em = createEntityManager();
 
         beginTransaction(em);
@@ -998,12 +992,9 @@ public class CriteriaQueryCastTestSuite extends JUnitTestCase {
             closeEntityManager(em);
         }
     }
-    
-    //new tests:
-    
-  //first Spec example, works due to joining
+
+  //first Spec example
     public void testTreatInFrom(){
-        System.out.println("Begin test testTreatInFrom");
         EntityManager em = createEntityManager();
         beginTransaction(em);
         try {
@@ -1053,9 +1044,7 @@ public class CriteriaQueryCastTestSuite extends JUnitTestCase {
         }
     }
     
-    //expected to fail.  "AS" doesn't add typecast to filter results
     public void testTreatInFromSTI(){
-        System.out.println("Begin test testTreatInFromSTI");
         EntityManager em = createEntityManager();
         beginTransaction(em);
         try {
@@ -1104,7 +1093,6 @@ public class CriteriaQueryCastTestSuite extends JUnitTestCase {
     
   //second Spec example,
     public void testTreatInWhere(){
-        System.out.println("Begin test testTreatInFrom");
         EntityManager em = createEntityManager();
         beginTransaction(em);
         try {
@@ -1153,9 +1141,7 @@ public class CriteriaQueryCastTestSuite extends JUnitTestCase {
         }
     }
     
-    //expected to fail.  "AS" doesn't add typecast to filter results
     public void testTreatInWhereSTI(){
-        System.out.println("Begin test testTreatInFromSTI");
         EntityManager em = createEntityManager();
         beginTransaction(em);
         try {
@@ -1204,7 +1190,6 @@ public class CriteriaQueryCastTestSuite extends JUnitTestCase {
     
     //more complex example 
     public void testTreatUsingAndOr(){
-        System.out.println("Begin test testTreatUsingAndOr");
         EntityManager em = createEntityManager();
         beginTransaction(em);
         try {
@@ -1266,10 +1251,7 @@ public class CriteriaQueryCastTestSuite extends JUnitTestCase {
         }
     }
     
-    //expected to fail.  "AS" doesn't add typecast to filter results
     public void testTreatUsingAndOrSTI(){
-        System.out.println("Begin test testTreatUsingAndOrSTI");
-        getPersistenceUnitServerSession().setLogLevel(0);
         EntityManager em = createEntityManager();
         beginTransaction(em);
         try {

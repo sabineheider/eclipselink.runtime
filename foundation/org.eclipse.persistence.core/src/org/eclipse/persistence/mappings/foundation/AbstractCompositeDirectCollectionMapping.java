@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 1998, 2012 Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1998, 2013 Oracle and/or its affiliates. All rights reserved.
  * This program and the accompanying materials are made available under the 
  * terms of the Eclipse Public License v1.0 and Eclipse Distribution License v. 1.0 
  * which accompanies this distribution. 
@@ -9,6 +9,9 @@
  *
  * Contributors:
  *     Oracle - initial API and implementation from Oracle TopLink
+ *     06/03/2013-2.5.1 Guy Pelletier    
+ *       - 402380: 3 jpa21/advanced tests failed on server with 
+ *         "java.lang.NoClassDefFoundError: org/eclipse/persistence/testing/models/jpa21/advanced/enums/Gender" 
  ******************************************************************************/  
 package org.eclipse.persistence.mappings.foundation;
 
@@ -416,6 +419,25 @@ public abstract class AbstractCompositeDirectCollectionMapping extends DatabaseM
     }
 
     /**
+     * PUBLIC:
+     * Set the class each element in the object's
+     * collection should be converted to, before the collection
+     * is inserted into the object.
+     * This is optional - if left null, the elements will be added
+     * to the object's collection unconverted.
+     */
+    public void setAttributeElementClassName(String attributeElementClass) {
+        TypeConversionConverter converter;
+        if (getValueConverter() instanceof TypeConversionConverter) {
+            converter = (TypeConversionConverter)getValueConverter();
+        } else {
+            converter = new TypeConversionConverter();
+            setValueConverter(converter);
+        }
+        converter.setObjectClassName(attributeElementClass);
+    }
+    
+    /**
      * ADVANCED:
      * Set the mapping's containerPolicy.
      */
@@ -540,6 +562,9 @@ public abstract class AbstractCompositeDirectCollectionMapping extends DatabaseM
                 return null;
             }
         }
+        if (row.hasSopObject()) {
+            return getAttributeValueFromObject(row.getSopObject());
+        }
         ContainerPolicy cp = this.getContainerPolicy();
 
         Object fieldValue = row.getValues(this.getField());
@@ -654,20 +679,14 @@ public abstract class AbstractCompositeDirectCollectionMapping extends DatabaseM
         return true;
     }
     
+    @Override
     public void convertClassNamesToClasses(ClassLoader classLoader){
         super.convertClassNamesToClasses(classLoader);
 
         this.containerPolicy.convertClassNamesToClasses(classLoader);
         
-        if (this.valueConverter != null) {
-            if (this.valueConverter instanceof TypeConversionConverter) {
-                ((TypeConversionConverter)this.valueConverter).convertClassNamesToClasses(classLoader);
-            } else if (this.valueConverter instanceof ObjectTypeConverter) {
-                // To avoid 1.5 dependencies with the EnumTypeConverter check
-                // against ObjectTypeConverter.
-                ((ObjectTypeConverter)this.valueConverter).convertClassNamesToClasses(classLoader);
-            }
-        }         
+        // Convert and any Converter class names.
+        convertConverterClassNamesToClasses(valueConverter, classLoader);        
     }
     
     /**

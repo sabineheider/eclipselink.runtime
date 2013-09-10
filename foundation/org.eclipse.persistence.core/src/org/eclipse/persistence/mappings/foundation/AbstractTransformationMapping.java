@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 1998, 2012 Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1998, 2013 Oracle and/or its affiliates. All rights reserved.
  * This program and the accompanying materials are made available under the 
  * terms of the Eclipse Public License v1.0 and Eclipse Distribution License v. 1.0 
  * which accompanies this distribution. 
@@ -739,6 +739,11 @@ public abstract class AbstractTransformationMapping extends DatabaseMapping {
         initializeFieldToTransformers(session);
         setFields(collectFields());
         this.indirectionPolicy.initialize();
+        if (usesIndirection()) {
+            for (DatabaseField field : this.fields) {
+                field.setKeepInRow(true);
+            }
+        }
     }
  
     /**
@@ -1091,7 +1096,9 @@ public abstract class AbstractTransformationMapping extends DatabaseMapping {
                 return null;
             }
         }
- 
+        if (row != null && row.hasSopObject()) {
+            return getAttributeValueFromObject(row.getSopObject());
+        }
         Object attributeValue = this.indirectionPolicy.valueFromMethod(object, row, query.getSession());
         Object oldAttribute = null;
         if (executionSession.isUnitOfWork() && query.shouldRefreshIdentityMapResult()){
@@ -1298,7 +1305,16 @@ public abstract class AbstractTransformationMapping extends DatabaseMapping {
     public boolean isChangeTrackingSupported(Project project) {
         return ! isMutable();
     }
- 
+
+    /**
+     * INTERNAL:
+     * Return whether the specified object is instantiated.
+     */
+    @Override
+    public boolean isAttributeValueFromObjectInstantiated(Object object) {
+        return this.indirectionPolicy.objectIsInstantiated(object);
+    }
+    
     /**
      * PUBLIC:
      * Indirection means that a ValueHolder will be put in-between the attribute and the real object.

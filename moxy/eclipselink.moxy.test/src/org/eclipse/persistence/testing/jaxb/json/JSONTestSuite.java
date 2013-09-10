@@ -12,6 +12,7 @@
  ******************************************************************************/
 package org.eclipse.persistence.testing.jaxb.json;
 
+import org.eclipse.persistence.testing.jaxb.json.any.AnyTestCases;
 import org.eclipse.persistence.testing.jaxb.json.attribute.JSONAttributeNoXmlRootElementIncludeRootFalseTestCases;
 import org.eclipse.persistence.testing.jaxb.json.attribute.JSONAttributeNoXmlRootElementInheritanceTestCases;
 import org.eclipse.persistence.testing.jaxb.json.attribute.JSONAttributeNoXmlRootElementJAXBElementTestCases;
@@ -36,6 +37,7 @@ import org.eclipse.persistence.testing.jaxb.json.norootelement.NoRootElementNSTe
 import org.eclipse.persistence.testing.jaxb.json.norootelement.NoRootElementTestCases;
 import org.eclipse.persistence.testing.jaxb.json.padding.JSONWithPaddingTestCases;
 import org.eclipse.persistence.testing.jaxb.json.rootlevellist.RootLevelListTestCases;
+import org.eclipse.persistence.testing.jaxb.json.wrapper.AllWrapperTestCases;
 import org.eclipse.persistence.testing.jaxb.json.xmlvalue.XMLValuePropDifferentTestCases;
 import org.eclipse.persistence.testing.jaxb.json.xmlvalue.XMLValuePropTestCases;
 import org.eclipse.persistence.testing.oxm.xmlconversionmanager.NumberTestCases;
@@ -73,7 +75,8 @@ public class JSONTestSuite extends TestSuite {
           suite.addTestSuite(EmptyNullMarshalUnmarshalTestCases.class);
           suite.addTestSuite(InheritanceNoRootTestCases.class);
           suite.addTest(JSONWithPaddingTestCases.suite());
-
+          suite.addTest(AnyTestCases.suite());
+          suite.addTest(AllWrapperTestCases.suite());
           return suite;
 	}
 }

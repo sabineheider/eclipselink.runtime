@@ -1,10 +1,10 @@
 /*******************************************************************************
- * Copyright (c)  2008, Sun Microsystems, Inc. All rights reserved. 
- * This program and the accompanying materials are made available under the
- * terms of the Eclipse Public License v1.0 and Eclipse Distribution License v. 1.0
- * which accompanies this distribution.
+ * Copyright (c) 2008, 2013 Oracle and/or its affiliates. All rights reserved.
+ * This program and the accompanying materials are made available under the 
+ * terms of the Eclipse Public License v1.0 and Eclipse Distribution License v. 1.0 
+ * which accompanies this distribution. 
  * The Eclipse Public License is available at http://www.eclipse.org/legal/epl-v10.html
- * and the Eclipse Distribution License is available at
+ * and the Eclipse Distribution License is available at 
  * http://www.eclipse.org/org/documents/edl-v10.php.
  *
  * Contributors:
@@ -22,6 +22,9 @@
  *     
  ******************************************************************************/
 package org.eclipse.persistence.internal.jpa;
+
+import javax.persistence.Cache;
+import javax.persistence.PersistenceException;
 
 import org.eclipse.persistence.descriptors.ClassDescriptor;
 import org.eclipse.persistence.internal.identitymaps.CacheKey;
@@ -468,7 +471,12 @@ public class CacheImpl implements JpaCache {
     }
     
     public <T> T unwrap(Class<T> cls) {
-        // TODO: implement
-        throw new RuntimeException("Not implemented ... WIP ...");
+        if (cls.equals(JpaCache.class)){
+            return (T) this;
+        }
+        if (cls.equals(IdentityMapAccessor.class)){
+            return (T) getAccessor();
+        }
+        throw new PersistenceException(ExceptionLocalization.buildMessage("unable_to_unwrap_jpa", new String[]{Cache.class.getName(),cls.getName()}));
     }
 }

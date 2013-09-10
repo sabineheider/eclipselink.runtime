@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 1998, 2012 Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1998, 2013 Oracle and/or its affiliates. All rights reserved.
  * This program and the accompanying materials are made available under the 
  * terms of the Eclipse Public License v1.0 and Eclipse Distribution License v. 1.0 
  * which accompanies this distribution. 
@@ -64,6 +64,8 @@ public interface SessionProfiler {
     public static final String DistributedMerge = "Timer:DistributedMerge";
     public static final String AssignSequence = "Timer:Sequencing";
     public static final String Caching = "Timer:Caching";
+    public static final String CacheCoordinationSerialize = "Timer:CacheCoordinationSerialize";
+    public static final String CacheCoordination = "Timer:CacheCoordination";
     public static final String ConnectionManagement = "Timer:ConnectionManagement";
     public static final String Logging = "Timer:Logging";
     public static final String JtsBeforeCompletion = "Timer:TXBeforeCompletion";

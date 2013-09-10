@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 1998, 2012 Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1998, 2013 Oracle and/or its affiliates. All rights reserved.
  * This program and the accompanying materials are made available under the 
  * terms of the Eclipse Public License v1.0 and Eclipse Distribution License v. 1.0 
  * which accompanies this distribution. 
@@ -276,6 +276,7 @@ public class QueryHintsHandler {
             addHint(new FetchGroupLoadHint());
             addHint(new LoadGroupHint());
             addHint(new LoadGroupAttributeHint());
+            addHint(new LoadGraphHint());
             addHint(new ExclusiveHint());
             addHint(new InheritanceJoinHint());
             addHint(new AsOfHint());
@@ -292,6 +293,9 @@ public class QueryHintsHandler {
             addHint(new CompositeMemberHint());
             addHint(new AllowNativeSQLQueryHint());
             addHint(new BatchWriteHint());
+            addHint(new ResultSetAccess());
+            addHint(new SerializedObject());
+            addHint(new ReturnNameValuePairsHint());
         }
         
         Hint(String name, String defaultValue) {
@@ -438,6 +442,37 @@ public class QueryHintsHandler {
         
         static Set<String> getSupportedHints(){
             return mainMap.keySet();
+        }
+    }
+    
+    /**
+     * This hint can be used to indicate whether or not a ResultSetMapping query should
+     * return populated DatabaseRecords vs. raw data.  This hint is particularly useful 
+     * when the structure of the returned data is not known.
+     */
+    protected static class ReturnNameValuePairsHint extends Hint {
+        ReturnNameValuePairsHint() {
+            super(QueryHints.RETURN_NAME_VALUE_PAIRS, HintValues.FALSE);
+            valueArray = new Object[][] { 
+                {HintValues.TRUE, Boolean.TRUE},
+                {HintValues.FALSE, Boolean.FALSE}
+            };
+        }
+    
+        /**
+         * Applies the given hint value to the query if it is non-null.  The given query
+         * is expected to be a ResultSetMappingQuery instance.
+         * @throws IllegalArgumentException if 'query' is not a ResultSetMappingQuery instance
+         */
+        DatabaseQuery applyToDatabaseQuery(Object valueToApply, DatabaseQuery query, ClassLoader loader, AbstractSession activeSession) {
+            if (query.isResultSetMappingQuery()) {
+                if (valueToApply != null) {
+                    ((ResultSetMappingQuery) query).setShouldReturnNameValuePairs(((Boolean) valueToApply));
+                }
+            } else {
+                throw new IllegalArgumentException(ExceptionLocalization.buildMessage("ejb30-wrong-type-for-query-hint",new Object[]{getQueryId(query), name, getPrintValue(valueToApply)}));
+            }
+            return query;
         }
     }
 
@@ -1115,7 +1150,7 @@ public class QueryHintsHandler {
                     }else if (valueToApply instanceof EntityGraphImpl){
                         ((ObjectLevelReadQuery)query).setLoadGroup(((EntityGraphImpl)valueToApply).getAttributeGroup().toLoadGroup());
                     }else{
-                        throw new IllegalArgumentException(ExceptionLocalization.buildMessage("not_usable_passed_to_entitygraph_hint", new Object[]{QueryHints.JPA_FETCH_GRAPH, valueToApply}));
+                        throw new IllegalArgumentException(ExceptionLocalization.buildMessage("not_usable_passed_to_entitygraph_hint", new Object[]{QueryHints.JPA_LOAD_GRAPH, valueToApply}));
                     }
                 } else {
                     ((ObjectLevelReadQuery)query).setFetchGroup(null);
@@ -1956,4 +1991,48 @@ public class QueryHintsHandler {
             return query;
         }
     }
+
+    protected static class ResultSetAccess extends Hint {
+        ResultSetAccess() {
+            super(QueryHints.RESULT_SET_ACCESS, HintValues.PERSISTENCE_UNIT_DEFAULT);
+            valueArray = new Object[][] { 
+                {HintValues.PERSISTENCE_UNIT_DEFAULT, null},
+                {HintValues.TRUE, Boolean.TRUE},
+                {HintValues.FALSE, Boolean.FALSE}
+            };
+        }
+    
+        DatabaseQuery applyToDatabaseQuery(Object valueToApply, DatabaseQuery query, ClassLoader loader, AbstractSession activeSession) {
+            if (query.isObjectLevelReadQuery()) {
+                if (valueToApply != null) {
+                    ((ObjectLevelReadQuery)query).setIsResultSetAccessOptimizedQuery((Boolean)valueToApply);
+                } else {
+                    ((ObjectLevelReadQuery)query).clearIsResultSetOptimizedQuery();
+                }
+            } else {
+                throw new IllegalArgumentException(ExceptionLocalization.buildMessage("ejb30-wrong-type-for-query-hint",new Object[]{getQueryId(query), name, getPrintValue(valueToApply)}));
+            }
+            return query;
+        }
+    }
+
+    protected static class SerializedObject extends Hint {
+        SerializedObject() {
+            super(QueryHints.SERIALIZED_OBJECT, HintValues.FALSE);
+            valueArray = new Object[][] { 
+                {HintValues.TRUE, Boolean.TRUE},
+                {HintValues.FALSE, Boolean.FALSE}
+            };
+        }
+    
+        DatabaseQuery applyToDatabaseQuery(Object valueToApply, DatabaseQuery query, ClassLoader loader, AbstractSession activeSession) {
+            if (query.isObjectLevelReadQuery()) {
+                ((ObjectLevelReadQuery)query).setShouldUseSerializedObjectPolicy((Boolean)valueToApply);
+            } else {
+                throw new IllegalArgumentException(ExceptionLocalization.buildMessage("ejb30-wrong-type-for-query-hint",new Object[]{getQueryId(query), name, getPrintValue(valueToApply)}));
+            }
+            return query;
+        }
+    }
+
 }

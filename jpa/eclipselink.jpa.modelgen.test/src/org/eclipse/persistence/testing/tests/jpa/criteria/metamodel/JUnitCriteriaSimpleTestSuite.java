@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 1998, 2012 Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1998, 2013 Oracle and/or its affiliates. All rights reserved.
  * This program and the accompanying materials are made available under the 
  * terms of the Eclipse Public License v1.0 and Eclipse Distribution License v. 1.0 
  * which accompanies this distribution. 
@@ -2211,9 +2211,6 @@ public class JUnitCriteriaSimpleTestSuite extends JUnitTestCase {
         Root<Employee> root = cq.from(getEntityManagerFactory().getMetamodel().entity(Employee.class));
         cq.where(qb.isMember(qb.parameter(PhoneNumber.class, "1"), root.get(Employee_.phoneNumbers)));
 
-        Vector parameters = new Vector();
-        parameters.add(phone);
-
         beginTransaction(em);
         try {
             List result = em.createQuery(cq).setParameter("1", phone).getResultList();
@@ -2226,6 +2223,8 @@ public class JUnitCriteriaSimpleTestSuite extends JUnitTestCase {
         uow = clientSession.acquireUnitOfWork();
         uow.deleteObject(phone);
         uow.commit();
+        
+        clearCache();
     }
 
     public void selectSimpleNotMemberOfWithParameterTest() {
@@ -2260,9 +2259,6 @@ public class JUnitCriteriaSimpleTestSuite extends JUnitTestCase {
         Root<Employee> root = cq.from(getEntityManagerFactory().getMetamodel().entity(Employee.class));
         cq.where(qb.isNotMember(qb.parameter(PhoneNumber.class, "1"), root.get(Employee_.phoneNumbers)));
 
-        Vector parameters = new Vector();
-        parameters.add(phone);
-
         beginTransaction(em);
         try {
             List result = em.createQuery(cq).setParameter("1", phone).getResultList();
@@ -2276,6 +2272,8 @@ public class JUnitCriteriaSimpleTestSuite extends JUnitTestCase {
         uow = clientSession.acquireUnitOfWork();
         uow.deleteObject(phone);
         uow.commit();
+        
+        clearCache();
     }
 
     public void selectSimpleBetweenWithParameterTest() {

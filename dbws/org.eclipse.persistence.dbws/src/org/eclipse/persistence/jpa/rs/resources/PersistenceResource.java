@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2013 Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2011, 2013 Oracle and/or its affiliates. All rights reserved.
  * This program and the accompanying materials are made available under the 
  * terms of the Eclipse Public License v1.0 and Eclipse Distribution License v. 1.0 
  * which accompanies this distribution. 
@@ -44,12 +44,14 @@ public class PersistenceResource extends AbstractPersistenceResource {
 
     @GET
     public Response getContexts(@PathParam("version") String version, @Context HttpHeaders hh, @Context UriInfo uriInfo) throws JAXBException {
+        setRequestUniqueId();
         return getContexts(version, hh, uriInfo.getBaseUri());
     }
 
     @POST
     @Produces(MediaType.WILDCARD)
     public Response callSessionBean(@PathParam("version") String version, @Context HttpHeaders hh, @Context UriInfo ui, InputStream is) throws JAXBException, ClassNotFoundException, NamingException, NoSuchMethodException, InvocationTargetException, IllegalAccessException {
+        setRequestUniqueId();
         return callSessionBeanInternal(version, hh, ui, is);
     }
 }

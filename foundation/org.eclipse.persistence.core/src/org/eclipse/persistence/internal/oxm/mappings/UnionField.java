@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2012 Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, 2013 Oracle and/or its affiliates. All rights reserved.
  * This program and the accompanying materials are made available under the
  * terms of the Eclipse Public License v1.0 and Eclipse Distribution License v. 1.0
  * which accompanies this distribution.
@@ -14,6 +14,8 @@ package org.eclipse.persistence.internal.oxm.mappings;
 
 import java.util.List;
 import javax.xml.namespace.QName;
+
+import org.eclipse.persistence.internal.oxm.ConversionManager;
 import org.eclipse.persistence.internal.oxm.NamespaceResolver;
 
 /**
@@ -34,7 +36,8 @@ import org.eclipse.persistence.internal.oxm.NamespaceResolver;
  * @see Constants
  */
 public interface UnionField<
-    NAMESPACE_RESOLVER extends NamespaceResolver> extends Field<NAMESPACE_RESOLVER> {
+    CONVERSION_MANAGER extends ConversionManager,
+    NAMESPACE_RESOLVER extends NamespaceResolver> extends Field<CONVERSION_MANAGER, NAMESPACE_RESOLVER> {
 
     /**
      * Adds the new type value to the list of types

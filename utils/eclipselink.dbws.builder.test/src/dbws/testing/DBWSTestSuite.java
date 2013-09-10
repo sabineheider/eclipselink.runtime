@@ -48,9 +48,11 @@ import javax.xml.transform.stream.StreamSource;
 //EclipseLink imports
 import org.eclipse.persistence.dbws.DBWSModel;
 import org.eclipse.persistence.dbws.DBWSModelProject;
-import org.eclipse.persistence.descriptors.ClassDescriptor;
 import org.eclipse.persistence.internal.databaseaccess.Platform;
 import org.eclipse.persistence.internal.helper.ConversionManager;
+import org.eclipse.persistence.internal.jpa.deployment.PersistenceUnitProcessor;
+import org.eclipse.persistence.internal.jpa.metadata.MetadataProcessor;
+import org.eclipse.persistence.internal.sessions.DatabaseSessionImpl;
 import org.eclipse.persistence.internal.xr.ProjectHelper;
 import org.eclipse.persistence.internal.xr.XRDynamicClassLoader;
 import org.eclipse.persistence.internal.xr.XRServiceAdapter;
@@ -59,32 +61,28 @@ import org.eclipse.persistence.internal.xr.XRServiceModel;
 import org.eclipse.persistence.internal.xr.XmlBindingsModel;
 import org.eclipse.persistence.jaxb.JAXBContextProperties;
 import org.eclipse.persistence.jaxb.xmlmodel.XmlBindings;
-import org.eclipse.persistence.mappings.DatabaseMapping;
+import org.eclipse.persistence.logging.AbstractSessionLog;
 import org.eclipse.persistence.oxm.XMLContext;
-import org.eclipse.persistence.oxm.XMLDescriptor;
 import org.eclipse.persistence.oxm.XMLUnmarshaller;
-import org.eclipse.persistence.oxm.mappings.XMLBinaryDataMapping;
 import org.eclipse.persistence.platform.xml.XMLComparer;
 import org.eclipse.persistence.platform.xml.XMLParser;
 import org.eclipse.persistence.platform.xml.XMLPlatform;
 import org.eclipse.persistence.platform.xml.XMLPlatformFactory;
 import org.eclipse.persistence.sessions.DatabaseLogin;
+import org.eclipse.persistence.sessions.DatabaseSession;
 import org.eclipse.persistence.sessions.DatasourceLogin;
 import org.eclipse.persistence.sessions.Project;
-import org.eclipse.persistence.sessions.factories.XMLProjectReader;
 import org.eclipse.persistence.tools.dbws.DBWSBuilder;
 import org.eclipse.persistence.tools.dbws.DBWSBuilderModel;
 import org.eclipse.persistence.tools.dbws.DBWSBuilderModelProject;
 import org.eclipse.persistence.tools.dbws.JSR109WebServicePackager;
 import org.eclipse.persistence.tools.dbws.XRPackager;
 
-import static org.eclipse.persistence.internal.helper.ClassConstants.APBYTE;
 import static org.eclipse.persistence.tools.dbws.DBWSBuilder.NO_SESSIONS_FILENAME;
 import static org.eclipse.persistence.tools.dbws.DBWSBuilder.SESSIONS_FILENAME_KEY;
 import static org.eclipse.persistence.tools.dbws.DBWSPackager.ArchiveUse.noArchive;
 import static org.eclipse.persistence.tools.dbws.Util.OR_PRJ_SUFFIX;
 import static org.eclipse.persistence.tools.dbws.Util.OX_PRJ_SUFFIX;
-import static org.eclipse.persistence.tools.dbws.Util.TYPE_STR;
 import static org.eclipse.persistence.tools.dbws.XRPackager.__nullStream;
 
 public class DBWSTestSuite {
@@ -190,7 +188,7 @@ public class DBWSTestSuite {
      * @throws WSDLException
      */
     public static void setUp() throws WSDLException {
-    	setUp(null, false);
+        setUp(null, false);
     }
 
     /**
@@ -201,7 +199,7 @@ public class DBWSTestSuite {
      * @throws WSDLException
      */
     public static void setUp(String stageDir) throws WSDLException {
-    	setUp(stageDir, false);
+        setUp(stageDir, false);
     }
     
     /**
@@ -246,12 +244,12 @@ public class DBWSTestSuite {
         xrPackager.setDBWSBuilder(builder);
         builder.setPackager(xrPackager);
         builder.setPackager(xrPackager);
-    	dbwsLogger = null;
+        dbwsLogger = null;
         if (useLogger) {
-        	dbwsLogger = new DBWSLogger("DBWSTestLogger", null);
+            dbwsLogger = new DBWSLogger("DBWSTestLogger", null);
         }
         if (stageDir == null) {
-        	builder.getProperties().put(SESSIONS_FILENAME_KEY, NO_SESSIONS_FILENAME);
+            builder.getProperties().put(SESSIONS_FILENAME_KEY, NO_SESSIONS_FILENAME);
             builder.build(DBWS_SCHEMA_STREAM, __nullStream, DBWS_SERVICE_STREAM, DBWS_OR_STREAM,
                     DBWS_OX_STREAM, __nullStream, __nullStream, __nullStream, __nullStream, __nullStream,
                     __nullStream, __nullStream, dbwsLogger);
@@ -271,18 +269,44 @@ public class DBWSTestSuite {
             @Override
             public void buildSessions() {
                 XRDynamicClassLoader xrdecl = new XRDynamicClassLoader(parentClassLoader);
+                DatasourceLogin login = new DatabaseLogin();
+                login.setUserName(username);
+                login.setPassword(password);
+                ((DatabaseLogin) login).setConnectionString(url);
+                ((DatabaseLogin) login).setDriverClassName(DATABASE_PLATFORM);
+                Platform platform = builder.getDatabasePlatform();
+                ConversionManager conversionManager = platform.getConversionManager();
+                if (conversionManager != null) {
+                    conversionManager.setLoader(xrdecl);
+                }
+                login.setDatasourcePlatform(platform);
+                ((DatabaseLogin) login).bindAllParameters();
+                
                 Project orProject = null;
                 if (DBWS_OR_STREAM.size() != 0) {
-                    orProject = XMLProjectReader.read(new StringReader(DBWS_OR_STREAM.toString()),
-                        xrdecl);
+                    MetadataProcessor processor = new MetadataProcessor(new XRPersistenceUnitInfo(xrdecl), 
+                            new DatabaseSessionImpl(login), xrdecl, false, true, false, false, false, null, null);
+                    processor.setMetadataSource(new JPAMetadataSource(xrdecl, new StringReader(DBWS_OR_STREAM.toString())));
+                    PersistenceUnitProcessor.processORMetadata(processor, true, PersistenceUnitProcessor.Mode.ALL);
+                    processor.addNamedQueries();
+                    orProject = processor.getProject().getProject();
                 } else {
                     orProject = new Project();
-                    orProject.setName(builder.getProjectName().concat(OR_PRJ_SUFFIX));
                 }
+                orProject.setName(builder.getProjectName().concat(OR_PRJ_SUFFIX));
+                orProject.setDatasourceLogin(login);
+                DatabaseSession databaseSession = orProject.createDatabaseSession();
+                if ("off".equalsIgnoreCase(builder.getLogLevel())) {
+                    databaseSession.dontLogMessages();
+                } else {
+                    databaseSession.setLogLevel(AbstractSessionLog.translateStringToLoggingLevel(builder.getLogLevel()));
+                }
+                xrService.setORSession(databaseSession);
+                orProject.convertClassNamesToClasses(xrdecl);
                 
                 Project oxProject = null;
                 if (DBWS_OX_STREAM.size() != 0) {
-                    Map<String, DBWSMetadataSource> metadataMap = new HashMap<String, DBWSMetadataSource>();
+                    Map<String, OXMMetadataSource> metadataMap = new HashMap<String, OXMMetadataSource>();
                     StreamSource xml = new StreamSource(new StringReader(DBWS_OX_STREAM.toString()));
                     try {
                         JAXBContext jc = JAXBContext.newInstance(XmlBindingsModel.class);
@@ -291,46 +315,18 @@ public class DBWSTestSuite {
                         JAXBElement<XmlBindingsModel> jaxbElt = unmarshaller.unmarshal(xml, XmlBindingsModel.class);
                         XmlBindingsModel model = jaxbElt.getValue();
                         for (XmlBindings xmlBindings : model.getBindingsList()) {
-                            metadataMap.put(xmlBindings.getPackageName(), new DBWSMetadataSource(xmlBindings));
+                            metadataMap.put(xmlBindings.getPackageName(), new OXMMetadataSource(xmlBindings));
                         }
                     } catch (JAXBException jaxbex) {
                         jaxbex.printStackTrace();
                     }
                     
-                    Map<String, Map<String, DBWSMetadataSource>> properties = new HashMap<String, Map<String, DBWSMetadataSource>>();
+                    Map<String, Map<String, OXMMetadataSource>> properties = new HashMap<String, Map<String, OXMMetadataSource>>();
                     properties.put(JAXBContextProperties.OXM_METADATA_SOURCE, metadataMap);
                     try {
                         org.eclipse.persistence.jaxb.dynamic.DynamicJAXBContext jCtx = 
                                 org.eclipse.persistence.jaxb.dynamic.DynamicJAXBContextFactory.createContextFromOXM(xrdecl, properties);
                         oxProject = jCtx.getXMLContext().getSession(0).getProject();
-
-                        // may need to alter descriptor alias
-                        if (oxProject.getAliasDescriptors() != null) {
-                            Map<String, ClassDescriptor> aliasDescriptors = new HashMap<String, ClassDescriptor>();
-                            for (Object key : oxProject.getAliasDescriptors().keySet()) {
-                                String alias = key.toString();
-                                XMLDescriptor xdesc = (XMLDescriptor) oxProject.getAliasDescriptors().get(alias);
-                                
-                                String defaultRootElement = xdesc.getDefaultRootElement();
-                                String proposedAlias = defaultRootElement;
-                                if (defaultRootElement.endsWith(TYPE_STR)) {
-                                    proposedAlias = defaultRootElement.substring(0, defaultRootElement.lastIndexOf(TYPE_STR));
-                                }
-                                proposedAlias = proposedAlias.toLowerCase();
-                                xdesc.setAlias(proposedAlias);
-                                aliasDescriptors.put(proposedAlias, xdesc);
-                                
-                                // workaround for JAXB validation:  JAXB expects a DataHandler in the 
-                                // object model for SwaRef, whereas we want to work with a byte[]
-                                for (DatabaseMapping mapping : xdesc.getMappings()) {
-                                    if (mapping instanceof XMLBinaryDataMapping) {
-                                        ((XMLBinaryDataMapping) mapping).setAttributeClassification(APBYTE);
-                                        ((XMLBinaryDataMapping) mapping).setAttributeClassificationName(APBYTE.getName());
-                                    }
-                                }
-                            }
-                            oxProject.setAliasDescriptors(aliasDescriptors);
-                        }
                     } catch (JAXBException e) {
                         e.printStackTrace();
                     }
@@ -338,20 +334,7 @@ public class DBWSTestSuite {
                     oxProject = new Project();
                 }
                 oxProject.setName(builder.getProjectName().concat(OX_PRJ_SUFFIX));
-                
-                DatasourceLogin login = new DatabaseLogin();
-                login.setUserName(username);
-                login.setPassword(password);
-                ((DatabaseLogin)login).setConnectionString(url);
-                ((DatabaseLogin)login).setDriverClassName(DATABASE_DRIVER);
-                Platform platform = builder.getDatabasePlatform();;
-                ConversionManager conversionManager = platform.getConversionManager();
-                if (conversionManager != null) {
-                    conversionManager.setLoader(xrdecl);
-                }
-                login.setDatasourcePlatform(platform);
-                ((DatabaseLogin)login).bindAllParameters();
-                orProject.setDatasourceLogin(login);
+
                 login = (DatasourceLogin)oxProject.getDatasourceLogin();
                 if (login != null) {
                     platform = login.getDatasourcePlatform();
@@ -362,6 +345,7 @@ public class DBWSTestSuite {
                         }
                     }
                 }
+                prepareDescriptors(oxProject, orProject, xrdecl);
                 ProjectHelper.fixOROXAccessors(orProject, oxProject);
                 xrService.setORSession(orProject.createDatabaseSession());
                 xrService.getORSession().dontLogMessages();
@@ -440,48 +424,48 @@ public class DBWSTestSuite {
      *
      */
     public static class DBWSLogger extends Logger {
-    	List<String> messages;
-    	
-		protected DBWSLogger(String name, String resourceBundleName) {
-			super(name, resourceBundleName);
-			messages = new ArrayList<String>();
-		}
-		
-		public void log(Level level, String msg) {
-			//System.out.println(level.getName() + ": " + msg);
-			messages.add(level.getName() + ": " + msg);
-		}
-		
-		public boolean hasMessages() {
-			return messages != null && messages.size() > 0;
-		}
+        List<String> messages;
+        
+        protected DBWSLogger(String name, String resourceBundleName) {
+            super(name, resourceBundleName);
+            messages = new ArrayList<String>();
+        }
+        
+        public void log(Level level, String msg) {
+            //System.out.println(level.getName() + ": " + msg);
+            messages.add(level.getName() + ": " + msg);
+        }
+        
+        public boolean hasMessages() {
+            return messages != null && messages.size() > 0;
+        }
 
-		public boolean hasWarnings() {
-			if (messages != null || messages.size() > 0) {
-				for (String message : messages) {
-					if (message.startsWith("WARNING")) {
-						return true;
-					}
-				}
-			}
-			return false;
-		}
-		
-		public List<String> getWarnings() {
-			List<String> warnings = null;
-			if (messages != null || messages.size() > 0) {
-				warnings = new ArrayList<String>();
-				for (String message : messages) {
-					if (message.startsWith("WARNING")) {
-						warnings.add(message);
-					}
-				}
-			}
-			return warnings;
-		}
-		
-		public List<String> getMessages() {
-			return messages;
-		}
+        public boolean hasWarnings() {
+            if (messages != null || messages.size() > 0) {
+                for (String message : messages) {
+                    if (message.startsWith("WARNING")) {
+                        return true;
+                    }
+                }
+            }
+            return false;
+        }
+        
+        public List<String> getWarnings() {
+            List<String> warnings = null;
+            if (messages != null || messages.size() > 0) {
+                warnings = new ArrayList<String>();
+                for (String message : messages) {
+                    if (message.startsWith("WARNING")) {
+                        warnings.add(message);
+                    }
+                }
+            }
+            return warnings;
+        }
+        
+        public List<String> getMessages() {
+            return messages;
+        }
     }
 }

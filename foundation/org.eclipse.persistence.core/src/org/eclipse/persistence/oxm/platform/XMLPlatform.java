@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 1998, 2012 Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1998, 2013 Oracle and/or its affiliates. All rights reserved.
  * This program and the accompanying materials are made available under the 
  * terms of the Eclipse Public License v1.0 and Eclipse Distribution License v. 1.0 
  * which accompanies this distribution. 
@@ -18,9 +18,9 @@ import org.eclipse.persistence.internal.databaseaccess.DatasourcePlatform;
 import org.eclipse.persistence.internal.helper.ConversionManager;
 import org.eclipse.persistence.internal.oxm.XMLConversionManager;
 import org.eclipse.persistence.internal.oxm.record.PlatformUnmarshaller;
-import org.eclipse.persistence.oxm.XMLUnmarshaller;
+import org.eclipse.persistence.internal.oxm.XMLUnmarshaller;
 
-public abstract class XMLPlatform extends DatasourcePlatform {
+public abstract class XMLPlatform<XML_UNMARSHALLER extends XMLUnmarshaller> extends DatasourcePlatform implements org.eclipse.persistence.internal.oxm.record.XMLPlatform<XML_UNMARSHALLER> {
     public ConversionManager getConversionManager() {
         // Lazy init for serialization.
         if (conversionManager == null) {
@@ -33,11 +33,12 @@ public abstract class XMLPlatform extends DatasourcePlatform {
     /**
      * INTERNAL:
      */
-    public abstract PlatformUnmarshaller newPlatformUnmarshaller(XMLUnmarshaller xmlUnmarshaller);
+    public abstract PlatformUnmarshaller newPlatformUnmarshaller(XML_UNMARSHALLER xmlUnmarshaller);
 
     /**
      * INTERNAL:
      */
-    public abstract PlatformUnmarshaller newPlatformUnmarshaller(XMLUnmarshaller xmlUnmarshaller, Map<String, Boolean> parserFeatures);
+    @Override
+    public abstract PlatformUnmarshaller newPlatformUnmarshaller(XML_UNMARSHALLER xmlUnmarshaller, Map<String, Boolean> parserFeatures);
 
 }

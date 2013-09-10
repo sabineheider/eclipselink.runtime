@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 1998, 2012 Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1998, 2013 Oracle and/or its affiliates. All rights reserved.
  * This program and the accompanying materials are made available under the 
  * terms of the Eclipse Public License v1.0 and Eclipse Distribution License v. 1.0 
  * which accompanies this distribution. 
@@ -20,15 +20,11 @@ import java.util.*;
 
 import org.eclipse.persistence.exceptions.*;
 import org.eclipse.persistence.expressions.*;
-import org.eclipse.persistence.internal.databaseaccess.DatabaseAccessor;
-import org.eclipse.persistence.internal.databaseaccess.DatabaseCall;
 import org.eclipse.persistence.internal.databaseaccess.FieldTypeDefinition;
 import org.eclipse.persistence.internal.expressions.*;
 import org.eclipse.persistence.internal.helper.*;
-import org.eclipse.persistence.internal.sessions.AbstractRecord;
 import org.eclipse.persistence.internal.sessions.AbstractSession;
 import org.eclipse.persistence.queries.*;
-import org.eclipse.persistence.sessions.SessionProfiler;
 
 /**
  *    <p><b>Purpose</b>: Provides Sybase ASE specific behavior.
@@ -262,57 +258,6 @@ public class SybasePlatform extends org.eclipse.persistence.platform.database.Da
     }
 
     /**
-     * because each platform has different requirements for accessing stored procedures and
-     * the way that we can combine resultsets and output params the stored procedure call
-     * is being executed on the platform.  This entire process needs some serious refactoring to eliminate
-     * the chance of bugs.
-     */
-    @Override
-    public Object executeStoredProcedure(DatabaseCall dbCall, PreparedStatement statement, DatabaseAccessor accessor, AbstractSession session) throws SQLException {
-        Object result = null;
-        ResultSet resultSet = null;
-        if (!dbCall.getReturnsResultSet()) {
-            accessor.executeDirectNoSelect(statement, dbCall, session);
-            result = accessor.buildOutputRow((CallableStatement)statement, dbCall, session);
-
-            //ReadAllQuery may be returning just output params, or they may be executing a DataReadQuery, which also
-            //assumes a vector
-            if (dbCall.areManyRowsReturned()) {
-                Vector tempResult = new Vector();
-                (tempResult).add(result);
-                result = tempResult;
-            }
-        } else {
-            // start the process of processing the result set and the output params.  this is specific to Sybase JConnect 5.5
-            // as we must process the result set before the output params.
-            session.startOperationProfile(SessionProfiler.StatementExecute, dbCall.getQuery(), SessionProfiler.ALL);
-            try {
-                resultSet = statement.executeQuery();
-            } finally {
-                session.endOperationProfile(SessionProfiler.StatementExecute, dbCall.getQuery(), SessionProfiler.ALL);
-            }
-            dbCall.matchFieldOrder(resultSet, accessor, session);
-
-            // cursored result set and output params not supported because of database limitation
-            if (dbCall.isCursorReturned()) {
-                dbCall.setStatement(statement);
-                dbCall.setResult(resultSet);
-                return dbCall;
-            }
-            result = accessor.processResultSet(resultSet, dbCall, statement, session);
-
-            if (dbCall.shouldBuildOutputRow()) {
-                AbstractRecord outputRow = accessor.buildOutputRow((CallableStatement)statement, dbCall, session);
-                dbCall.getQuery().setProperty("output", outputRow);
-                session.getEventManager().outputParametersDetected(outputRow, dbCall);
-            }
-            return result;
-            // end special sybase behavior.
-        }
-        return result;
-    }
-
-    /**
      * The sybase syntax for obtaining pessimistic lock is "SELECT ADDRESS_ID, ... FROM ADDRESS WITH (HOLDLOCK) WHERE (ADDRESS_ID = ?)"
      * Please note that above only obtains shared lock. Apparently there is no way to obtain exclusive lock on Sybase
      * using only a select statement
@@ -409,7 +354,7 @@ public class SybasePlatform extends org.eclipse.persistence.platform.database.Da
      */
     @Override
     public String getOutputProcedureToken() {
-        return "OUTPUT";
+        return useJDBCStoredProcedureSyntax() ? "" : "OUTPUT";
     }
 
     /**
@@ -425,7 +370,21 @@ public class SybasePlatform extends org.eclipse.persistence.platform.database.Da
      */
     @Override
     public String getProcedureCallHeader() {
-        return "EXECUTE ";
+        return useJDBCStoredProcedureSyntax() ? "{Call " : "EXECUTE ";
+    }
+    public String getProcedureCallTail() {
+        return useJDBCStoredProcedureSyntax() ? "}" : "";
+    }
+    /**
+     * Return true if this platform is to use the JDBC supported syntax for executing stored procedures.
+     * If the driver is known to be the DataDirec driver, and the value is not set, then set to true and return.
+     */
+    public boolean useJDBCStoredProcedureSyntax() {
+    
+        if (useJDBCStoredProcedureSyntax == null) {
+            useJDBCStoredProcedureSyntax = this.driverName != null && this.driverName.equals("Sybase");
+        }
+        return useJDBCStoredProcedureSyntax;
     }
 
     @Override
@@ -564,6 +523,15 @@ public class SybasePlatform extends org.eclipse.persistence.platform.database.Da
         return exOperator;
     }
 
+    /**
+     * INTERNAL:
+     * Return true if output parameters can be built with result sets.
+     */
+    @Override
+    public boolean isOutputAllowWithResultSet() {
+        return false;
+    }
+    
     @Override
     public boolean isSybase() {
         return true;
@@ -671,7 +639,7 @@ public class SybasePlatform extends org.eclipse.persistence.platform.database.Da
      */
     @Override
     public boolean requiresProcedureCallBrackets() {
-        return false;
+        return useJDBCStoredProcedureSyntax();
     }
 
     /**

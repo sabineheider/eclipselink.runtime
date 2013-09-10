@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2011, 2012 Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2011, 2013 Oracle and/or its affiliates. All rights reserved.
  * This program and the accompanying materials are made available under the
  * terms of the Eclipse Public License v1.0 and Eclipse Distribution License v. 1.0
  * which accompanies this distribution.
@@ -119,7 +119,7 @@ public class ExpressionImpl<X> extends SelectionImpl<X> implements Expression<X>
     public Predicate in(Collection<?> values) {
         List list = new ArrayList();
         list.add(this);
-        return new CompoundExpressionImpl(this.metamodel, this.currentNode.in(values), list, "in");
+        return new InImpl(this.metamodel, this, values, list);
     }
     /**
      * Apply a predicate to test whether the expression is a member
@@ -131,7 +131,7 @@ public class ExpressionImpl<X> extends SelectionImpl<X> implements Expression<X>
         List list = new ArrayList();
         list.add(values);
         list.add(this);
-        return new CompoundExpressionImpl(metamodel, ((InternalSelection)values).getCurrentNode().equal(((InternalSelection)this).getCurrentNode()), list, "in");
+        return new InImpl(metamodel, this, (ExpressionImpl)values, list);
     }
     
     public Predicate isNotNull() {
@@ -161,7 +161,11 @@ public class ExpressionImpl<X> extends SelectionImpl<X> implements Expression<X>
     public boolean isExpression(){
         return true;
     }
-    
+
+    public boolean isJunction(){
+        return false;
+    }
+
     public boolean isLiteral(){
         return this.isLiteral;
     }

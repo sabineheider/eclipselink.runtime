@@ -1,5 +1,5 @@
 /*******************************************************************************
-* Copyright (c) 1998, 2012 Oracle and/or its affiliates. All rights reserved.
+* Copyright (c) 1998, 2013 Oracle and/or its affiliates. All rights reserved.
 * This program and the accompanying materials are made available under the
 * terms of the Eclipse Public License v1.0 and Eclipse Distribution License v. 1.0
 * which accompanies this distribution.
@@ -119,7 +119,13 @@ public class JAXBException extends EclipseLinkException {
     public static final int ERROR_INVOKING_ACCESSOR = 50087;
     public static final int INVALID_ENUM_VALUE = 50088;
     public static final int INVALID_INTERFACE = 50089;
-    
+    public static final int INVALID_VALUE_FOR_OBJECT_GRAPH = 50090;
+    public static final int DUPLICATE_ELEMENT_NAME = 50091;
+    public static final int MULTIPLE_XMLELEMREF = 50092;
+    public static final int UNKNOWN_TYPE_FOR_VARIABLE_MAPPING = 50093;
+    public static final int UNKNOWN_PROPERTY_FOR_VARIABLE_MAPPING = 50094;
+    public static final int INVALID_TYPE_FOR_VARIABLE_MAPPING = 50095;
+    public static final int MUST_MAP_TO_TEXT = 50096;
 
 
     protected JAXBException(String message) {
@@ -1110,5 +1116,55 @@ public class JAXBException extends EclipseLinkException {
         JAXBException validationException = new JAXBException(ExceptionMessageGenerator.buildMessage(JAXBException.class, INVALID_INTERFACE, args));
         validationException.setErrorCode(INVALID_INTERFACE);
         return validationException;
-    }    
+    }
+    
+    public static JAXBException invalidValueForObjectGraph(Object value) {
+        Object[] args = {value};
+        JAXBException validationException = new JAXBException(ExceptionMessageGenerator.buildMessage(JAXBException.class,  INVALID_VALUE_FOR_OBJECT_GRAPH, args));
+        validationException.setErrorCode(INVALID_VALUE_FOR_OBJECT_GRAPH);
+        return validationException;
+    }
+
+    public static JAXBException duplicateElementName(QName qName) {
+        Object[] args = {qName};
+        JAXBException validationException = new JAXBException(ExceptionMessageGenerator.buildMessage(JAXBException.class, DUPLICATE_ELEMENT_NAME, args));
+        validationException.setErrorCode(DUPLICATE_ELEMENT_NAME);
+        return validationException;
+    }
+
+    public static JAXBException multipleXmlElementRef(String propertyTypeName, String className) {
+        Object[] args = { propertyTypeName, className };
+        JAXBException validationException = new JAXBException(ExceptionMessageGenerator.buildMessage(JAXBException.class, MULTIPLE_XMLELEMREF, args));
+        validationException.setErrorCode(MULTIPLE_XMLELEMREF);
+        return validationException;
+    }
+    
+    public static JAXBException unknownTypeForVariableNode(String className) {
+        Object[] args = { className };
+        JAXBException validationException = new JAXBException(ExceptionMessageGenerator.buildMessage(JAXBException.class, UNKNOWN_TYPE_FOR_VARIABLE_MAPPING, args));
+        validationException.setErrorCode(UNKNOWN_TYPE_FOR_VARIABLE_MAPPING);
+        return validationException;
+    }
+    
+    public static JAXBException unknownPropertyForVariableNode(String propertyName, String className) {
+        Object[] args = { propertyName, className };
+        JAXBException validationException = new JAXBException(ExceptionMessageGenerator.buildMessage(JAXBException.class, UNKNOWN_PROPERTY_FOR_VARIABLE_MAPPING, args));
+        validationException.setErrorCode(UNKNOWN_PROPERTY_FOR_VARIABLE_MAPPING);
+        return validationException;
+    }
+    
+    public static JAXBException invalidTypeForVariableNode(String attribute, String type, String className) {
+        Object[] args = { attribute, type, className };
+        JAXBException validationException = new JAXBException(ExceptionMessageGenerator.buildMessage(JAXBException.class, INVALID_TYPE_FOR_VARIABLE_MAPPING, args));
+        validationException.setErrorCode(INVALID_TYPE_FOR_VARIABLE_MAPPING);
+        return validationException;
+    }
+
+    public static JAXBException mustMapToText(String propName, String typeName, String refTypeName) {
+        Object[] args = { propName, typeName, refTypeName };
+        JAXBException validationException = new JAXBException(ExceptionMessageGenerator.buildMessage(JAXBException.class, MUST_MAP_TO_TEXT, args));
+        validationException.setErrorCode(MUST_MAP_TO_TEXT);
+        return validationException;
+    }
+
 }

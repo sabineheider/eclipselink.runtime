@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 1998, 2012 Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1998, 2013 Oracle and/or its affiliates. All rights reserved.
  * This program and the accompanying materials are made available under the 
  * terms of the Eclipse Public License v1.0 and Eclipse Distribution License v. 1.0 
  * which accompanies this distribution. 
@@ -19,6 +19,7 @@ import org.eclipse.persistence.descriptors.ClassDescriptor;
 import org.eclipse.persistence.exceptions.*;
 import org.eclipse.persistence.internal.sessions.AbstractRecord;
 import org.eclipse.persistence.internal.sessions.AbstractSession;
+import org.eclipse.persistence.internal.sessions.UnitOfWorkImpl;
 
 /**
  * QueryBasedValueHolder wraps a database-stored object and implements behavior
@@ -85,6 +86,19 @@ public class QueryBasedValueHolder extends DatabaseValueHolder {
      */
     public Integer getRefreshCascadePolicy(){
         return this.refreshCascade;
+    }
+
+    /**
+     * Process against the UOW and attempt to load a local copy before going to the shared cache
+     * If null is returned then the calling UOW will instantiate as normal.
+     */
+    @Override
+    public Object getValue(UnitOfWorkImpl uow) {
+        if (this.query.isReadObjectQuery()){
+            return this.query.getQueryMechanism().checkCacheForObject(this.query.getTranslationRow(), uow);
+        }
+        //not able to shortcircuit cache lookup to UOW return null;
+        return null;
     }
 
     /**

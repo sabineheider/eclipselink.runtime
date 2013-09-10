@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 1998, 2012 Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1998, 2013 Oracle and/or its affiliates. All rights reserved.
  * This program and the accompanying materials are made available under the 
  * terms of the Eclipse Public License v1.0 and Eclipse Distribution License v. 1.0 
  * which accompanies this distribution. 
@@ -59,6 +59,7 @@ import org.eclipse.persistence.sessions.coordination.RemoteCommandManager;
 import org.eclipse.persistence.sessions.factories.SessionManager;
 import org.eclipse.persistence.tools.profiler.PerformanceMonitor;
 import org.eclipse.persistence.sessions.remote.RemoteSession;
+import org.eclipse.persistence.sessions.serializers.Serializer;
 import org.eclipse.persistence.tools.profiler.PerformanceProfiler;
 import org.eclipse.persistence.tools.profiler.QueryMonitor;
 import org.eclipse.persistence.tools.tuning.SafeModeTuner;
@@ -470,6 +471,17 @@ public class PersistenceUnitProperties {
      * @see org.eclipse.persistence.sessions.server.ReadConnectionPool
      */
     public static final String CONNECTION_POOL_SEQUENCE = "eclipselink.connection-pool.sequence.";
+    
+    /**
+     * Tell EclipseLink to use it's internal connection pool to pool connections from a datasource.
+     * 
+     * This property is useful when using EclipseLink with Gemini JPA because it internally wraps local
+     * database information in a datasource.
+     * 
+     * Default: false
+     */
+    public static final String CONNECTION_POOL_INTERNALLY_POOL_DATASOURCE = "eclipselink.connection-pool.force-internal-pool";
+    
     
     /**
      * The <code>"eclipselink.jdbc.connections.wait-timeout"</code> property
@@ -994,6 +1006,61 @@ public class PersistenceUnitProperties {
      */
     public static final String CACHE_TYPE_DEFAULT = CACHE_TYPE_ + DEFAULT;
 
+    /** 
+     * NOTE: The Canonical Model properties should be kept in sync with those
+     * in org.eclipse.persistence.internal.jpa.modelgen.CanonicalModelProperties. 
+     */
+    
+    /**
+     * This optional property specifies the prefix that will be added to the 
+     * start of the class name of any canonical model class generated. 
+     * By default the prefix is not used.
+     */    
+    public static final String CANONICAL_MODEL_PREFIX = "eclipselink.canonicalmodel.prefix";
+    public static String CANONICAL_MODEL_PREFIX_DEFAULT = "";
+    
+    /**
+     * This optional property specifies the suffix that will be added to the 
+     * end of the class name of any canonical model class generated. The suffix
+     * defaults to "_" unless a prefix is specified. If this property is
+     * specified, the value must be a non-empty string that contains valid
+     * characters for use in a Java class name.
+     */
+    public static final String CANONICAL_MODEL_SUFFIX = "eclipselink.canonicalmodel.suffix";
+    public static String CANONICAL_MODEL_SUFFIX_DEFAULT = "_";
+    
+    /**
+     * This optional property specifies a sub-package name that can be used to 
+     * have the canonical model generator generate its classes in a sub-package 
+     * of the package where the corresponding entity class is located. By 
+     * default the canonical model classes are generated into the same package 
+     * as the entity classes. 
+     */
+    public static final String CANONICAL_MODEL_SUB_PACKAGE = "eclipselink.canonicalmodel.subpackage";
+    public static String CANONICAL_MODEL_SUB_PACKAGE_DEFAULT = "";
+    
+    /**
+     * This optional property can be used a performance enhancement between
+     * compile rounds. It is used to avoid reloading XML metadata on each
+     * compile which may only contain a single class etc. The default value
+     * is true and should be left as such for the initial generation to capture
+     * the XML metadata. Afterwards users may choose to set this flag if no
+     * changes to XML are expected thereafter.
+     */
+    public static final String CANONICAL_MODEL_LOAD_XML = "eclipselink.canonicalmodel.load_xml";
+    public static final String CANONICAL_MODEL_LOAD_XML_DEFAULT = "true";
+    
+    /**
+     * This optional property can be used a performance enhancement between
+     * compile rounds within an IDE. It is used to avoid using a static metadata 
+     * factory between 'cache' metadata from incremental builds. Turning this 
+     * off in some use cases (IDE) could result in a loss of functionality. 
+     * The default value is true and should be left as such for full feature 
+     * support.
+     */
+    public static final String CANONICAL_MODEL_USE_STATIC_FACTORY = "eclipselink.canonicalmodel.use_static_factory";
+    public static final String CANONICAL_MODEL_USE_STATIC_FACTORY_DEFAULT = "true";
+    
     /**
      * Default caching properties - apply to all entities. May be overridden by
      * individual entity property with the same prefix. If you do not wish to
@@ -1426,6 +1493,8 @@ public class PersistenceUnitProperties {
      *  
      * <p>The values for this property are <code>"none"</code>, <code>"create"</code>, 
      * <code>"drop-and-create"</code>, <code>"drop"</code>.</p> 
+     * 
+     * EclipseLink also supports the <code>"create-or-extend-tables"</code> option.
      * 
      * <p>If the <code>"javax.persistence.schema-generation.database.action"</code> 
      * property is not specified, no schema generation actions must be taken on 
@@ -2345,8 +2414,29 @@ public class PersistenceUnitProperties {
      * threads updating the same objects in a different order.
      * If not set to true, the order of updates is not guaranteed.
      * "true" by default.
-     */    
+     * @deprecated since 2.6 replaced by PERSISTENCE_CONTEXT_COMMIT_ORDER
+     */
+    @Deprecated
     public static final String ORDER_UPDATES = "eclipselink.order-updates";
+    
+    /**
+     * Defines the ordering of updates and deletes of a set of the same entity type during a commit or flush operation.
+     * The commit order of entities is defined by their foreign key constraints, and then sorted alphabetically.\
+     * <p>
+     * By default the commit of a set of the same entity type is ordered by its Id.
+     * <p>
+     * Entity type commit order can be modified using a DescriptorCustomizer and the ClassDescriptor.addConstraintDependency() API.
+     * Commit order can also be controlled using the EntityManager.flush() API.
+     * <p>
+     * Values (case insensitive):
+     * <ul>
+     * <li>"Id" (DEFAULT) : Updates and deletes are ordered by the object's id.  This can help avoid deadlocks on highly concurrent systems.
+     * <li>"Changes": Updates are ordered by the object's changes, then by id.  This can improve batch writing efficiency.
+     * <li>"None": No ordering is done.
+     * </ul>
+     * @see CommitOrderType
+     */    
+    public static final String PERSISTENCE_CONTEXT_COMMIT_ORDER = "eclipselink.persistence-context.commit-order";
     
     /**
      * The <code>"eclipselink.profiler"</code>property configures the type of
@@ -2384,6 +2474,20 @@ public class PersistenceUnitProperties {
      */
     public static final String TUNING = "eclipselink.tuning";
 
+    /**
+     * The <code>"eclipselink.memory.free-metadata"</code>property configures the JPA
+     * internal deployment metadata to be released after deployment.
+     * This conserves memory, as the metadata is no longer required, but make
+     * future deployments of any other application take longer, as the metadata must be re-allocated.
+     * <p>
+     * Values (case insensitive):
+     * <ul>
+     * <li>"true"
+     * <li>"false" (DEFAULT)
+     * </ul>
+     */
+    public static final String FREE_METADATA = "eclipselink.memory.free-metadata";
+    
     /**
      * The <code>"eclipselink.transaction.join-existing"</code> property Set to
      * "true" this property forces persistence context to read through
@@ -2557,6 +2661,7 @@ public class PersistenceUnitProperties {
      * <li>"jms-publishing"
      * <li>"rmi"
      * <li>"rmi-iiop"
+     * <li>"jgroups"
      * <li>a <package.class> name of a subclass implementation of the TransportManager abstract class.
      * </ul>
      * by default the cache is not coordinated.
@@ -2567,6 +2672,17 @@ public class PersistenceUnitProperties {
      */
     public static final String COORDINATION_PROTOCOL = "eclipselink.cache.coordination.protocol";
 
+    /**
+     * The <code>"eclipselink.cache.coordination.jgroups.config"</code> property
+     * configures cache coordination for a clustered environment. Only used for
+     * JGroups coordination. Sets the JGroups config XML file location.
+     * If not set the default JGroups config will be used.
+     * 
+     * @see #COORDINATION_PROTOCOL
+     * @see org.eclipse.persistence.sessions.coordination.jgroups.JGroupsTransportManager#setConfigFile(String)
+     */
+    public static final String COORDINATION_JGROUPS_CONFIG = "eclipselink.cache.coordination.jgroups.config";
+    
     /**
      * The <code>"eclipselink.cache.coordination.jms.host"</code> property
      * configures cache coordination for a clustered environment. Only used for
@@ -2770,10 +2886,24 @@ public class PersistenceUnitProperties {
     public static final String COORDINATION_THREAD_POOL_SIZE = "eclipselink.cache.coordination.thread.pool.size";
     
     /**
+     * the <code>"eclipselink.cache.coordination.serializer"</code> property
+     * configures how cache coordination serializes message sent between nodes.
+     * By default Java serialization is used.  Other serializer can be used for improved performance
+     * or integration with other systems.
+     * The full class name of the serializer class should be provided.
+     * 
+     * @see #COORDINATION_PROTOCOL
+     * @see Serializer
+     * @see org.eclipse.persistence.sessions.coordination.RemoteCommandManager#setSerializer(Serializer)
+     */
+    public static final String COORDINATION_SERIALIZER = "eclipselink.cache.coordination.serializer";
+    
+    /**
      * the <code>"eclipselink.cache.coordination.channel"</code> property
-     * configures cache coordination for a clustered environment. Set if the
+     * configures cache coordination for a clustered environment. Set the
      * channel for this cluster. All server's in the same channel will be
      * coordinated.  The default channel name is "EclipseLinkCommandChannel".
+     * If multiple EclipseLink deployment reside on the same network, they should use different channels.
      * 
      * @see #COORDINATION_PROTOCOL
      * @see org.eclipse.persistence.sessions.coordination.RemoteCommandManager#setChannel(String)
@@ -2938,6 +3068,37 @@ public class PersistenceUnitProperties {
      * @see org.eclipse.persistence.sessions.DatasourceLogin#setProperty(String, Object)
      */
     public static final String JDBC_PROPERTY = "eclipselink.jdbc.property.";
+    
+    /**
+     * Allows to set whether a query should by default use ResultSet Access optimization.
+     * The optimization allows to avoid getting objects from ResultSet if the cached object used.
+     * For instance, SELECT id, blob FROM .. with optimization would extract only "id" from ResultSet,
+     * and if there is a corresponding cached object and it's not a refresh query, "blob" would never be extracted.
+     * The draw back is keeping ResultSet and connection longer: until objects are built
+     * (or extracted from cache) for all rows and all eager references (direct and nested) for each row.
+     * Note that the optimization would not be used if it contradicts other query settings.
+     * <p>
+     * Allowed Values (String):
+     * <ul>
+     * <li>"true" - use optimization
+     * <li>"false" don't use optimization
+     * </ul>
+     * Default value is 
+     * ObjectLevelReadQuery.isResultSetAccessOptimizedQueryDefault = false;
+     * 
+     * @see org.eclipse.persistence.internal.sessions.AbstractSession#setShouldOptimizeResultSetAccess(boolean)
+	 * @see org.eclipse.persistence.queries.ObjectLevelReadQuery#setIsResultSetAccessOptimizedQuery(boolean)
+     */
+    public static final String JDBC_RESULT_SET_ACCESS_OPTIMIZATION = "eclipselink.jdbc.result-set-access-optimization";
+    
+    /**
+     * Specifies class name for session serializer (must implement org.eclipse.persistence.sessions.serializers.Serializer)
+     * <p>
+     * Default value is "org.eclipse.persistence.sessions.serializers.JavaSerializer" 
+     * 
+     * @see org.eclipse.persistence.internal.sessions.AbstractSession#setSerializer(Serializer)
+     */
+    public static final String SERIALIZER = "eclipselink.serializer";
     
     /**
      * INTERNAL: The following properties will not be displayed through logging

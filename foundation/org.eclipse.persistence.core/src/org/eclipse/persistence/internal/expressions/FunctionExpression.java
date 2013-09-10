@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 1998, 2012 Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1998, 2013 Oracle and/or its affiliates. All rights reserved.
  * This program and the accompanying materials are made available under the 
  * terms of the Eclipse Public License v1.0 and Eclipse Distribution License v. 1.0 
  * which accompanies this distribution. 
@@ -29,6 +29,7 @@ import org.eclipse.persistence.mappings.OneToOneMapping;
 import org.eclipse.persistence.mappings.querykeys.ForeignReferenceQueryKey;
 import org.eclipse.persistence.mappings.querykeys.QueryKey;
 import org.eclipse.persistence.queries.DatabaseQuery;
+import org.eclipse.persistence.queries.ReadQuery;
 import org.eclipse.persistence.queries.ReportQuery;
 
 /**
@@ -284,8 +285,17 @@ public class FunctionExpression extends BaseExpression {
      * only applies to query keys representing an object or to expression builders.
      *
      */
+    @Override
     public Vector getFields() {
         return getBaseExpression().getFields();
+    }
+
+    /**
+     * INTERNAL:
+     */
+    @Override
+    public List<DatabaseField> getSelectionFields(ReadQuery query) {
+        return getBaseExpression().getSelectionFields(query);
     }
 
     public ExpressionOperator getOperator() {
@@ -418,14 +428,12 @@ public class FunctionExpression extends BaseExpression {
             if (base.isQueryKeyExpression()) {
                 mapping = base.getMapping();
             }
-            ClassDescriptor descriptor = null;
             List<DatabaseField> sourceFields = null;
             List<DatabaseField> targetFields = null;
             if ((mapping != null) && mapping.isOneToOneMapping()
                     && (!((OneToOneMapping)mapping).hasRelationTableMechanism())
                     && (!((OneToOneMapping)mapping).hasCustomSelectionQuery())) {
                 base = (ObjectExpression)base.getBaseExpression();
-                descriptor = mapping.getReferenceDescriptor();
                 Map<DatabaseField, DatabaseField> targetToSourceKeyFields = ((OneToOneMapping)mapping).getTargetToSourceKeyFields();
                 sourceFields = new ArrayList(targetToSourceKeyFields.size());
                 targetFields = new ArrayList(targetToSourceKeyFields.size());
@@ -435,8 +443,7 @@ public class FunctionExpression extends BaseExpression {
                 }
             } else {
                 mapping = null;
-                descriptor = base.getDescriptor();
-                sourceFields = descriptor.getPrimaryKeyFields();
+                sourceFields = base.getDescriptor().getPrimaryKeyFields();
                 targetFields = sourceFields;
             }
             if (sourceFields.size() != 1) {

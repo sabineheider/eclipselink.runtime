@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 1998, 2012 Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1998, 2013 Oracle and/or its affiliates. All rights reserved.
  * This program and the accompanying materials are made available under the 
  * terms of the Eclipse Public License v1.0 and Eclipse Distribution License v. 1.0 
  * which accompanies this distribution. 
@@ -13,8 +13,10 @@
  ******************************************************************************/  
 package org.eclipse.persistence.sessions.coordination.jms;
 
-import java.util.Hashtable;
+import java.util.Map;
+
 import org.eclipse.persistence.exceptions.RemoteCommandManagerException;
+import org.eclipse.persistence.internal.sessions.coordination.RemoteConnection;
 import org.eclipse.persistence.internal.sessions.coordination.jms.JMSTopicRemoteConnection;
 import org.eclipse.persistence.sessions.coordination.RemoteCommandManager;
 
@@ -60,8 +62,8 @@ public class JMSTopicTransportManager extends JMSPublishingTransportManager {
      * attempts to create local connection in a separate thread.
      * Returns clone of the original map.
      */
-    public Hashtable getConnectionsToExternalServicesForCommandPropagation() {
-        if(this.localConnection == null && !this.rcm.isStopped()) {
+    public Map<String, RemoteConnection> getConnectionsToExternalServicesForCommandPropagation() {
+        if (this.localConnection == null && !this.rcm.isStopped()) {
             // It's a good time to create localConnection,
             // in a new thread - to return externalConnections promptly.
             this.rcm.getServerPlatform().launchContainerRunnable(new Runnable() {

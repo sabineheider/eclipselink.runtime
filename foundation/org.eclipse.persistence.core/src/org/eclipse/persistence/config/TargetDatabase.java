@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 1998, 2012 Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1998, 2013 Oracle and/or its affiliates. All rights reserved.
  * This program and the accompanying materials are made available under the 
  * terms of the Eclipse Public License v1.0 and Eclipse Distribution License v. 1.0 
  * which accompanies this distribution. 
@@ -38,6 +38,7 @@ public class TargetDatabase {
     public static final String  HANA = "HANA";
     public static final String  HSQL = "HSQL";
     public static final String  Informix = "Informix";
+    public static final String  Informix11 = "Informix11";
     public static final String  JavaDB = "JavaDB";
     public static final String  MaxDB = "MaxDB";
     public static final String  MySQL4 = "MySQL4";

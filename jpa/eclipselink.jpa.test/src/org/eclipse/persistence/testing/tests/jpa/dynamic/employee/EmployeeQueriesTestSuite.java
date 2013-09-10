@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 1998, 2012 Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1998, 2013 Oracle and/or its affiliates. All rights reserved.
  * This program and the accompanying materials are made available under the 
  * terms of the Eclipse Public License v1.0 and Eclipse Distribution License v. 1.0 
  * which accompanies this distribution. 
@@ -59,9 +59,6 @@ public class EmployeeQueriesTestSuite {
     @BeforeClass
     public static void setUp() throws Exception {
         emf = DynamicTestHelper.createEMF(DYNAMIC_PERSISTENCE_NAME);
-        boolean isMySQL = JpaHelper.getServerSession(emf).getDatasourcePlatform().
-            getClass().getName().contains("MySQLPlatform");
-        assumeTrue(isMySQL);
         helper = new JPADynamicHelper(emf);
         deSystem = DynamicEmployeeSystem.buildProject(helper);
         serverSession = JpaHelper.getServerSession(emf);
@@ -70,12 +67,22 @@ public class EmployeeQueriesTestSuite {
 
     @AfterClass
     public static void tearDown() {
-        serverSession.executeNonSelectingSQL("DROP TABLE D_SALARY");
-        serverSession.executeNonSelectingSQL("DROP TABLE D_PROJ_EMP");
-        serverSession.executeNonSelectingSQL("DROP TABLE D_PROJECT");
-        serverSession.executeNonSelectingSQL("DROP TABLE D_PHONE");
-        serverSession.executeNonSelectingSQL("DROP TABLE D_EMPLOYEE");
-        serverSession.executeNonSelectingSQL("DROP TABLE D_ADDRESS");
+        try{
+            serverSession.executeNonSelectingSQL("DELETE FROM D_PROJ_EMP");
+            serverSession.executeNonSelectingSQL("DELETE FROM D_PHONE");
+            serverSession.executeNonSelectingSQL("DELETE FROM D_SALARY");
+            serverSession.executeNonSelectingSQL("DELETE FROM D_PROJECT");
+            serverSession.executeNonSelectingSQL("DELETE FROM D_EMPLOYEE");
+            serverSession.executeNonSelectingSQL("DELETE FROM D_ADDRESS");
+            serverSession.executeNonSelectingSQL("DROP TABLE D_SALARY");
+            serverSession.executeNonSelectingSQL("DROP TABLE D_PROJ_EMP");
+            serverSession.executeNonSelectingSQL("DROP TABLE D_PROJECT");
+            serverSession.executeNonSelectingSQL("DROP TABLE D_PHONE");
+            serverSession.executeNonSelectingSQL("DROP TABLE D_EMPLOYEE");
+            serverSession.executeNonSelectingSQL("DROP TABLE D_ADDRESS");
+        } catch (Exception e){
+            e.printStackTrace();
+        }
         helper = null;
         emf.close();
         emf = null;

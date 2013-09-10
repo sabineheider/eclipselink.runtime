@@ -41,7 +41,7 @@ import static org.eclipse.persistence.jpa.jpql.parser.Expression.*;
  *
  * start_with_clause ::= START WITH conditional_expression
  *
- * connectby_clause ::= CONNECT BY general_path_expression
+ * connectby_clause ::= CONNECT BY { single_valued_object_path_expression | collection_valued_path_expression }
  *
  * order_siblings_by_clause ::= ORDER SIBLINGS BY orderby_item {, orderby_item}*
  *
@@ -144,6 +144,7 @@ public final class EclipseLinkJPQLGrammar2_5 extends AbstractJPQLGrammar {
 		registerBNF(new AsOfClauseBNF());
 		registerBNF(new ConnectByClauseBNF());
 		registerBNF(new HierarchicalQueryClauseBNF());
+		registerBNF(new InternalConnectByClauseBNF());
 		registerBNF(new OrderSiblingsByClauseBNF());
 		registerBNF(new StartWithClauseBNF());
 
@@ -179,10 +180,10 @@ public final class EclipseLinkJPQLGrammar2_5 extends AbstractJPQLGrammar {
 
 		registerIdentifierRole(AS_OF,                IdentifierRole.CLAUSE);
 		registerIdentifierRole(CONNECT_BY,           IdentifierRole.CLAUSE);
-		registerIdentifierRole(SCN,                  IdentifierRole.COMPLETEMENT);
+		registerIdentifierRole(SCN,                  IdentifierRole.COMPLEMENT);
 		registerIdentifierRole(START_WITH,           IdentifierRole.CLAUSE);
 		registerIdentifierRole(ORDER_SIBLINGS_BY,    IdentifierRole.CLAUSE);
-		registerIdentifierRole(TIMESTAMP,            IdentifierRole.COMPLETEMENT);
+		registerIdentifierRole(TIMESTAMP,            IdentifierRole.COMPLEMENT);
 
 		registerIdentifierVersion(CONNECT_BY,        JPAVersion.VERSION_2_1);
 		registerIdentifierVersion(ORDER_SIBLINGS_BY, JPAVersion.VERSION_2_1);

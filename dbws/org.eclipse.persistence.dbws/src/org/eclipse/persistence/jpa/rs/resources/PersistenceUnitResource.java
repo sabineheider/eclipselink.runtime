@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2013 Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2011, 2013 Oracle and/or its affiliates. All rights reserved.
  * This program and the accompanying materials are made available under the 
  * terms of the Eclipse Public License v1.0 and Eclipse Distribution License v. 1.0 
  * which accompanies this distribution. 
@@ -38,23 +38,27 @@ public class PersistenceUnitResource extends AbstractPersistenceUnitResource {
     @GET
     @Path("entity/{descriptorAlias}")
     public Response getDescriptorMetadata(@PathParam("version") String version, @PathParam("context") String persistenceUnit, @PathParam("descriptorAlias") String descriptorAlias, @Context HttpHeaders hh, @Context UriInfo uriInfo) {
+        setRequestUniqueId();
         return getDescriptorMetadata(version, persistenceUnit, descriptorAlias, hh, uriInfo.getBaseUri());
     }
 
     @GET
     public Response getTypes(@PathParam("version") String version, @PathParam("context") String persistenceUnit, @Context HttpHeaders hh, @Context UriInfo uriInfo) {
+        setRequestUniqueId();
         return getTypes(version, persistenceUnit, hh, uriInfo.getBaseUri());
     }
 
     @GET
     @Path("query")
     public Response getQueriesMetadata(@PathParam("version") String version, @PathParam("context") String persistenceUnit, @Context HttpHeaders hh, @Context UriInfo uriInfo) {
+        setRequestUniqueId();
         return getQueriesMetadata(version, persistenceUnit, hh, uriInfo.getBaseUri());
     }
 
     @GET
     @Path("query/{queryName}")
     public Response getQueryMetadata(@PathParam("version") String version, @PathParam("context") String persistenceUnit, @PathParam("queryName") String queryName, @Context HttpHeaders hh, @Context UriInfo uriInfo) {
+        setRequestUniqueId();
         return getQueryMetadata(version, persistenceUnit, queryName, hh, uriInfo.getBaseUri());
     }
 }

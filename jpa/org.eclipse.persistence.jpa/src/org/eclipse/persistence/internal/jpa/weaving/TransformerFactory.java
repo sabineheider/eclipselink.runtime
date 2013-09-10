@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 1998, 2012 Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1998, 2013 Oracle and/or its affiliates. All rights reserved.
  * This program and the accompanying materials are made available under the 
  * terms of the Eclipse Public License v1.0 and Eclipse Distribution License v. 1.0 
  * which accompanies this distribution. 
@@ -105,25 +105,17 @@ public class TransformerFactory {
      * class or from a superclass.
      */
     public void addClassDetailsForMappedSuperClasses(MetadataClass clz, ClassDescriptor initialDescriptor, ClassDetails classDetails, Map classDetailsMap, List unMappedAttributes, boolean weaveChangeTracking){
-        // If there are no unmapped attributes left, there is no work left to do.
-        if (unMappedAttributes.isEmpty()){
-            return;
-        }
-
         MetadataClass superClz = clz.getSuperclass();
         if (superClz == null || superClz.isObject()){
             return;
         }
         
-        // We need to check that the superClz is actually a mapped superclass
-        // and to determine that we will ask the session for the mapped super
-        // class descriptor. If there is no mapped superclass descriptor then
-        // bail. NOTE: it is still possible at this point to have 
-        // unMappedAttributes left however. This will be true in a table per
-        // class scenerio.
         ClassDescriptor mappedSuperclassDescriptor = ((AbstractSession) session).getMappedSuperclass(superClz.getName());
         if (mappedSuperclassDescriptor == null) {
-            return;
+            ClassDescriptor descriptor = findDescriptor(session.getProject(), clz.getSuperclass().getName());
+            if (descriptor != null) {
+                return;
+            }
         }
         
         boolean weaveValueHolders = canWeaveValueHolders(superClz, unMappedAttributes);
@@ -132,16 +124,15 @@ public class TransformerFactory {
         ClassDetails superClassDetails = createClassDetails(superClz, weaveValueHolders, weaveChangeTracking, weaveFetchGroups, weaveInternal, weaveRest);
         superClassDetails.setIsMappedSuperClass(true);
         
-        if (! mappedSuperclassDescriptor.usesPropertyAccessForWeaving()) {
+        if (mappedSuperclassDescriptor != null && ! mappedSuperclassDescriptor.usesPropertyAccessForWeaving()) {
             superClassDetails.useAttributeAccess();
-        } 
+        } else if (!initialDescriptor.usesPropertyAccessForWeaving()){
+            superClassDetails.useAttributeAccess();
+        }
         
         if (!classDetailsMap.containsKey(superClassDetails.getClassName())){
             stillUnMappedMappings = storeAttributeMappings(superClz, superClassDetails, unMappedAttributes, weaveValueHolders);
             classDetailsMap.put(superClassDetails.getClassName() ,superClassDetails);
-        }
-
-        if (((stillUnMappedMappings != null) && (stillUnMappedMappings.size() > 0))){
             addClassDetailsForMappedSuperClasses(superClz, initialDescriptor, classDetails, classDetailsMap, stillUnMappedMappings, weaveChangeTracking);
         }
     }
@@ -185,7 +176,7 @@ public class TransformerFactory {
 
                     classDetails.setShouldWeaveConstructorOptimization((classDetails.getDescribedClass().getFields().size() - (descriptor.getMappings().size() - unMappedAttributes.size()))<=0);
 
-                    if (!unMappedAttributes.isEmpty()){
+                    if (classDetails.getSuperClassName() != null) {
                         addClassDetailsForMappedSuperClasses(metaClass, descriptor, classDetails, classDetailsMap, unMappedAttributes, weaveChangeTracking);
                     }
                 }

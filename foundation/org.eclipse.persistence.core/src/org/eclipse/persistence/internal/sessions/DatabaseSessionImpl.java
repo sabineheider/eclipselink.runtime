@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 1998, 2012 Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1998, 2013 Oracle and/or its affiliates. All rights reserved.
  * This program and the accompanying materials are made available under the 
  * terms of the Eclipse Public License v1.0 and Eclipse Distribution License v. 1.0 
  * which accompanies this distribution. 
@@ -50,6 +50,7 @@ import org.eclipse.persistence.platform.server.NoServerPlatform;
 import org.eclipse.persistence.platform.server.ServerPlatformBase;
 import org.eclipse.persistence.queries.AttributeGroup;
 import org.eclipse.persistence.queries.DatabaseQuery;
+import org.eclipse.persistence.queries.ObjectLevelReadQuery;
 import org.eclipse.persistence.queries.QueryResultsCachePolicy;
 import org.eclipse.persistence.queries.ReadQuery;
 
@@ -158,6 +159,95 @@ public class DatabaseSessionImpl extends AbstractSession implements org.eclipse.
     }
     
     /**
+     * INTERNAL:
+     * Issue any pre connect and post connect without an actual connection to 
+     * the database. Descriptors are initialized in postConnectDatasource and
+     * are used in DDL generation. This will look to set the schema platform
+     * via the JPA 2.1 properties or through a detection on the connection
+     * before DDL generation.
+     */
+    public void setDatasourceAndInitialize() throws DatabaseException {
+        preConnectDatasource();
+        setOrDetectDatasource(false);
+        postConnectDatasource();
+    }
+    
+    /**
+     * INTERNAL:
+     * Will set the platform from specified schema generation properties or 
+     * by detecting it through the connection (if one is available).
+     * Any connection that is open for detection is closed before this method
+     * returns.
+     * 
+     * @param throwException - set to true if the caller cares to throw exceptions, false to swallow them.
+     */
+    protected void setOrDetectDatasource(boolean throwException) {
+        // Try to set the platform from JPA 2.1 schema properties first before attempting a detection.
+        if (getProperties().containsKey(PersistenceUnitProperties.SCHEMA_DATABASE_PRODUCT_NAME)) {
+            String vendorNameAndVersion = (String) getProperties().get(PersistenceUnitProperties.SCHEMA_DATABASE_PRODUCT_NAME);
+            
+            String majorVersion = (String) getProperties().get(PersistenceUnitProperties.SCHEMA_DATABASE_MAJOR_VERSION);
+            if (majorVersion != null) {
+                vendorNameAndVersion += majorVersion;
+            }
+            
+            String minorVersion = (String) getProperties().get(PersistenceUnitProperties.SCHEMA_DATABASE_MINOR_VERSION);
+            if (minorVersion != null) {
+                vendorNameAndVersion += minorVersion;
+            }
+
+            getLogin().setPlatformClassName(DBPlatformHelper.getDBPlatform(vendorNameAndVersion, getSessionLog()));
+        } else {
+            Connection conn = null;
+            
+            try {
+                conn = (Connection) getReadLogin().connectToDatasource(null, this);
+                // null out the cached platform because the platform on the login will be changed by the following line of code
+                this.platform = null;
+                String platformName = null;
+                
+                try {
+                    String vendorNameAndVersion = conn.getMetaData().getDatabaseProductName() + conn.getMetaData().getDatabaseMajorVersion();
+                    platformName = DBPlatformHelper.getDBPlatform(vendorNameAndVersion, getSessionLog());
+                    getLogin().setPlatformClassName(platformName);
+                } catch (EclipseLinkException classNotFound) {
+                    if (platformName.indexOf("Oracle") != -1) {
+                        // If we are running against Oracle, it is possible that we are running in an environment where
+                        // the OracleXPlatform class can not be loaded. Try using OraclePlatform class before giving up
+                        getLogin().setPlatformClassName(OraclePlatform.class.getName());
+                    } else {
+                        throw classNotFound;
+                    }
+                }
+                
+                getLogin().getPlatform().setDriverName(conn.getMetaData().getDriverName());
+            } catch (SQLException ex) {
+                if (throwException) {
+                    DatabaseException dbEx =  DatabaseException.errorRetrieveDbMetadataThroughJDBCConnection();
+                    // Typically exception would occur if user did not provide correct connection
+                    // parameters. The root cause of exception should be propagated up
+                    dbEx.initCause(ex);
+                    throw dbEx;
+                }
+            } finally {
+                if (conn != null) {
+                    try {
+                        conn.close();
+                    } catch (SQLException ex) {
+                        if (throwException) {
+                            DatabaseException dbEx =  DatabaseException.errorRetrieveDbMetadataThroughJDBCConnection();
+                            // Typically exception would occur if user did not provide correct connection
+                            // parameters. The root cause of exception should be propagated up
+                            dbEx.initCause(ex);
+                            throw dbEx;
+                        }
+                    }
+                }
+            }
+        }
+    }
+    
+    /**
      * PUBLIC:
      * Return  SequencingControl which used for sequencing setup and
      * customization including management of sequencing preallocation.
@@ -218,6 +308,7 @@ public class DatabaseSessionImpl extends AbstractSession implements org.eclipse.
     public DatabaseSessionImpl() {
         super();
         this.setServerPlatform(new NoServerPlatform(this));
+        this.shouldOptimizeResultSetAccess = ObjectLevelReadQuery.isResultSetAccessOptimizedQueryDefault;
     }
 
     /**
@@ -244,6 +335,7 @@ public class DatabaseSessionImpl extends AbstractSession implements org.eclipse.
     public DatabaseSessionImpl(org.eclipse.persistence.sessions.Project project) {
         super(project);
         this.setServerPlatform(new NoServerPlatform(this));
+        this.shouldOptimizeResultSetAccess = ObjectLevelReadQuery.isResultSetAccessOptimizedQueryDefault;
     }
 
     /**
@@ -629,33 +721,6 @@ public class DatabaseSessionImpl extends AbstractSession implements org.eclipse.
     protected Login getReadLogin(){
         return getDatasourceLogin();
     }
-
-    /**
-     * INTERNAL:
-     * This will attempt to set the login platform from the JPA 2.1 schema 
-     * properties. Returns true if successful, false otherwise.
-     */
-    protected boolean setSchemaPlatform() {
-        if (getProperties().containsKey(PersistenceUnitProperties.SCHEMA_DATABASE_PRODUCT_NAME)) {
-            String vendorNameAndVersion = (String) getProperties().get(PersistenceUnitProperties.SCHEMA_DATABASE_PRODUCT_NAME);
-            
-            String majorVersion = (String) getProperties().get(PersistenceUnitProperties.SCHEMA_DATABASE_MAJOR_VERSION);
-            if (majorVersion != null) {
-                vendorNameAndVersion += majorVersion;
-            }
-            
-            String minorVersion = (String) getProperties().get(PersistenceUnitProperties.SCHEMA_DATABASE_MINOR_VERSION);
-            if (minorVersion != null) {
-                vendorNameAndVersion += minorVersion;
-            }
-
-            getLogin().setPlatformClassName(DBPlatformHelper.getDBPlatform(vendorNameAndVersion, getSessionLog()));
-            
-            return true;
-        }
-        
-        return false;
-    }
     
     /**
      * PUBLIC:
@@ -669,51 +734,7 @@ public class DatabaseSessionImpl extends AbstractSession implements org.eclipse.
      */
     public void loginAndDetectDatasource() throws DatabaseException {
         preConnectDatasource();
-        
-        // Try to set the platform from JPA 2.1 schema properties first before
-        // attempting a detection.
-        if (! setSchemaPlatform()) {
-            Connection conn = null;
-            try {
-                conn = (Connection)getReadLogin().connectToDatasource(null, this);
-                // null out the cached platform because the platform on the login will be changed by the following line of code
-                this.platform = null;
-                String platformName = null;
-                
-                try {
-                    String vendorNameAndVersion = conn.getMetaData().getDatabaseProductName() + conn.getMetaData().getDatabaseMajorVersion();
-                    platformName = DBPlatformHelper.getDBPlatform(vendorNameAndVersion, getSessionLog());
-                    getLogin().setPlatformClassName(platformName);
-                } catch (EclipseLinkException classNotFound) {
-                    if (platformName.indexOf("Oracle") != -1) {
-                        // If we are running against Oracle, it is possible that we are running in an environment where
-                        // the OracleXPlatform class can not be loaded. Try using OraclePlatform class before giving up
-                        getLogin().setPlatformClassName(OraclePlatform.class.getName());
-                    } else {
-                        throw classNotFound;
-                    }
-                }
-            } catch (SQLException ex) {
-                DatabaseException dbEx =  DatabaseException.errorRetrieveDbMetadataThroughJDBCConnection();
-                // Typically exception would occur if user did not provide correct connection
-                // parameters. The root cause of exception should be propagated up
-                dbEx.initCause(ex);
-                throw dbEx;
-            } finally {
-                if (conn != null) {
-                    try {
-                        conn.close();
-                    } catch (SQLException ex) {
-                        DatabaseException dbEx =  DatabaseException.errorRetrieveDbMetadataThroughJDBCConnection();
-                        // Typically exception would occur if user did not provide correct connection
-                        // parameters. The root cause of exception should be propagated up
-                        dbEx.initCause(ex);
-                        throw dbEx;
-                    }
-                }
-            }
-        }
-        
+        setOrDetectDatasource(true);
         connect();
         postConnectDatasource();
     }
@@ -728,23 +749,6 @@ public class DatabaseSessionImpl extends AbstractSession implements org.eclipse.
     public void login() throws DatabaseException {
         preConnectDatasource();
         connect();
-        postConnectDatasource();
-    }
-    
-    /**
-     * PUBLIC:
-     * Issue any pre connect and post connect without an actual connection to 
-     * the database. Descriptors are initialized in postConnectDatasource and
-     * are used in DDL generation. This will look to set the schema platform
-     * via the JPA 2.1 properties before DDL generation.
-     * 
-     * The login must have been assigned when or after creating the session.
-     *
-     * @see #login(Login)
-     */
-    public void loginNoConnect() throws DatabaseException {
-        preConnectDatasource();
-        setSchemaPlatform();
         postConnectDatasource();
     }
     
@@ -838,6 +842,10 @@ public class DatabaseSessionImpl extends AbstractSession implements org.eclipse.
         if (this.databaseEventListener != null) {
             this.databaseEventListener.register(this);
         }
+        if ((getDatasourcePlatform() instanceof DatabasePlatform) && getPlatform().getBatchWritingMechanism() != null) {
+            getPlatform().getBatchWritingMechanism().initialize(this);
+        }
+        
     }
 
     /**
@@ -1002,7 +1010,7 @@ public class DatabaseSessionImpl extends AbstractSession implements org.eclipse.
                 try {
                     // Give the failover time to recover.
                     Thread.currentThread().sleep(getLogin().getDelayBetweenConnectionAttempts());
-                    log(SessionLog.INFO, "communication_failure_attempting_query_retry", (Object[])null, null);
+                    log(SessionLog.INFO, SessionLog.QUERY, "communication_failure_attempting_query_retry", (Object[])null, null);
                 } catch (InterruptedException intEx) {
                     break;
                 }

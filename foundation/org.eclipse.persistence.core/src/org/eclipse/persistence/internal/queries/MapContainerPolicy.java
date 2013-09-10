@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 1998, 2010 Oracle, Frank Schwarz. All rights reserved.
+ * Copyright (c) 1998, 2013 Oracle and/or its affiliates, Frank Schwarz. All rights reserved.
  * This program and the accompanying materials are made available under the 
  * terms of the Eclipse Public License v1.0 and Eclipse Distribution License v. 1.0 
  * which accompanies this distribution. 
@@ -246,6 +246,25 @@ public class MapContainerPolicy extends InterfaceContainerPolicy {
         } catch (UnsupportedOperationException ex) {
             throw QueryException.methodNotValid(container, "clear()");
         }
+    }
+
+    /**
+     * INTERNAL:
+     * Return a clone of the specified container.
+     */
+    @Override
+    public Object cloneFor(Object container) {
+        if (container == null) {
+            return null;
+        }
+        if (container instanceof java.lang.Cloneable) {
+            return super.cloneFor(container);
+        }
+
+        Map original = (Map)container;
+        Map clone = (Map)containerInstance(original.size());
+        clone.putAll(original);
+        return clone;
     }
 
     /**

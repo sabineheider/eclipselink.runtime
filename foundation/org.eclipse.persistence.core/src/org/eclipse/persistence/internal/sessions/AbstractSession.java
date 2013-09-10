@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 1998, 2012 Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1998, 2013 Oracle and/or its affiliates. All rights reserved.
  * This program and the accompanying materials are made available under the
  * terms of the Eclipse Public License v1.0 and Eclipse Distribution License v. 1.0
  * which accompanies this distribution.
@@ -224,7 +224,7 @@ public abstract class AbstractSession extends CoreAbstractSession<ClassDescripto
     protected boolean isLoggingOff;
 
     /** PERF: Allow for finalizers to be enabled, currently enables client-session finalize. */
-    protected boolean isFinalizersEnabled = false;
+    protected boolean isFinalizersEnabled;
 
     /** List of active command threads. */
     transient protected ExposedNodeLinkedList activeCommandThreads;
@@ -241,7 +241,7 @@ public abstract class AbstractSession extends CoreAbstractSession<ClassDescripto
      *  managed objects.
      *  @see org.eclipse.persistence.config.ReferenceMode
      */
-    protected ReferenceMode defaultReferenceMode = null;
+    protected ReferenceMode defaultReferenceMode;
 
     /**
      * Default pessimistic lock timeout value.
@@ -251,7 +251,7 @@ public abstract class AbstractSession extends CoreAbstractSession<ClassDescripto
     protected int queryTimeoutDefault;
     
     /** Allow a session to enable concurrent processing. */
-    protected boolean isConcurrent = false;
+    protected boolean isConcurrent;
     
     /**
      * This map will hold onto class to static metamodel class references from JPA.
@@ -264,7 +264,7 @@ public abstract class AbstractSession extends CoreAbstractSession<ClassDescripto
     protected List<DescriptorEvent> deferredEvents;
     
     /** records that the UOW is executing deferred events.  Events could cause operations to occur that may attempt to restart the event execution.  This must be avoided*/
-    protected boolean isExecutingEvents = false;
+    protected boolean isExecutingEvents;
 
     /** Allow queries to be targeted at specific connection pools. */
     protected PartitioningPolicy partitioningPolicy;
@@ -283,6 +283,13 @@ public abstract class AbstractSession extends CoreAbstractSession<ClassDescripto
     
     /** Allow CDI injection of entity listeners **/
     transient protected EntityListenerInjectionManager entityListenerInjectionManager;
+    
+    /**
+     * Indicates whether ObjectLevelReadQuery should by default use ResultSet Access optimization. 
+    * Optimization specified by the session is ignored if incompatible with other query settings. 
+     */
+    protected boolean shouldOptimizeResultSetAccess; 
+    
     /**
      * INTERNAL:
      * Create and return a new session.
@@ -294,9 +301,6 @@ public abstract class AbstractSession extends CoreAbstractSession<ClassDescripto
         this.name = "";
         initializeIdentityMapAccessor();
         // PERF - move to lazy init (3286091)
-        this.numberOfActiveUnitsOfWork = 0;
-        this.isInBroker = false;
-        this.isSynchronized = false;
     }
 
     /**
@@ -343,9 +347,6 @@ public abstract class AbstractSession extends CoreAbstractSession<ClassDescripto
      * Return the Serializer to use by default for serialization.
      */
     public Serializer getSerializer() {
-        if ((this.serializer == null) && (getParent() != null)) {
-            return getParent().getSerializer();
-        }
         return serializer;
     }
 
@@ -677,7 +678,7 @@ public abstract class AbstractSession extends CoreAbstractSession<ClassDescripto
                 DatabaseException exceptionToThrow = databaseException;
                 Object[] args = new Object[1];
                 args[0] = databaseException;
-                log(SessionLog.INFO, "communication_failure_attempting_begintransaction_retry", args, null);
+                log(SessionLog.INFO, SessionLog.TRANSACTION, "communication_failure_attempting_begintransaction_retry", args, null);
                 // Attempt to reconnect connection.
                 exceptionToThrow = retryTransaction(accessor, databaseException, 0, this);
                 if (exceptionToThrow == null) {
@@ -722,7 +723,7 @@ public abstract class AbstractSession extends CoreAbstractSession<ClassDescripto
                     Thread.currentThread().sleep(getLogin().getDelayBetweenConnectionAttempts());
                     Object[] args = new Object[1];
                     args[0] = databaseException;
-                    log(SessionLog.INFO, "communication_failure_attempting_begintransaction_retry", args, null);
+                    log(SessionLog.INFO, SessionLog.TRANSACTION, "communication_failure_attempting_begintransaction_retry", args, null);
                 } catch (InterruptedException intEx) {
                     break;
                 }
@@ -1356,7 +1357,7 @@ public abstract class AbstractSession extends CoreAbstractSession<ClassDescripto
      */
     public void updateTablePerTenantDescriptors(String property, Object value) {
         // When all the table per tenant descriptors are set, we should initialize them.
-        boolean shouldInitializeDescriptors = true;
+        boolean shouldInitializeDescriptors = hasTablePerTenantDescriptors();
         
         for (ClassDescriptor descriptor : getTablePerTenantDescriptors()) {
             TablePerMultitenantPolicy policy = (TablePerMultitenantPolicy) descriptor.getMultitenantPolicy();
@@ -1464,6 +1465,15 @@ public abstract class AbstractSession extends CoreAbstractSession<ClassDescripto
                 query.setAccessors(null);
             }
         }
+    }
+    
+    /**
+     * INTERNAL:
+     * Release (if required) connection after call.
+     * @param query
+     * @return
+     */
+    public void releaseConnectionAfterCall(DatabaseQuery query) {
     }
 
     /**
@@ -1813,7 +1823,7 @@ public abstract class AbstractSession extends CoreAbstractSession<ClassDescripto
                     if (databaseException.isCommunicationFailure()) {
                         Object[] args = new Object[1];
                         args[0] = databaseException;
-                        log(SessionLog.INFO, "communication_failure_attempting_query_retry", args, null);
+                        log(SessionLog.INFO, SessionLog.QUERY, "communication_failure_attempting_query_retry", args, null);
                         Object result = retryQuery(query, row, databaseException, retryCount, this);
                         if (result instanceof DatabaseException) {
                             exception = (DatabaseException)result;
@@ -3476,7 +3486,7 @@ public abstract class AbstractSession extends CoreAbstractSession<ClassDescripto
         if (this.isLoggingOff) {
             return;
         }
-        log(SessionLog.FINER, message, (Object[])null, null, false);
+        log(SessionLog.FINER, SessionLog.MISC, message, (Object[])null, null, false);
     }
 
     /**
@@ -4405,7 +4415,7 @@ public abstract class AbstractSession extends CoreAbstractSession<ClassDescripto
                 level = SessionLog.ALL;
                 ;
             }
-            log(level, message, null, null, false);
+            log(level, SessionLog.PROPAGATION, message, null, null, false);
         }
     }
 
@@ -4673,7 +4683,9 @@ public abstract class AbstractSession extends CoreAbstractSession<ClassDescripto
      * </p><p>
      * @param accessor  the connection that generated the log entry
      * </p>
+     * @deprecated since 2.6 replaced by log with category, log(int, String, String, Object[], Accessor)
      */
+    @Deprecated
     public void log(int level, String message, Object[] params, Accessor accessor) {
         if (this.isLoggingOff) {
             return;
@@ -4697,7 +4709,9 @@ public abstract class AbstractSession extends CoreAbstractSession<ClassDescripto
      * </p><p>
      * @param shouldTranslate  true if the message needs to be translated.
      * </p>
+     * @deprecated since 2.6 replaced by log with category, log(int, String, String, Object[], Accessor, boolean)
      */
+    @Deprecated
     public void log(int level, String message, Object[] params, Accessor accessor, boolean shouldTranslate) {
         if (this.isLoggingOff) {
             return;
@@ -5059,12 +5073,39 @@ public abstract class AbstractSession extends CoreAbstractSession<ClassDescripto
        if (objectOrCollection instanceof Collection) {
            Iterator iterator = ((Collection)objectOrCollection).iterator();
            while (iterator.hasNext()) {
-               load(iterator.next(), group);
+               Object object = iterator.next();
+               load(object, group, getClassDescriptor(object.getClass()), false);
            }
        } else {
-           ClassDescriptor concreteDescriptor = getDescriptor(objectOrCollection);
+           ClassDescriptor concreteDescriptor =  getClassDescriptor(objectOrCollection.getClass());
+           load(objectOrCollection, group, concreteDescriptor, false);
+       }
+   }
+
+   /**
+    * This method will load the passed object or collection of objects using the passed AttributeGroup.
+    * In case of collection all members should be either objects of the same mapped type
+    * or have a common inheritance hierarchy mapped root class.
+    * The AttributeGroup should correspond to the object type. 
+    * 
+    * @param objectOrCollection
+    */
+   public void load(Object objectOrCollection, AttributeGroup group, ClassDescriptor referenceDescriptor, boolean fromFetchGroup) {
+       if (objectOrCollection == null || group == null) {
+           return;
+       }       
+       if (objectOrCollection instanceof Collection) {
+           Iterator iterator = ((Collection)objectOrCollection).iterator();
+           while (iterator.hasNext()) {
+               load(iterator.next(), group, referenceDescriptor, fromFetchGroup);
+           }
+       } else {
+           ClassDescriptor concreteDescriptor = referenceDescriptor;
+           if (concreteDescriptor.hasInheritance() && !objectOrCollection.getClass().equals(concreteDescriptor.getJavaClass())){
+               concreteDescriptor = concreteDescriptor.getInheritancePolicy().getDescriptor(objectOrCollection.getClass());
+           }
            AttributeGroup concreteGroup = group.findGroup(concreteDescriptor);
-           concreteDescriptor.getObjectBuilder().load(objectOrCollection, concreteGroup, this);
+           concreteDescriptor.getObjectBuilder().load(objectOrCollection, concreteGroup, this, fromFetchGroup);
        }
    }
 
@@ -5075,7 +5116,7 @@ public abstract class AbstractSession extends CoreAbstractSession<ClassDescripto
        // PERF: Only use deferred locking if required.
        // CR#3876308 If joining is used, deferred locks are still required.
        if (query.requiresDeferredLocks()) {
-           cacheKey = this.getIdentityMapAccessorInstance().acquireDeferredLock(primaryKey, concreteDescriptor.getJavaClass(), concreteDescriptor, query.isCacheCheckComplete());
+           cacheKey = this.getIdentityMapAccessorInstance().acquireDeferredLock(primaryKey, concreteDescriptor.getJavaClass(), concreteDescriptor, query.isCacheCheckComplete() || query.shouldRetrieveBypassCache());
 
            if (cacheKey.getActiveThread() != Thread.currentThread()) {
                int counter = 0;
@@ -5090,7 +5131,7 @@ public abstract class AbstractSession extends CoreAbstractSession<ClassDescripto
                        Thread.sleep(10);
                    } catch (InterruptedException exception) {
                    }
-                   cacheKey = this.getIdentityMapAccessorInstance().acquireDeferredLock(primaryKey, concreteDescriptor.getJavaClass(), concreteDescriptor, query.isCacheCheckComplete());
+                   cacheKey = this.getIdentityMapAccessorInstance().acquireDeferredLock(primaryKey, concreteDescriptor.getJavaClass(), concreteDescriptor, query.isCacheCheckComplete() || query.shouldRetrieveBypassCache());
                    if (cacheKey.getActiveThread() == Thread.currentThread()) {
                        break;
                    }
@@ -5101,7 +5142,7 @@ public abstract class AbstractSession extends CoreAbstractSession<ClassDescripto
                }
            }
        } else {
-           cacheKey = this.getIdentityMapAccessorInstance().acquireLock(primaryKey, concreteDescriptor.getJavaClass(), concreteDescriptor, query.isCacheCheckComplete());
+           cacheKey = this.getIdentityMapAccessorInstance().acquireLock(primaryKey, concreteDescriptor.getJavaClass(), concreteDescriptor, query.isCacheCheckComplete() || query.shouldRetrieveBypassCache());
        }
        return  cacheKey;
    }
@@ -5159,4 +5200,23 @@ public abstract class AbstractSession extends CoreAbstractSession<ClassDescripto
    public void setIsConcurrent(boolean isConcurrent) {
        this.isConcurrent = isConcurrent;
    }
+   
+   /**
+    * ADVANCED:
+    * Set to indicate whether ObjectLevelReadQuery should by default use ResultSet Access optimization. 
+    * If not set then parent's flag is used, is none set then ObjectLevelReadQuery.isResultSetAccessOptimizedQueryDefault is used.
+    * If the optimization specified by the session is ignored if incompatible with other query settings. 
+    */
+   public void setShouldOptimizeResultSetAccess(boolean shouldOptimizeResultSetAccess) {
+       this.shouldOptimizeResultSetAccess = shouldOptimizeResultSetAccess;
+   }
+   
+   /**
+    * ADVANCED:
+    * Indicates whether ObjectLevelReadQuery should by default use ResultSet Access optimization. 
+    * Optimization specified by the session is ignored if incompatible with other query settings. 
+    */
+   public boolean shouldOptimizeResultSetAccess() {
+       return this.shouldOptimizeResultSetAccess;
+   }   
 }

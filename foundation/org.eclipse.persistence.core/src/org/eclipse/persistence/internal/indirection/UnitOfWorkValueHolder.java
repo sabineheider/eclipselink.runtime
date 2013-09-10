@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 1998, 2012 Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1998, 2013 Oracle and/or its affiliates. All rights reserved.
  * This program and the accompanying materials are made available under the 
  * terms of the Eclipse Public License v1.0 and Eclipse Distribution License v. 1.0 
  * which accompanies this distribution. 
@@ -41,7 +41,7 @@ public abstract class UnitOfWorkValueHolder extends DatabaseValueHolder implemen
     protected transient DatabaseMapping mapping;
 
     /** The value holder stored in the backup copy, should not be transient. */
-    protected ValueHolder backupValueHolder;
+    protected ValueHolderInterface backupValueHolder;
 
     /** These cannot be transient because they are required for a remote unit of work.
     When the remote uow is serialized to the server to be committed, these
@@ -87,7 +87,7 @@ public abstract class UnitOfWorkValueHolder extends DatabaseValueHolder implemen
      */
     public abstract Object buildCloneFor(Object originalAttributeValue);
 
-    protected ValueHolder getBackupValueHolder() {
+    protected ValueHolderInterface getBackupValueHolder() {
         return backupValueHolder;
     }
 
@@ -159,6 +159,14 @@ public abstract class UnitOfWorkValueHolder extends DatabaseValueHolder implemen
                         // UnitOfWork valueholder on the UnitOfWork only.
                         return wrapped.instantiateForUnitOfWorkValueHolder(this);
                     }
+                }
+            }
+            if (!((DatabaseValueHolder)this.wrappedValueHolder).isInstantiated()){
+                //if not instantiated then try and load the UOW versions to prevent the whole loading from the cache and cloning
+                //process
+                Object result = ((DatabaseValueHolder)this.wrappedValueHolder).getValue((UnitOfWorkImpl) this.session);
+                if (result != null){
+                    return result;
                 }
             }
         }
@@ -272,7 +280,7 @@ public abstract class UnitOfWorkValueHolder extends DatabaseValueHolder implemen
         //do nothing.  nothing should be reset to null;
     }
 
-    public void setBackupValueHolder(ValueHolder backupValueHolder) {
+    public void setBackupValueHolder(ValueHolderInterface backupValueHolder) {
         this.backupValueHolder = backupValueHolder;
     }
 

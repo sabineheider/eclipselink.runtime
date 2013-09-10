@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 1998, 2012 Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1998, 2013 Oracle and/or its affiliates. All rights reserved.
  * This program and the accompanying materials are made available under the 
  * terms of the Eclipse Public License v1.0 and Eclipse Distribution License v. 1.0 
  * which accompanies this distribution. 
@@ -140,12 +140,20 @@ public abstract class DatabaseCall extends DatasourceCall {
 
     /** The SQL string to execute. */
     protected String sqlString;
+    
+    /** Indicates whether the call has allocated connection. May be set if the call has not finished */
+    protected boolean hasAllocatedConnection;
 
     /**
      * Define if this query is compatible with batch writing.
      * Some queries, such as DDL are not compatible.
      */
     protected boolean isBatchExecutionSupported;
+    
+    /**
+     * Keep a list of the output cursors.
+     */
+    protected List<DatabaseField> outputCursors;
     
     public DatabaseCall() {
         super.shouldProcessTokenInQuotes = false;
@@ -215,6 +223,7 @@ public abstract class DatabaseCall extends DatasourceCall {
     public void appendOutCursor(DatabaseField outField) {
         getParameters().add(outField);
         getParameterTypes().add(OUT_CURSOR);
+        getOutputCursors().add(outField);
     }
 
     /**
@@ -475,6 +484,18 @@ public abstract class DatabaseCall extends DatasourceCall {
         }
         return fields;
     }
+    
+    /**
+     * INTERNAL:
+     * Return the output cursors for this stored procedure call.
+     */
+    public List<DatabaseField> getOutputCursors() {
+        if (outputCursors == null) {
+            outputCursors = new ArrayList<DatabaseField>();
+        }
+        
+        return outputCursors;
+    }
 
     /**
      * INTERNAL:
@@ -545,6 +566,13 @@ public abstract class DatabaseCall extends DatasourceCall {
         return hasOptimisticLock;
     }
 
+    /**
+     * Return true if there are output cursors on this call.
+     */
+    public boolean hasOutputCursors() {
+        return outputCursors != null && ! outputCursors.isEmpty();
+    }
+    
     /**
      * Callable statement is required if there is an output parameter.
      */
@@ -1292,5 +1320,19 @@ public abstract class DatabaseCall extends DatasourceCall {
      */
     public void setBatchExecutionSupported(boolean isBatchExecutionSupported) {
         this.isBatchExecutionSupported = isBatchExecutionSupported;
+    }
+    
+    /**
+     * INTERNAL:
+     */
+    public boolean hasAllocatedConnection() {
+        return this.hasAllocatedConnection;
+    }
+
+    /**
+     * INTERNAL:
+     */
+    public void setHasAllocatedConnection(boolean hasAllocatedConnection) {
+        this.hasAllocatedConnection = hasAllocatedConnection;
     }
 }

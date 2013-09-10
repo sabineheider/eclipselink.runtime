@@ -23,9 +23,13 @@ import java.util.Vector;
 import org.eclipse.persistence.descriptors.ClassDescriptor;
 import org.eclipse.persistence.exceptions.DBWSException;
 import org.eclipse.persistence.internal.helper.NonSynchronizedVector;
-import org.eclipse.persistence.queries.ReadObjectQuery;
+import org.eclipse.persistence.internal.jpa.JPAQuery;
+import org.eclipse.persistence.queries.DatabaseQuery;
 import org.eclipse.persistence.sessions.UnitOfWork;
+
 import static org.eclipse.persistence.internal.xr.Util.PK_QUERYNAME;
+import static org.eclipse.persistence.internal.xr.Util.TYPE_STR;
+import static org.eclipse.persistence.internal.xr.Util.UNDERSCORE_STR;
 
 /**
  * <p><b>INTERNAL:</b>An XR DeleteOperation is an executable representation of a <tt>DELETE</tt>
@@ -34,11 +38,11 @@ import static org.eclipse.persistence.internal.xr.Util.PK_QUERYNAME;
  * @author Mike Norman - michael.norman@oracle.com
  * @since EclipseLink 1.x
  */
-@SuppressWarnings({"unchecked"/*, "rawtypes"*/})
+@SuppressWarnings({"unchecked"})
 public class DeleteOperation extends Operation {
-
     protected String descriptorName;
     protected ClassDescriptor classDescriptor;
+    protected String findByPKQuery;
 
     public String getDescriptorName() {
         return descriptorName;
@@ -51,6 +55,28 @@ public class DeleteOperation extends Operation {
         return classDescriptor;
     }
 
+    /**
+     * Return the findByPrimaryKey query that this DeleteOperation
+     * will use to acquire the object to delete.
+     * 
+     */
+    public String getFindByPKQuery() {
+        // provide backward compatibility
+        if (findByPKQuery == null) {
+            findByPKQuery = PK_QUERYNAME + UNDERSCORE_STR + descriptorName + TYPE_STR;
+        }
+        return findByPKQuery;
+    }
+    
+    /**
+     * Set the findByPrimaryKey query that this DeleteOperation
+     * will use to acquire the object to delete.
+     * 
+     */
+    public void setFindByPKQuery(String findByPKQuery) {
+        this.findByPKQuery = findByPKQuery;
+    }
+    
     @Override
     public void validate(XRServiceAdapter xrService) {
         super.validate(xrService);
@@ -73,19 +99,50 @@ public class DeleteOperation extends Operation {
      *
      * @see  {@link Operation}
      */
+    @SuppressWarnings("rawtypes")
     @Override
     public Object invoke(XRServiceAdapter xrService, Invocation invocation) {
-        ReadObjectQuery roq =
-            (ReadObjectQuery)classDescriptor.getQueryManager().getQuery(PK_QUERYNAME);
-        List queryArguments = roq.getArguments();
-        int queryArgumentsSize = queryArguments.size();
-        Vector executeArguments = new NonSynchronizedVector();
-        for (int i = 0; i < queryArgumentsSize; i++) {
-            String argName = (String)queryArguments.get(i);
-            executeArguments.add(invocation.getParameter(argName));
+        DatabaseQuery query = classDescriptor.getQueryManager().getQuery(getFindByPKQuery());
+                
+        // a named query created via ORM metadata processing needs initialization
+        if (query instanceof JPAQuery) {
+            query = ((JPAQuery) query).processSQLQuery(xrService.getORSession().getActiveSession());
         }
+
         UnitOfWork uow = xrService.getORSession().acquireUnitOfWork();
-        Object toBeDeleted = uow.executeQuery(roq, executeArguments);
+        Object toBeDeleted;
+
+        // a query created via ORM metadata processing does not have parameters set, however, the operation should
+        if (query.getArguments().size() == 0) {
+            int idx = 0;
+            for (Parameter  param : getParameters()) {
+                // for custom SQL query (as configured via ORM metadata processing) we add args by position
+                query.addArgument(Integer.toString(++idx), Util.SCHEMA_2_CLASS.get(param.getType()));
+                query.addArgumentValue(invocation.getParameter(param.getName()));
+            }
+            toBeDeleted = uow.executeQuery(query);
+        } else {
+            // set query args or execute args for the non-JPAQuery case,
+            // i.e. stored proc/funcs get populated from ORM metadata
+            // whereas named queries (SQL strings) do not...
+            List queryArguments = query.getArguments();
+            int queryArgumentsSize = queryArguments.size();
+            Vector executeArguments = new NonSynchronizedVector();
+            for (int i = 0; i < queryArgumentsSize; i++) {
+                String argName = (String)queryArguments.get(i);
+                executeArguments.add(invocation.getParameter(argName));
+            }
+            toBeDeleted = uow.executeQuery(query, executeArguments);
+        }
+
+        // JPAQuery will return a single result in a Vector
+        if (!isCollection() && toBeDeleted instanceof Vector) {
+            if (((Vector) toBeDeleted).isEmpty()) {
+                toBeDeleted = null;
+            } else {
+                toBeDeleted = ((Vector)toBeDeleted).firstElement();
+            }
+        }
         if (toBeDeleted != null) {
             uow.deleteObject(toBeDeleted);
             uow.commit();

@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 1998, 2012 Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1998, 2013 Oracle and/or its affiliates. All rights reserved.
  * This program and the accompanying materials are made available under the 
  * terms of the Eclipse Public License v1.0 and Eclipse Distribution License v. 1.0 
  * which accompanies this distribution. 
@@ -40,6 +40,10 @@ public class ImageSimulator {
         generatedImage.setCommentary(initCharArrayBase(clobSize));
         generatedImage.setCustomAttribute1(new SerializableNonEntity(new Long(Long.MAX_VALUE)));
         generatedImage.setCustomAttribute2(new SerializableNonEntity(new Long(Long.MAX_VALUE)));
+        generatedImage.setXml1(new SerializableNonEntity(new Long(Long.MIN_VALUE)));
+        generatedImage.setXml2(new SerializableNonEntity(new Long(Long.MIN_VALUE)));
+        generatedImage.setJson1(new SerializableNonEntity(new Long(Long.MIN_VALUE)));
+        generatedImage.setJson2(new SerializableNonEntity(new Long(Long.MIN_VALUE)));
 
         return generatedImage;
     }

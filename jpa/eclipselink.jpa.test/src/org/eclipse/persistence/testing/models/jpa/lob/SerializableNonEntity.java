@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 1998, 2012 Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1998, 2013 Oracle and/or its affiliates. All rights reserved.
  * This program and the accompanying materials are made available under the 
  * terms of the Eclipse Public License v1.0 and Eclipse Distribution License v. 1.0 
  * which accompanies this distribution. 
@@ -14,10 +14,13 @@ package org.eclipse.persistence.testing.models.jpa.lob;
 
 import java.io.Serializable;
 
+import javax.xml.bind.annotation.XmlRootElement;
+
 /**
  * This class is used to test serialization to persistent fields in other entities,
  * such as mapping attributes of this type to String or blob field types.
  */
+@XmlRootElement
 public class SerializableNonEntity implements Serializable {
     Long someValue;
 

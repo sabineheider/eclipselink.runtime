@@ -37,17 +37,16 @@ import org.eclipse.persistence.eis.interactions.QueryStringInteraction;
 import org.eclipse.persistence.internal.nosql.adapters.mongo.MongoConnection;
 import org.eclipse.persistence.internal.nosql.adapters.mongo.MongoConnectionFactory;
 import org.eclipse.persistence.internal.nosql.adapters.mongo.MongoOperation;
-import org.eclipse.persistence.internal.sessions.AbstractSession;
 import org.eclipse.persistence.jpa.JpaEntityManager;
 import org.eclipse.persistence.jpa.dynamic.JPADynamicHelper;
 import org.eclipse.persistence.sessions.Record;
-import org.eclipse.persistence.sessions.Session;
 import org.eclipse.persistence.testing.framework.junit.JUnitTestCase;
 import org.eclipse.persistence.testing.models.jpa.mongo.Buyer;
 import org.eclipse.persistence.testing.models.jpa.mongo.Customer;
 import org.eclipse.persistence.testing.models.jpa.mongo.LineItem;
 import org.eclipse.persistence.testing.models.jpa.mongo.Order;
 import org.eclipse.persistence.testing.models.jpa.mongo.Address;
+import org.eclipse.persistence.testing.models.jpa.mongo.Address.AddressType;
 
 import com.mongodb.DB;
 import com.mongodb.Mongo;
@@ -74,6 +73,7 @@ public class MongoTestSuite extends JUnitTestCase {
         suite.addTest(new MongoTestSuite("testInsert"));
         suite.addTest(new MongoTestSuite("testFind"));
         suite.addTest(new MongoTestSuite("testUpdate"));
+        suite.addTest(new MongoTestSuite("testUpdateAdd"));
         suite.addTest(new MongoTestSuite("testMerge"));
         suite.addTest(new MongoTestSuite("testLockError"));
         suite.addTest(new MongoTestSuite("testRefresh"));
@@ -81,6 +81,7 @@ public class MongoTestSuite extends JUnitTestCase {
         suite.addTest(new MongoTestSuite("testSimpleJPQL"));
         suite.addTest(new MongoTestSuite("testJPQLLike"));
         suite.addTest(new MongoTestSuite("testComplexJPQL"));
+        suite.addTest(new MongoTestSuite("testJPQLEnum"));
         suite.addTest(new MongoTestSuite("testNativeQuery"));
         suite.addTest(new MongoTestSuite("testExternalFactory"));
         suite.addTest(new MongoTestSuite("testUserPassword"));
@@ -152,6 +153,7 @@ public class MongoTestSuite extends JUnitTestCase {
             order.orderedBy = "ACME";
             order.address = new Address();
             order.address.city = "Ottawa";
+            order.address.type = AddressType.Work;
             
             LineItem item = new LineItem();
             item.itemName = "stuff";
@@ -211,15 +213,8 @@ public class MongoTestSuite extends JUnitTestCase {
         } finally {
             closeEntityManagerAndTransaction(em);
         }
-        clearCache();
-        em = createEntityManager();
-        beginTransaction(em);
-        try {
-            Order fromDatabase = em.find(Order.class, order.id);
-            compareObjects(order, fromDatabase);
-        } finally {
-            closeEntityManagerAndTransaction(em);
-        }        
+        verifyObjectInCacheAndDatabase(order);
+        verifyObjectInEntityManager(order);
     }
     
     /**
@@ -321,16 +316,43 @@ public class MongoTestSuite extends JUnitTestCase {
             commitTransaction(em);
         } finally {
             closeEntityManagerAndTransaction(em);
-        }        
+        }
+        verifyObjectInCacheAndDatabase(order);
+        verifyObjectInEntityManager(order);
+    }
+
+    
+    /**
+     * Test updates.
+     */
+    public void testUpdateAdd() {
+        EntityManager em = createEntityManager();
+        beginTransaction(em);
+        Order order = new Order();
+        try {
+            order.orderedBy = "ACME";
+            order.address = new Address();
+            order.address.city = "Ottawa";
+            em.persist(order);
+            commitTransaction(em);
+        } finally {
+            closeEntityManagerAndTransaction(em);
+        }
         clearCache();
         em = createEntityManager();
         beginTransaction(em);
         try {
-            Order fromDatabase = em.find(Order.class, order.id);
-            compareObjects(order, fromDatabase);
+            order = em.find(Order.class, order.id);
+            Customer customer = new Customer();
+            em.persist(customer);
+            order.customers.add(customer);
+            order.comments.add("foo");
+            commitTransaction(em);
         } finally {
             closeEntityManagerAndTransaction(em);
         }
+        verifyObjectInCacheAndDatabase(order);
+        verifyObjectInEntityManager(order);
     }
     
     /**
@@ -651,6 +673,26 @@ public class MongoTestSuite extends JUnitTestCase {
             results = query.getResultList();
             if (results.size() != 10) {
                 fail("Expected 10 result: " + results);
+            }
+        } finally {
+            closeEntityManager(em);
+        }
+    }
+    
+    /**
+     * Test enum query.
+     */
+    public void testJPQLEnum() {
+        // Clear db first.
+        testSetup();
+        EntityManager em = createEntityManager();
+        try {
+            // like
+            Query query = em.createQuery("Select o from Order o where o.address.type = :type");
+            query.setParameter("type", AddressType.Home);
+            List results = query.getResultList();
+            if (results.size() != 0) {
+                fail("Expected 0 result: " + results);
             }
         } finally {
             closeEntityManager(em);

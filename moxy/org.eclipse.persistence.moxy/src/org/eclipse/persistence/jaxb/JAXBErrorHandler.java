@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 1998, 2012 Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1998, 2013 Oracle and/or its affiliates. All rights reserved.
  * This program and the accompanying materials are made available under the 
  * terms of the Eclipse Public License v1.0 and Eclipse Distribution License v. 1.0 
  * which accompanies this distribution. 
@@ -17,6 +17,7 @@ import javax.xml.bind.ValidationEventHandler;
 import javax.xml.bind.helpers.ValidationEventImpl;
 import javax.xml.bind.helpers.ValidationEventLocatorImpl;
 
+import org.eclipse.persistence.exceptions.EclipseLinkException;
 import org.eclipse.persistence.oxm.record.ValidatingMarshalRecord.MarshalSAXParseException;
 import org.xml.sax.SAXParseException;
 import org.xml.sax.SAXException;
@@ -74,8 +75,15 @@ public class JAXBErrorHandler implements ErrorHandler {
         if(exception instanceof MarshalSAXParseException) {
             eventLocator.setObject(((MarshalSAXParseException) exception).getObject());
         }
-        ValidationEvent event = new ValidationEventImpl(severity, exception.getLocalizedMessage(), eventLocator, exception);
+        Throwable linkedException = exception.getCause();
+        if(linkedException instanceof EclipseLinkException) {
+            linkedException = exception.getCause();
+        }
+        ValidationEvent event = new ValidationEventImpl(severity, exception.getLocalizedMessage(), eventLocator, linkedException);
         if (!eventHandler.handleEvent(event)) {
+            if(linkedException instanceof EclipseLinkException) {
+                throw (EclipseLinkException) linkedException;
+            }
             throw exception;
         }
     }

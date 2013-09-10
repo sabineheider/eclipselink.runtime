@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 1998, 2012 Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1998, 2013 Oracle and/or its affiliates. All rights reserved.
  * This program and the accompanying materials are made available under the 
  * terms of the Eclipse Public License v1.0 and Eclipse Distribution License v. 1.0 
  * which accompanies this distribution. 
@@ -20,7 +20,6 @@ import javax.xml.namespace.QName;
 import org.eclipse.persistence.exceptions.XMLMarshalException;
 import org.eclipse.persistence.internal.core.queries.CoreContainerPolicy;
 import org.eclipse.persistence.internal.core.sessions.CoreAbstractSession;
-import org.eclipse.persistence.internal.helper.Helper;
 import org.eclipse.persistence.internal.oxm.mappings.AnyCollectionMapping;
 import org.eclipse.persistence.internal.oxm.mappings.Descriptor;
 import org.eclipse.persistence.internal.oxm.mappings.Field;
@@ -31,8 +30,6 @@ import org.eclipse.persistence.internal.oxm.record.ObjectMarshalContext;
 import org.eclipse.persistence.internal.oxm.record.UnmarshalRecord;
 import org.eclipse.persistence.internal.oxm.record.XMLReader;
 import org.eclipse.persistence.internal.oxm.record.deferred.AnyMappingContentHandler;
-import org.eclipse.persistence.logging.AbstractSessionLog;
-import org.eclipse.persistence.logging.SessionLog;
 import org.eclipse.persistence.oxm.mappings.nullpolicy.AbstractNullPolicy;
 import org.eclipse.persistence.oxm.mappings.nullpolicy.XMLNullRepresentationType;
 import org.w3c.dom.Attr;
@@ -83,7 +80,7 @@ public class XMLAnyCollectionMappingNodeValue extends XMLRelationshipMappingNode
         	return marshalRecord.emptyCollection(xPathFragment, namespaceResolver, xmlAnyCollectionMapping.getWrapperNullPolicy() != null);
         }
         
-        if(marshalRecord.getMarshaller().getMediaType().isApplicationJSON()){
+        if(marshalRecord.getMarshaller().isApplicationJSON()){
             List<XPathFragment> frags = new ArrayList();
             List<List> values = new ArrayList<List>();
             List mixedValues = new ArrayList();
@@ -339,6 +336,8 @@ public class XMLAnyCollectionMappingNodeValue extends XMLRelationshipMappingNode
             if (prefix == null || prefix.length() == 0) {
                 prefix = marshalRecord.getNamespaceResolver().generatePrefix();
                 generatedNamespace = new Namespace(prefix, xmlRootFragment.getNamespaceURI());
+                xmlRootFragment.setGeneratedPrefix(true);
+
             }
             xpath = prefix + Constants.COLON + xpath;
         }
@@ -360,14 +359,16 @@ public class XMLAnyCollectionMappingNodeValue extends XMLRelationshipMappingNode
         CoreAbstractSession childSession;
         Marshaller marshaller = marshalRecord.getMarshaller();
         XPathFragment rootFragment;
-
+        
         if (xmlAnyCollectionMapping.usesXMLRoot() && (value instanceof Root)) {
             xmlRootFragment = new XPathFragment();
             xmlRootFragment.setNamespaceAware(marshalRecord.isNamespaceAware());
             wasXMLRoot = true;
-            value = ((Root) value).getObject();
-            if(null == value){
-                return false;
+            value = ((Root) value).getObject();            
+            if(null == value){            	   
+            	setupFragment(((Root) originalValue), xmlRootFragment, marshalRecord);
+            	marshalRecord.nilComplex(xmlRootFragment, namespaceResolver);
+                return true;
             }
         }
         UnmarshalKeepAsElementPolicy keepAsElementPolicy = xmlAnyCollectionMapping.getKeepAsElementPolicy();
@@ -384,17 +385,11 @@ public class XMLAnyCollectionMappingNodeValue extends XMLRelationshipMappingNode
             }
             descriptor = (Descriptor) childSession.getDescriptor(value);
             objectBuilder = (ObjectBuilder) descriptor.getObjectBuilder();
+            
             List extraNamespaces = objectBuilder.addExtraNamespacesToNamespaceResolver(descriptor, marshalRecord, session, true, true);
-            if (wasXMLRoot) {
-                Namespace generatedNamespace = setupFragment(((Root) originalValue), xmlRootFragment, marshalRecord);
-                if (generatedNamespace != null) {
-                    if (extraNamespaces == null) {
-                        extraNamespaces = new java.util.ArrayList();
-                    }
-                    extraNamespaces.add(generatedNamespace);
-                }
+            if(wasXMLRoot){
+                setupFragment(((Root) originalValue), xmlRootFragment, marshalRecord);
             }
-
             /*
              * B5112171: 25 Apr 2006
              * During marshalling - XML AnyObject and AnyCollection
@@ -405,7 +400,7 @@ public class XMLAnyCollectionMappingNodeValue extends XMLRelationshipMappingNode
             String defaultRootElementString = descriptor.getDefaultRootElement();
 
             if (!wasXMLRoot && (defaultRootElementString == null)) {
-                AbstractSessionLog.getLog().log(SessionLog.WARNING, "marshal_warning_null_document_root_element", new Object[] { Helper.getShortClassName(this.getClass()), descriptor });
+                throw XMLMarshalException.defaultRootElementNotSpecified(descriptor);
             } else {
                 marshalRecord.beforeContainmentMarshal(value);
 
@@ -443,12 +438,8 @@ public class XMLAnyCollectionMappingNodeValue extends XMLRelationshipMappingNode
     	 QName qname = null;
         if (xmlRootFragment != null) {
             qname = ((Root) originalValue).getSchemaType();
-        
-            Namespace generatedNamespace = setupFragment((Root) originalValue, xmlRootFragment, marshalRecord);
+            setupFragment(((Root) originalValue), xmlRootFragment, marshalRecord);
             getXPathNode().startElement(marshalRecord, xmlRootFragment, object, session, namespaceResolver, null, null);
-            if (generatedNamespace != null) {
-                marshalRecord.namespaceDeclaration(generatedNamespace.getPrefix(),  generatedNamespace.getNamespaceURI());
-            }
             updateNamespaces(qname, marshalRecord, null);     
         }
         marshalRecord.characters(qname, value, null, false);
@@ -465,7 +456,12 @@ public class XMLAnyCollectionMappingNodeValue extends XMLRelationshipMappingNode
     public boolean isWhitespaceAware() {
         return this.xmlAnyCollectionMapping.isMixedContent() && this.xmlAnyCollectionMapping.isWhitespacePreservedForMixedContent();
     }
-    
+
+    @Override
+    public boolean isWrapperAllowedAsCollectionName() {
+        return false;
+    }
+
     public boolean isAnyMappingNodeValue() {
         return true;
     }

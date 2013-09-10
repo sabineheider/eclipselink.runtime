@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 1998, 2012 Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1998, 2013 Oracle and/or its affiliates. All rights reserved.
  * This program and the accompanying materials are made available under the 
  * terms of the Eclipse Public License v1.0 and Eclipse Distribution License v. 1.0 
  * which accompanies this distribution. 
@@ -131,6 +131,7 @@ public class TraceLocalizationResource extends ListResourceBundle {
                                            { "dropping_connection", "Dropping connection: {0}" },
                                            { "attempting_to_reconnect_to_JMS_service", "Attempting to reconnect to JMS service" },
                                            { "retreived_remote_message_from_JMS_topic", "Retreived remote message from JMS topic: {0}" },
+                                           { "retreived_remote_message_from_jgroup_channel", "Retreived remote message from JGroups channel: {0}" },
                                            { "processing_topLink_remote_command", "Processing TopLink remote command" },
                                            { "JMS_exception_thrown", "JMSException thrown" },
                                            { "announcement_sent_from", "Announcement sent from {0}" },
@@ -263,6 +264,9 @@ public class TraceLocalizationResource extends ListResourceBundle {
                                            { "cmp_init_initialize", "JavaSECMPInitializer - initializing {0}."},
                                            { "cmp_init_initialize_from_main", "JavaSECMPInitializer - initializing from main."},
                                            { "cmp_init_initialize_from_agent", "JavaSECMPInitializer - initializing from agent."},
+                                           { "validation_factory_not_initialized", "Bean Validation Factory was not initialized: [{0}]."},
+                                           { "searching_for_default_mapping_file", "Searching for mapping file: [{0}] at root URL: [{1}]."},
+                                           { "found_default_mapping_file", "Found mapping file: [{0}] at root URL: [{1}]."},
 
                                            { "dbPlatformHelper_detectedVendorPlatform", "Detected database platform: {0}"},
                                            { "dbPlatformHelper_regExprDbPlatform", "Database platform: {1}, regular expression: {0}"},

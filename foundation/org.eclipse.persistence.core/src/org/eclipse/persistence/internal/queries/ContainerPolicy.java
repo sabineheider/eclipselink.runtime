@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 1998, 2012 Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1998, 2013 Oracle and/or its affiliates. All rights reserved.
  * This program and the accompanying materials are made available under the 
  * terms of the Eclipse Public License v1.0 and Eclipse Distribution License v. 1.0 
  * which accompanies this distribution. 
@@ -583,6 +583,15 @@ public abstract class ContainerPolicy implements CoreContainerPolicy<AbstractSes
      * Both of the containers must use the same container policy (namely, this one).
      */
     public Object concatenateContainers(Object firstContainer, Object secondContainer, AbstractSession session) {
+        if (firstContainer instanceof ComplexQueryResult) {
+            ComplexQueryResult firstResult = (ComplexQueryResult)firstContainer;
+            ComplexQueryResult secondResult = (ComplexQueryResult)secondContainer;
+            firstResult.setResult(concatenateContainers(
+                    firstResult.getResult(), secondResult.getResult(), session));
+            ((List)firstResult.getData()).addAll((List)secondResult.getData());
+            return firstResult;
+        }
+    
         Object container = containerInstance(sizeFor(firstContainer) + sizeFor(secondContainer));
 
         for (Object firstIter = iteratorFor(firstContainer); hasNext(firstIter);) {
@@ -1600,7 +1609,7 @@ public abstract class ContainerPolicy implements CoreContainerPolicy<AbstractSes
     public Object valueFromPKList(Object[] pks, AbstractRecord foreignKeys, ForeignReferenceMapping mapping, AbstractSession session){
         
         Object result = containerInstance(pks.length);
-        Map<Object, Object> fromCache = session.getIdentityMapAccessor().getAllFromIdentityMapWithEntityPK(pks, elementDescriptor);
+        Map<Object, Object> fromCache = session.getIdentityMapAccessorInstance().getAllFromIdentityMapWithEntityPK(pks, elementDescriptor);
         for (Object entity: fromCache.values()){
             addInto(entity, result, session);
         }

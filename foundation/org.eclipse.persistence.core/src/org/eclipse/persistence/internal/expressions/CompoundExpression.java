@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 1998, 2012 Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1998, 2013 Oracle and/or its affiliates. All rights reserved.
  * This program and the accompanying materials are made available under the 
  * terms of the Eclipse Public License v1.0 and Eclipse Distribution License v. 1.0 
  * which accompanies this distribution. 
@@ -210,21 +210,29 @@ public abstract class CompoundExpression extends Expression {
      */
     public Expression normalize(ExpressionNormalizer normalizer) {
         validateNode();
-        if (this.firstChild != null) {
-            //let's make sure a session is available in the case of a parallel expression
-            ExpressionBuilder builder = this.firstChild.getBuilder();
-            if (builder != null){
-                builder.setSession(normalizer.getSession().getRootSession(null));
+        boolean previous = normalizer.isAddAdditionalExpressionsWithinCurrrentExpressionContext();
+        boolean isOrExpression = (isLogicalExpression() && this.operator.getSelector() == ExpressionOperator.Or);
+        normalizer.setAddAdditionalExpressionsWithinCurrrentExpressionContext(previous|| isOrExpression);
+        
+        try {
+            if (this.firstChild != null) {
+                //let's make sure a session is available in the case of a parallel expression
+                ExpressionBuilder builder = this.firstChild.getBuilder();
+                if (builder != null){
+                    builder.setSession(normalizer.getSession().getRootSession(null));
+                }
+                setFirstChild(normalizer.processAdditionalLocalExpressions(this.firstChild.normalize(normalizer), isOrExpression));
             }
-            setFirstChild(this.firstChild.normalize(normalizer));
-        }
-        if (this.secondChild != null) {
-            //let's make sure a session is available in the case of a parallel expression
-             ExpressionBuilder builder = this.secondChild.getBuilder();
-             if (builder != null){
-                 builder.setSession(normalizer.getSession().getRootSession(null));
-             }
-            setSecondChild(this.secondChild.normalize(normalizer));
+            if (this.secondChild != null) {
+                //let's make sure a session is available in the case of a parallel expression
+                 ExpressionBuilder builder = this.secondChild.getBuilder();
+                 if (builder != null){
+                     builder.setSession(normalizer.getSession().getRootSession(null));
+                 }
+                setSecondChild(normalizer.processAdditionalLocalExpressions(this.secondChild.normalize(normalizer), isOrExpression));
+            }
+        } finally {
+            normalizer.setAddAdditionalExpressionsWithinCurrrentExpressionContext(previous);
         }
 
         // For CR2456, it is now possible for normalize to remove redundant

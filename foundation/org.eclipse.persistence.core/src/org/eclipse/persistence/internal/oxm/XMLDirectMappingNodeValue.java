@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 1998, 2012 Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1998, 2013 Oracle and/or its affiliates. All rights reserved.
  * This program and the accompanying materials are made available under the 
  * terms of the Eclipse Public License v1.0 and Eclipse Distribution License v. 1.0 
  * which accompanies this distribution. 
@@ -81,8 +81,15 @@ public class XMLDirectMappingNodeValue extends MappingNodeValue implements NullC
             if (xPathFragment.hasAttribute) {
             	marshalRecord.attribute(xPathFragment, namespaceResolver, fieldValue, schemaType);
                 marshalRecord.closeStartGroupingElements(groupingFragment);
-            } else {
-                marshalRecord.closeStartGroupingElements(groupingFragment);                             
+            } else {                
+                if(((Field) xmlDirectMapping.getField()).getXPathFragment().nameIsText ){
+                    XPathNode parentNode = xPathNode.getParent();                  
+                    if(parentNode.getAttributeChildren() != null){
+                        marshalRecord.forceValueWrapper();
+                    }
+                }
+                
+                marshalRecord.closeStartGroupingElements(groupingFragment);           
                 marshalRecord.characters(schemaType, fieldValue, null, xmlDirectMapping.isCDATA());                
             }
             if(isQName) {
@@ -146,7 +153,7 @@ public class XMLDirectMappingNodeValue extends MappingNodeValue implements NullC
         unmarshalRecord.removeNullCapableValue(this);
         Field xmlField = (Field) xmlDirectMapping.getField();
         CoreAbstractSession session = unmarshalRecord.getSession();        
-        Object realValue = unmarshalRecord.getXMLReader().convertValueBasedOnSchemaType(xmlField, value, (XMLConversionManager) session.getDatasourcePlatform().getConversionManager(), unmarshalRecord);
+        Object realValue = unmarshalRecord.getXMLReader().convertValueBasedOnSchemaType(xmlField, value, (ConversionManager) session.getDatasourcePlatform().getConversionManager(), unmarshalRecord);
 
         // Perform operations on the object based on the null policy
         Object convertedValue = xmlDirectMapping.getAttributeValue(realValue, session, unmarshalRecord);
@@ -173,13 +180,13 @@ public class XMLDirectMappingNodeValue extends MappingNodeValue implements NullC
         }
         unmarshalRecord.resetStringBuffer();
         CoreAbstractSession session = unmarshalRecord.getSession();
-        XMLConversionManager xmlConversionManager = (XMLConversionManager) session.getDatasourcePlatform().getConversionManager();
+        ConversionManager conversionManager = (ConversionManager) session.getDatasourcePlatform().getConversionManager();
         QName typeQName = unmarshalRecord.getTypeQName(); 
         if (typeQName != null) {
-            Class typeClass = xmlField.getJavaClass(typeQName);
-            value = xmlConversionManager.convertObject(value, typeClass, typeQName);
+            Class typeClass = xmlField.getJavaClass(typeQName, conversionManager);
+            value = conversionManager.convertObject(value, typeClass, typeQName);
         } else {
-            value = unmarshalRecord.getXMLReader().convertValueBasedOnSchemaType(xmlField, value, xmlConversionManager, unmarshalRecord);
+            value = unmarshalRecord.getXMLReader().convertValueBasedOnSchemaType(xmlField, value, conversionManager, unmarshalRecord);
         }
 
         Object convertedValue = xmlDirectMapping.getAttributeValue(value, session, unmarshalRecord);

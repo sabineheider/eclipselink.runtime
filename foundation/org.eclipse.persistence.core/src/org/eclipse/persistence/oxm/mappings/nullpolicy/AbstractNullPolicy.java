@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 1998, 2012 Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1998, 2013 Oracle and/or its affiliates. All rights reserved.
  * This program and the accompanying materials are made available under the 
  * terms of the Eclipse Public License v1.0 and Eclipse Distribution License v. 1.0 
  * which accompanies this distribution. 
@@ -24,7 +24,6 @@ import org.eclipse.persistence.internal.oxm.mappings.Field;
 import org.eclipse.persistence.internal.oxm.record.AbstractMarshalRecord;
 import org.eclipse.persistence.internal.oxm.record.MarshalRecord;
 import org.eclipse.persistence.internal.oxm.record.XMLRecord;
-import org.eclipse.persistence.oxm.record.DOMRecord;
 import org.w3c.dom.Element;
 import org.w3c.dom.Node;
 import org.xml.sax.Attributes;
@@ -225,8 +224,7 @@ public abstract class AbstractNullPolicy {
             // EMPTY_NODE - Write out empty element - Required
             if (marshalNullRepresentation == XMLNullRepresentationType.EMPTY_NODE) {
                 Node element = XPathEngine.getInstance().createUnownedElement(record.getDOM(), field);
-                DOMRecord nestedRow = new DOMRecord(element);
-                record.put(field, nestedRow);
+                record.put(field, element);
                 return true;
             } else {
                 // ABSENT_NODE - Write out nothing - Optional

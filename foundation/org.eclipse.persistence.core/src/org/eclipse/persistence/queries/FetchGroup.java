@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 1998, 2012 Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1998, 2013 Oracle and/or its affiliates. All rights reserved.
  * This program and the accompanying materials are made available under the 
  * terms of the Eclipse Public License v1.0 and Eclipse Distribution License v. 1.0 
  * which accompanies this distribution. 
@@ -19,6 +19,7 @@ import java.util.Iterator;
 import java.util.Map;
 import java.util.Set;
 
+import org.eclipse.persistence.core.queries.CoreAttributeGroup;
 import org.eclipse.persistence.descriptors.FetchGroupManager;
 import org.eclipse.persistence.internal.localization.ExceptionLocalization;
 import org.eclipse.persistence.internal.queries.AttributeItem;
@@ -238,7 +239,7 @@ public class FetchGroup extends AttributeGroup {
      */
     protected void setSubclassShouldLoad(boolean shouldLoad) {
         if (this.subClasses != null){
-            for (AttributeGroup group : this.subClasses){
+            for (CoreAttributeGroup group : this.subClasses){
                 ((FetchGroup)group).shouldLoad = shouldLoad;
                 ((FetchGroup)group).setSubclassShouldLoad(shouldLoad);
             }
@@ -277,7 +278,7 @@ public class FetchGroup extends AttributeGroup {
     }
     
     @Override
-    protected FetchGroup newGroup(String name, AttributeGroup parent) {
+    protected FetchGroup newGroup(String name, CoreAttributeGroup parent) {
         FetchGroup fetchGroup = new FetchGroup(name);
         if(parent != null) {
             fetchGroup.setShouldLoad(((FetchGroup)parent).shouldLoad());
@@ -298,7 +299,7 @@ public class FetchGroup extends AttributeGroup {
      * LoadGroup created with all member groups with shouldLoad set to false dropped.
      */
     public LoadGroup toLoadGroupLoadOnly() {
-        return this.toLoadGroup(new HashMap<AttributeGroup, LoadGroup>(), null, true);
+        return this.toLoadGroup(new HashMap<AttributeGroup, LoadGroup>(), true);
     }
     
     @Override
@@ -306,11 +307,11 @@ public class FetchGroup extends AttributeGroup {
         return (FetchGroup)super.clone();
     }    
 
-    public LoadGroup toLoadGroup(Map<AttributeGroup, LoadGroup> cloneMap, AttributeItem parentItem, boolean loadOnly){
+    public LoadGroup toLoadGroup(Map<AttributeGroup, LoadGroup> cloneMap, boolean loadOnly){
         if (loadOnly && !this.shouldLoad){
             return null;
         }
-        return super.toLoadGroup(cloneMap, parentItem, loadOnly);
+        return super.toLoadGroup(cloneMap, loadOnly);
     }
     /**
      * INTERNAL:
@@ -333,21 +334,21 @@ public class FetchGroup extends AttributeGroup {
     }
 
     @Override
-    public void addAttribute(String attributeNameOrPath, AttributeGroup group) {
+    public void addAttribute(String attributeNameOrPath, CoreAttributeGroup group) {
         this.entityFetchGroup = null;
-        super.addAttribute(attributeNameOrPath, (group != null ? group.toFetchGroup() : null));
+        super.addAttribute(attributeNameOrPath, (group != null ? ((AttributeGroup)group).toFetchGroup() : null));
     }
 
     @Override
-    public void addAttribute(String attributeNameOrPath, Collection<AttributeGroup> groups) {
+    public void addAttribute(String attributeNameOrPath, Collection<? extends CoreAttributeGroup> groups) {
         this.entityFetchGroup = null;
         super.addAttribute(attributeNameOrPath, groups);
     }
 
     @Override
-    public void addAttributeKey(String attributeNameOrPath, AttributeGroup group) {
+    public void addAttributeKey(String attributeNameOrPath, CoreAttributeGroup group) {
         this.entityFetchGroup = null;
-        super.addAttributeKey(attributeNameOrPath, (group != null ? group.toFetchGroup() : null));
+        super.addAttributeKey(attributeNameOrPath, (group != null ? ((AttributeGroup)group).toFetchGroup() : null));
     }
     
 

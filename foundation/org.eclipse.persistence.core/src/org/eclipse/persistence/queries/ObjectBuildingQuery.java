@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 1998, 2012 Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1998, 2013 Oracle and/or its affiliates. All rights reserved.
  * This program and the accompanying materials are made available under the 
  * terms of the Eclipse Public License v1.0 and Eclipse Distribution License v. 1.0 
  * which accompanies this distribution. 
@@ -16,6 +16,7 @@ import java.security.AccessController;
 import java.security.PrivilegedActionException;
 import java.util.*;
 import org.eclipse.persistence.internal.expressions.*;
+import org.eclipse.persistence.internal.identitymaps.CacheKey;
 import org.eclipse.persistence.mappings.DatabaseMapping;
 import org.eclipse.persistence.internal.security.PrivilegedAccessHelper;
 import org.eclipse.persistence.internal.security.PrivilegedClassForName;
@@ -95,6 +96,8 @@ public abstract class ObjectBuildingQuery extends ReadQuery {
     
     /** was a check early return completed */
     protected boolean isCacheCheckComplete;
+
+    protected Map<Object, CacheKey> prefetchedCacheKeys;
 
     /**
      * INTERNAL:
@@ -300,6 +303,10 @@ public abstract class ObjectBuildingQuery extends ReadQuery {
      */
     public long getExecutionTime() {
         return executionTime;
+    }
+
+    public Map<Object, CacheKey> getPrefetchedCacheKeys() {
+        return prefetchedCacheKeys;
     }
 
     /**
@@ -562,6 +569,10 @@ public abstract class ObjectBuildingQuery extends ReadQuery {
         lockingClause = ForUpdateClause.newInstance(lockMode);
     }
 
+    public void setPrefetchedCacheKeys(Map<Object, CacheKey> prefetchedCacheKeys) {
+        this.prefetchedCacheKeys = prefetchedCacheKeys;
+    }
+
     /**
      * REQUIRED:
      * Set the reference class for the query.
@@ -760,5 +771,20 @@ public abstract class ObjectBuildingQuery extends ReadQuery {
      */
     public void setShouldBuildNullForNullPk(boolean shouldBuildNullForNullPk) {
         this.shouldBuildNullForNullPk = shouldBuildNullForNullPk;
+    }
+    /**
+     * INTERNAL:
+     * Return if the query uses ResultSet optimization.
+     */
+    public boolean usesResultSetAccessOptimization() {
+        return false;
+    }
+
+    /**
+     * INTERNAL:
+     * Indicates whether the query should use SerializedObjectPolicy if descriptor has it.
+     */
+    public boolean shouldUseSerializedObjectPolicy() {
+        return false;
     }
 }

@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 1998, 2012 Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1998, 2013 Oracle and/or its affiliates. All rights reserved.
  * This program and the accompanying materials are made available under the 
  * terms of the Eclipse Public License v1.0 and Eclipse Distribution License v. 1.0 
  * which accompanies this distribution. 
@@ -148,6 +148,7 @@ public class TestRunModel extends TestModel {
             tests.add("org.eclipse.persistence.testing.tests.remote.suncorba.SunCORBARemoteModel");
             tests.add("org.eclipse.persistence.testing.tests.distributedservers.DistributedSessionBrokerServersModel");
             tests.add("org.eclipse.persistence.testing.tests.distributedservers.rcm.RCMDistributedServersModel");
+            tests.add("org.eclipse.persistence.testing.tests.distributedservers.rcm.jgroups.JGroupsDistributedServersModel");
 
             // Can take a long time, can deadlock.
 // *** (d024108) hangs occasionally on HANA -> temporarily disabled
@@ -198,6 +199,7 @@ public class TestRunModel extends TestModel {
         models.add(buildNoSQLTestModel());
         models.add(buildJPATestModel());
         models.add(buildPerformanceTestModel());
+        models.add(buildJPAPerformanceTestModel());
 
         Vector manualTest = new Vector();
         manualTest.add("org.eclipse.persistence.testing.tests.stress.StressTestModel");
@@ -222,7 +224,7 @@ public class TestRunModel extends TestModel {
      */
     public static TestModel buildJPATestModel() {
         List tests = new ArrayList();
-        tests.add("org.eclipse.persistence.testing.tests.jpa.AllCMP3TestRunModel");
+        tests.add("org.eclipse.persistence.testing.tests.jpa.AllJPATests");
                     
         TestModel model = new TestModel();
         model.setName("JPA Tests");
@@ -396,7 +398,7 @@ public class TestRunModel extends TestModel {
     }
 
     /**
-     * Build and return a model of all performance tests.
+     * Build and return a model of all core performance tests.
      */
     public static TestModel buildPerformanceTestModel() {
         Vector performanceTests = new Vector();
@@ -406,11 +408,29 @@ public class TestRunModel extends TestModel {
         performanceTests.add("org.eclipse.persistence.testing.tests.performance.ConcurrencyComparisonTestModel");
         performanceTests.add("org.eclipse.persistence.testing.tests.performance.ConcurrencyRegressionTestModel");
         performanceTests.add("org.eclipse.persistence.testing.tests.performance.JavaPerformanceComparisonModel");
+                    
+        TestModel performanceModel = new TestModel();
+        performanceModel.setName("Performance Tests");
+        for (int index = 0; index < performanceTests.size(); ++index) {
+            try {
+                performanceModel.addTest((TestModel)Class.forName((String)performanceTests.elementAt(index)).newInstance());
+            } catch (Exception exception) {
+                System.out.println("Failed to set up " + performanceTests.elementAt(index) + " \n" + exception);
+            }
+        }
+        return performanceModel;
+    }
+
+    /**
+     * Build and return a model of all JPA performance tests.
+     */
+    public static TestModel buildJPAPerformanceTestModel() {
+        Vector performanceTests = new Vector();
         performanceTests.add("org.eclipse.persistence.testing.tests.jpa.performance.JPAPerformanceTestModel");
         performanceTests.add("org.eclipse.persistence.testing.tests.jpa.memory.JPAMemoryTestModel");
                     
         TestModel performanceModel = new TestModel();
-        performanceModel.setName("Performance Tests");
+        performanceModel.setName("JPA Performance Tests");
         for (int index = 0; index < performanceTests.size(); ++index) {
             try {
                 performanceModel.addTest((TestModel)Class.forName((String)performanceTests.elementAt(index)).newInstance());

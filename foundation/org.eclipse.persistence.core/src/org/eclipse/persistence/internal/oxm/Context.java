@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2012 Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, 2013 Oracle and/or its affiliates. All rights reserved.
  * This program and the accompanying materials are made available under the
  * terms of the Eclipse Public License v1.0 and Eclipse Distribution License v. 1.0
  * which accompanies this distribution.
@@ -33,12 +33,11 @@ import org.eclipse.persistence.internal.core.descriptors.CoreObjectBuilder;
 import org.eclipse.persistence.internal.core.sessions.CoreAbstractSession;
 import org.eclipse.persistence.internal.oxm.mappings.Descriptor;
 import org.eclipse.persistence.internal.oxm.mappings.Field;
-import org.eclipse.persistence.logging.SessionLog;
 import org.eclipse.persistence.oxm.schema.XMLSchemaReference;
 
 public abstract class Context<
     ABSTRACT_SESSION extends CoreAbstractSession,
-    DESCRIPTOR extends Descriptor<?, ?, ?, ?, ?, NAMESPACE_RESOLVER, ?, ?, ?>,
+    DESCRIPTOR extends Descriptor<?, ?, ?, ?, ?, NAMESPACE_RESOLVER, ?, ?, ?, ?>,
     FIELD extends Field,
     NAMESPACE_RESOLVER extends NamespaceResolver,
     PROJECT extends CoreProject,
@@ -75,13 +74,6 @@ public abstract class Context<
                     session.getEventManager().addListener(sessionEventListener);
                 }
             }
-
-            // turn logging for this session off and leave the global session up
-            // Note: setting level to SEVERE or WARNING will printout stacktraces for expected exceptions
-            session.setLogLevel(SessionLog.OFF);
-            // don't turn off global static logging
-            //AbstractSessionLog.getLog().log(AbstractSessionLog.INFO, "ox_turn_global_logging_off", getClass());
-            //AbstractSessionLog.getLog().setLevel(AbstractSessionLog.OFF);
 
             setupSession(session);
             storeDescriptorsByQName(session);
@@ -520,7 +512,7 @@ public abstract class Context<
         T value = getValueByXPath(object, descriptor.getObjectBuilder(), stringTokenizer, namespaceResolver, returnType);
         if (null == value) {
             CoreMapping selfMapping = descriptor.getObjectBuilder().getMappingForField(createField(String.valueOf(Constants.DOT)));
-            if (null != selfMapping) {
+            if (null != selfMapping && selfMapping.getReferenceDescriptor() != null) {            
                 return getValueByXPath(selfMapping.getAttributeValueFromObject(object), selfMapping.getReferenceDescriptor().getObjectBuilder(),
                         new StringTokenizer(xPath, Constants.XPATH_SEPARATOR),  ((DESCRIPTOR) selfMapping.getReferenceDescriptor()).getNamespaceResolver(), returnType);
             }

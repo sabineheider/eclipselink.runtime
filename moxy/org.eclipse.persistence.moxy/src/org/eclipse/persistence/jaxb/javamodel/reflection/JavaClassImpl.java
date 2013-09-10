@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 1998, 2012 Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1998, 2013 Oracle and/or its affiliates. All rights reserved.
  * This program and the accompanying materials are made available under the 
  * terms of the Eclipse Public License v1.0 and Eclipse Distribution License v. 1.0 
  * which accompanies this distribution. 
@@ -223,7 +223,7 @@ public class JavaClassImpl implements JavaClass {
             }
         }
         try {
-            return new JavaConstructorImpl(jClass.getDeclaredConstructor(params), javaModelImpl);
+            return new JavaConstructorImpl(PrivilegedAccessHelper.getDeclaredConstructorFor(this.jClass, params, true), javaModelImpl);
         } catch (NoSuchMethodException nsme) {
             return null;
         }
@@ -524,12 +524,29 @@ public class JavaClassImpl implements JavaClass {
         }      
     }
 
-    //---------------- unimplemented methods ----------------//
     public JavaAnnotation getDeclaredAnnotation(JavaClass arg0) {
+        // the only annotation we will return if isMetadataComplete == true is XmlRegistry
+        if (arg0 != null && (!isMetadataComplete || arg0.getQualifiedName().equals(XML_REGISTRY_CLASS_NAME))) {
+            Class annotationClass = ((JavaClassImpl) arg0).getJavaClass();
+            Annotation[] annotations = javaModelImpl.getAnnotationHelper().getDeclaredAnnotations(getAnnotatedElement());
+            for (Annotation annotation : annotations) {
+                if (annotation.annotationType().equals(annotationClass)) {
+                    return new JavaAnnotationImpl(annotation);
+                }
+            }
+        }
         return null;
     }
 
     public Collection getDeclaredAnnotations() {
-        return null;
+        ArrayList<JavaAnnotation> annotationCollection = new ArrayList<JavaAnnotation>();
+        if (!isMetadataComplete) {
+            Annotation[] annotations = javaModelImpl.getAnnotationHelper().getDeclaredAnnotations(getAnnotatedElement());
+            for (Annotation annotation : annotations) {
+                annotationCollection.add(new JavaAnnotationImpl(annotation));
+            }
+        }
+        return annotationCollection;
     }
+
 }

@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 1998, 2012 Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1998, 2013 Oracle and/or its affiliates. All rights reserved.
  * This program and the accompanying materials are made available under the 
  * terms of the Eclipse Public License v1.0 and Eclipse Distribution License v. 1.0 
  * which accompanies this distribution. 
@@ -15,6 +15,7 @@ package org.eclipse.persistence.internal.oxm;
 import javax.activation.DataHandler;
 
 import org.eclipse.persistence.exceptions.XMLMarshalException;
+import org.eclipse.persistence.internal.core.queries.CoreContainerPolicy;
 import org.eclipse.persistence.internal.oxm.mappings.BinaryDataCollectionMapping;
 import org.eclipse.persistence.internal.oxm.mappings.BinaryDataMapping;
 import org.eclipse.persistence.internal.oxm.mappings.Field;
@@ -109,7 +110,11 @@ public class XMLBinaryAttachmentHandler extends org.eclipse.persistence.internal
                 } else {
                     data = attachmentUnmarshaller.getAttachmentAsByteArray(this.c_id);
                 }
-                data = XMLBinaryDataHelper.getXMLBinaryDataHelper().convertObject(data, mapping.getAttributeClassification(), record.getSession());
+                CoreContainerPolicy cp = null;
+                if(isCollection){
+                	cp = mapping.getContainerPolicy();
+                }
+                data = XMLBinaryDataHelper.getXMLBinaryDataHelper().convertObject(data, mapping.getAttributeClassification(), record.getSession(), cp);
                 data = converter.convertDataValueToObjectValue(data, record.getSession(), unmarshaller);
                 //check for collection case
                 if (isCollection) {
@@ -144,7 +149,11 @@ public class XMLBinaryAttachmentHandler extends org.eclipse.persistence.internal
     }
 
     public Object getObjectValueFromDataHandler(DataHandler handler, Class cls) {
-        return XMLBinaryDataHelper.getXMLBinaryDataHelper().convertObject(handler, cls, record.getSession());
+    	CoreContainerPolicy cp = null;
+        if(isCollection){
+        	cp = mapping.getContainerPolicy();
+        }
+        return XMLBinaryDataHelper.getXMLBinaryDataHelper().convertObject(handler, cls, record.getSession(), cp);
     }
 
 }

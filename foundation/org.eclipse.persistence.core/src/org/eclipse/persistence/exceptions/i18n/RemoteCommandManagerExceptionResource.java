@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 1998, 2012 Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1998, 2013 Oracle and/or its affiliates. All rights reserved.
  * This program and the accompanying materials are made available under the 
  * terms of the Eclipse Public License v1.0 and Eclipse Distribution License v. 1.0 
  * which accompanies this distribution. 
@@ -39,7 +39,8 @@ public class RemoteCommandManagerExceptionResource extends ListResourceBundle {
                                            { "22114", "{0}: failed to deserialize retrieved message {1}." },
                                            { "22115", "{0}: failed to process remote command retrieved from message {1}, from {2}, command type {3}" },
                                            { "22116", "Received JMS message is null. Treating it as a JMSException" },
-                                           { "22117", "Session's RemoteCommandManager is closed or has not been initialized while processing incoming messages" }
+                                           { "22117", "Session's RemoteCommandManager is closed or has not been initialized while processing incoming messages" },
+                                           { "22118", "Failed to create JGroups connection using config file: {0}" }
     };
 
     /**

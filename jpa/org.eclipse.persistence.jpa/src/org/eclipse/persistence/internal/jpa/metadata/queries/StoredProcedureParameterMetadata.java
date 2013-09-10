@@ -423,7 +423,12 @@ public class StoredProcedureParameterMetadata extends ORMetadata {
                     call.addUnamedInOutputArgument(m_queryParameter, m_queryParameter, getJavaClass(m_type));
                 } else {
                     if (hasJdbcType() && hasJdbcTypeName()) {
-                        call.addNamedInOutputArgument(m_name, m_queryParameter, m_queryParameter, m_jdbcType, m_jdbcTypeName, getJavaClass(m_type));
+                        OracleArrayTypeMetadata aType = null;
+                        if (hasTypeName() && (aType = getArrayTypeMetadata(m_typeName)) != null) {
+                            call.addNamedInOutputArgument(m_name, m_queryParameter, m_queryParameter, m_jdbcType, m_jdbcTypeName, getJavaClass(m_type), buildNestedField(aType));
+                        } else {
+                        	call.addNamedInOutputArgument(m_name, m_queryParameter, m_queryParameter, m_jdbcType, m_jdbcTypeName, getJavaClass(m_type));
+                        }
                     } else {
                         call.addNamedInOutputArgument(m_name, m_queryParameter, m_queryParameter, getJavaClass(m_type));
                     }
@@ -456,21 +461,10 @@ public class StoredProcedureParameterMetadata extends ORMetadata {
             
             setDatabaseFieldSettings((DatabaseField) array[1]);
         } else if (m_mode.equals(Direction.OUT_CURSOR.name()) || m_mode.equals(JPA_PARAMETER_REF_CURSOR)) {
-            boolean multipleCursors = call.getParameterTypes().contains(call.OUT_CURSOR);
-            
             if (callByIndex) {
-                call.useUnnamedCursorOutputAsResultSet();
+                call.useUnnamedCursorOutputAsResultSet(index);
             } else {
                 call.useNamedCursorOutputAsResultSet(m_queryParameter);
-                call.setCursorOrdinalPosition(m_queryParameter, index);
-            }
-            
-            // There are multiple cursor output parameters, then do not use the 
-            // cursor as the result set. This will be set to true in the calls
-            // above so we must do the multiple cursor call before hand.
-            if (multipleCursors) {
-                call.setIsMultipleCursorOutputProcedure(true);
-                call.setIsCursorOutputProcedure(false);
             }
         }
     }

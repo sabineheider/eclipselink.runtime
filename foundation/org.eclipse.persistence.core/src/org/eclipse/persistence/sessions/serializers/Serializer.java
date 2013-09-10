@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 1998, 2012 Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1998, 2013 Oracle and/or its affiliates. All rights reserved.
  * This program and the accompanying materials are made available under the 
  * terms of the Eclipse Public License v1.0 and Eclipse Distribution License v. 1.0 
  * which accompanies this distribution. 
@@ -12,6 +12,8 @@
  ******************************************************************************/
 package org.eclipse.persistence.sessions.serializers;
 
+import java.io.Serializable;
+
 import org.eclipse.persistence.sessions.Session;
 
 /**
@@ -19,7 +21,9 @@ import org.eclipse.persistence.sessions.Session;
  * Allows for a plugable serializer for Remote, Cache Coordination, Converters.
  * @author James Sutherland
  */
-public interface Serializer {
-    byte[] serialize(Object object, Session session);
-    Object deserialize(byte[] bytes, Session session);
+public interface Serializer extends Serializable, Cloneable {
+    Object serialize(Object object, Session session);
+    Object deserialize(Object bytes, Session session);
+    Class getType();
+    void initialize(Class serializeClass, String serializePackage, Session session);
 }

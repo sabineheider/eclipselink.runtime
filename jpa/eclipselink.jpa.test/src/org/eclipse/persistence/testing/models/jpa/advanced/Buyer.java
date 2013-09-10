@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 1998, 2012 Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1998, 2013 Oracle and/or its affiliates. All rights reserved.
  * This program and the accompanying materials are made available under the 
  * terms of the Eclipse Public License v1.0 and Eclipse Distribution License v. 1.0 
  * which accompanies this distribution. 
@@ -207,7 +207,7 @@ public class Buyer implements Serializable {
     @Id
     @GeneratedValue(strategy=SEQUENCE, generator="BUYER_SEQUENCE_GENERATOR")
     @SequenceGenerator(name="BUYER_SEQUENCE_GENERATOR", sequenceName="BUYER_SEQ", allocationSize=10)
-    @Column(name="BUYER_ID", length=49)
+    @Column(name="BUYER_ID", length=29)
     public Integer getId() { 
         return id; 
     }

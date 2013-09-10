@@ -28,7 +28,7 @@ import org.eclipse.persistence.jpa.jpql.WordParser;
  * <p>
  * <div nowrap><b>BNF:</b> <code>identification_variable_declaration ::= range_variable_declaration { join | fetch_join }*</code><p>
  *
- * @version 2.4
+ * @version 2.5
  * @since 2.3
  * @author Pascal Filion
  */
@@ -127,6 +127,23 @@ public final class IdentificationVariableDeclaration extends AbstractExpression 
 	}
 
 	/**
+	 * {@inheritDoc}
+	 */
+	@Override
+	public JPQLQueryBNF findQueryBNF(Expression expression) {
+
+		if ((rangeVariableDeclaration != null) && rangeVariableDeclaration.isAncestor(expression)) {
+			return getQueryBNF(RangeVariableDeclarationBNF.ID);
+		}
+
+		if ((joins != null) && joins.isAncestor(expression)) {
+			return getQueryBNF(InternalJoinBNF.ID);
+		}
+
+		return super.findQueryBNF(expression);
+	}
+
+	/**
 	 * Returns the unique join (fetch join) or the list of joins (fetch joins) expression.
 	 *
 	 * @return The <code>JOIN</code> expression(s) or a <code>null</code> expression if none was declared
@@ -198,17 +215,15 @@ public final class IdentificationVariableDeclaration extends AbstractExpression 
 
 		// Parsing the join expressions
 		if (parsingJoinExpression) {
-
-			return !word.equalsIgnoreCase(INNER) &&
-			       !word.equalsIgnoreCase(JOIN)  &&
+			return !word.equalsIgnoreCase(JOIN)  &&
+			       !word.equalsIgnoreCase(INNER) &&
 			       !word.equalsIgnoreCase(OUTER) &&
-			       !word.equalsIgnoreCase(LEFT)  &&
-			       super.isParsingComplete(wordParser, word, expression);
+			       !word.equalsIgnoreCase(LEFT);
 		}
 
 		// Parsing the range variable declaration
-		return word.equalsIgnoreCase(INNER) ||
-		       word.equalsIgnoreCase(JOIN)  ||
+		return word.equalsIgnoreCase(JOIN)  ||
+		       word.equalsIgnoreCase(INNER) ||
 		       word.equalsIgnoreCase(LEFT)  ||
 		       word.equalsIgnoreCase(OUTER) ||
 		       word.equalsIgnoreCase(IN)    ||
@@ -267,7 +282,7 @@ public final class IdentificationVariableDeclaration extends AbstractExpression 
 			rangeVariableDeclaration.toParsedText(writer, actual);
 		}
 
-		if (hasSpace && (actual || hasJoins())) {
+		if (hasSpace) {
 			writer.append(SPACE);
 		}
 

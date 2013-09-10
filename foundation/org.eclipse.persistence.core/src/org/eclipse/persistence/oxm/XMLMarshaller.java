@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 1998, 2012 Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1998, 2013 Oracle and/or its affiliates. All rights reserved.
  * This program and the accompanying materials are made available under the
  * terms of the Eclipse Public License v1.0 and Eclipse Distribution License v. 1.0
  * which accompanies this distribution.
@@ -12,6 +12,7 @@
  ******************************************************************************/
 package org.eclipse.persistence.oxm;
 
+import java.util.Collection;
 import java.util.Properties;
 
 import javax.xml.transform.Result;
@@ -23,6 +24,7 @@ import org.eclipse.persistence.internal.oxm.Root;
 import org.eclipse.persistence.internal.oxm.TreeObjectBuilder;
 import org.eclipse.persistence.internal.oxm.XMLObjectBuilder;
 import org.eclipse.persistence.internal.oxm.XPathEngine;
+import org.eclipse.persistence.internal.oxm.record.ExtendedResult;
 import org.eclipse.persistence.internal.security.PrivilegedAccessHelper;
 import org.eclipse.persistence.internal.sessions.AbstractSession;
 import org.eclipse.persistence.oxm.documentpreservation.DocumentPreservationPolicy;
@@ -30,6 +32,7 @@ import org.eclipse.persistence.oxm.record.MarshalRecord;
 import org.eclipse.persistence.oxm.record.NodeRecord;
 import org.eclipse.persistence.oxm.record.XMLRecord;
 import org.eclipse.persistence.platform.xml.XMLPlatformException;
+import org.eclipse.persistence.sessions.DatabaseSession;
 import org.w3c.dom.Document;
 import org.w3c.dom.Element;
 import org.w3c.dom.Node;
@@ -58,7 +61,9 @@ import org.w3c.dom.Node;
  *
  * @see org.eclipse.persistence.oxm.XMLContext
  */
-public class XMLMarshaller extends org.eclipse.persistence.internal.oxm.XMLMarshaller<AbstractSession, XMLContext, XMLDescriptor, MediaType, NamespacePrefixMapper, TreeObjectBuilder> implements Cloneable {
+public class XMLMarshaller extends org.eclipse.persistence.internal.oxm.XMLMarshaller<AbstractSession, CharacterEscapeHandler, XMLContext, XMLDescriptor, XMLMarshalListener, MediaType, NamespacePrefixMapper, TreeObjectBuilder, DatabaseSession> implements Cloneable {
+
+    private Object marshalAttributeGroup;
 
     /**
      * Create a new XMLMarshaller based on the specified session
@@ -137,8 +142,26 @@ public class XMLMarshaller extends org.eclipse.persistence.internal.oxm.XMLMarsh
             }
         }else{
             Class objectClass = object.getClass();
-            session = context.getSession(objectClass);
-            xmlDescriptor = getDescriptor(objectClass, session);
+            if(result instanceof ExtendedResult){
+                MarshalRecord writerRecord = ((ExtendedResult)result).createRecord();
+                if(object instanceof Collection){
+                    writerRecord.startCollection();
+                    for(Object o : (Collection) object) {                        
+                        marshal(o, writerRecord);
+                    }
+                    writerRecord.endCollection();
+                    return;
+                }else{
+                    marshal(object, writerRecord);
+                    return;
+                }
+            }
+            if(session == null || xmlDescriptor == null){
+                session = context.getSession(objectClass);
+                xmlDescriptor = getDescriptor(objectClass, session);
+            }
+            
+            
         }
 
         //if this is a simple xml root, the session and descriptor will be null
@@ -231,7 +254,16 @@ public class XMLMarshaller extends org.eclipse.persistence.internal.oxm.XMLMarsh
         return null;
     }
 
-    
+    @Override
+    public XMLMarshalListener getMarshalListener() {
+        return super.getMarshalListener();
+    }
+
+    @Override
+    public void setMarshalListener(XMLMarshalListener listener) {
+        super.setMarshalListener(listener);
+    }
+
     /**
      * Convert the given object to XML and update the given marshal record with
      * that XML Document.
@@ -483,6 +515,46 @@ public class XMLMarshaller extends org.eclipse.persistence.internal.oxm.XMLMarsh
      */
     public NamespacePrefixMapper getNamespacePrefixMapper() {
         return super.getNamespacePrefixMapper();
+    }
+
+    /**
+     * Return this Marshaller's CharacterEscapeHandler.
+     * @since 2.3.3
+     */
+    @Override
+    public CharacterEscapeHandler getCharacterEscapeHandler() {
+        return super.getCharacterEscapeHandler();
+    }
+
+    /**
+     * Set this Marshaller's CharacterEscapeHandler.
+     * @since 2.3.3
+     */
+    @Override
+    public void setCharacterEscapeHandler(CharacterEscapeHandler c) {
+        super.setCharacterEscapeHandler(c);
+    }
+
+    /**
+     * Set the MediaType for this xmlMarshaller.
+     * See org.eclipse.persistence.oxm.MediaType for the media types supported by EclipseLink MOXy
+     * @param mediaType
+     * @since EclipseLink 2.4.0
+     */
+    @Override
+    public void setMediaType(MediaType mediaType) {
+        super.setMediaType(mediaType);
+    }
+
+    /**
+     * Get the MediaType for this xmlMarshaller.
+     * See org.eclipse.persistence.oxm.MediaType for the media types supported by EclipseLink MOXy
+     * If not set the default is MediaType.APPLICATION_XML
+     * @return MediaType
+     * @since EclipseLink 2.4.0
+     */
+    public MediaType getMediaType(){
+        return mediaType;
     }
 
 }

@@ -1,5 +1,5 @@
 /*******************************************************************************
-* Copyright (c) 1998, 2012 Oracle and/or its affiliates. All rights reserved.
+* Copyright (c) 1998, 2013 Oracle and/or its affiliates. All rights reserved.
 * This program and the accompanying materials are made available under the
 * terms of the Eclipse Public License v1.0 and Eclipse Distribution License v. 1.0
 * which accompanies this distribution.
@@ -98,6 +98,9 @@ public class XMLStreamReaderReader extends XMLReaderAdapter {
                 int eventType = xmlStreamReader.next();
                 parseEvent(xmlStreamReader, eventType);
             }
+            if(xmlStreamReader.hasNext()) {
+                xmlStreamReader.next();
+            }
             contentHandler.endDocument();
         } catch(SAXException e ) {
             throw e;
@@ -110,6 +113,12 @@ public class XMLStreamReaderReader extends XMLReaderAdapter {
         switch (eventType) {
             case XMLStreamReader.START_ELEMENT: {
                 depth++;
+                int namespaceCount = xmlStreamReader.getNamespaceCount();
+                if(namespaceCount > 0) {
+                    for(int x=0; x<namespaceCount; x++) {
+                        contentHandler.startPrefixMapping(xmlStreamReader.getNamespacePrefix(x), xmlStreamReader.getNamespaceURI(x));
+                    }
+                }
                 String localName = xmlStreamReader.getLocalName();
                 String namespaceURI = xmlStreamReader.getNamespaceURI();
                 if(Constants.EMPTY_STRING.equals(namespaceURI)) {
@@ -144,7 +153,13 @@ public class XMLStreamReaderReader extends XMLReaderAdapter {
                 } else {
                     contentHandler.endElement(namespaceURI, localName, null);
                 }
-                break;
+                int namespaceCount = xmlStreamReader.getNamespaceCount();
+                if(namespaceCount > 0) {
+                    for(int x=0; x<namespaceCount; x++) {
+                        contentHandler.endPrefixMapping(xmlStreamReader.getNamespacePrefix(x));
+                    }
+                }
+               break;
             }
             case XMLStreamReader.PROCESSING_INSTRUCTION: {
                 contentHandler.processingInstruction(xmlStreamReader.getPITarget(), xmlStreamReader.getPIData());

@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 1998, 2012 Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1998, 2013 Oracle and/or its affiliates. All rights reserved.
  * This program and the accompanying materials are made available under the 
  * terms of the Eclipse Public License v1.0 and Eclipse Distribution License v. 1.0 
  * which accompanies this distribution. 
@@ -14,10 +14,13 @@
  *       - 389090: JPA 2.1 DDL Generation Support
  *     02/04/2013-2.5 Guy Pelletier 
  *       - 389090: JPA 2.1 DDL Generation Support
+ *     04/12/2013-2.5 Guy Pelletier 
+ *       - 405640: JPA 2.1 schema generation drop operation fails to include dropping defaulted fk constraints.
  ******************************************************************************/  
 package org.eclipse.persistence.tools.schemaframework;
 
 import java.io.Writer;
+import java.net.URL;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Set;
@@ -489,7 +492,7 @@ public class SchemaManager {
             return new TableSequenceDefinition(sequence, createDatabaseSchemas);
         } else if (sequence instanceof UnaryTableSequence ||
                    (sequence instanceof DefaultSequence && ((DefaultSequence)sequence).getDefaultSequence() instanceof UnaryTableSequence)) {
-            return new UnaryTableSequenceDefinition(sequence);
+            return new UnaryTableSequenceDefinition(sequence, createDatabaseSchemas);
         } else if (sequence instanceof NativeSequence || 
                    (sequence instanceof DefaultSequence && ((DefaultSequence)sequence).getDefaultSequence() instanceof NativeSequence)) {
             NativeSequence nativeSequence = null;
@@ -921,32 +924,35 @@ public class SchemaManager {
         this.createSchemaWriter = null;
         this.dropSchemaWriter = null;
     }
-
+    
     /**
      * PUBLIC:
      * Output all DDL statements to a file writer specified by the name in the parameter.
      */
     public void outputDDLToFile(String fileName) {
-        try {
-            this.createSchemaWriter = new java.io.FileWriter(fileName);
-        } catch (java.io.IOException ioException) {
-            throw ValidationException.fileError(ioException);
-        }
+        this.createSchemaWriter = getWriter(fileName);
     }
 
     public void outputCreateDDLToFile(String fileName) {
-        try {
-            this.createSchemaWriter = new java.io.FileWriter(fileName);
-        } catch (java.io.IOException ioException) {
-            throw ValidationException.fileError(ioException);
-        }
+        this.createSchemaWriter = getWriter(fileName);
     }
 
     public void outputDropDDLToFile(String fileName) {
+        this.dropSchemaWriter = getWriter(fileName);
+    }
+    
+    protected Writer getWriter(String fileName) {
         try {
-            this.dropSchemaWriter = new java.io.FileWriter(fileName);
+            return new java.io.FileWriter(fileName);
         } catch (java.io.IOException ioException) {
-            throw ValidationException.fileError(ioException);
+            // Try a url next, otherwise throw the existing error.
+            try {
+                URL url = new URL(fileName);
+                return new java.io.FileWriter(url.getFile());
+            } catch (Exception e) {
+                // MalformedURLException and IOException
+                throw ValidationException.fileError(ioException);
+            }
         }
     }
 
@@ -1061,7 +1067,7 @@ public class SchemaManager {
 
         try {
             // Drop the tables.
-            TableCreator tableCreator = getDefaultTableCreator(false);
+            TableCreator tableCreator = getDefaultTableCreator(true);
             tableCreator.dropTables(this.session, this);
             
             // Drop the sequences.

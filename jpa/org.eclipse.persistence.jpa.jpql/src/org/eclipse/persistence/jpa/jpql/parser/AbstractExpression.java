@@ -33,7 +33,7 @@ import org.eclipse.persistence.jpa.jpql.utility.iterable.SnapshotCloneListIterab
  * @see ExpressionFactory
  * @see JPQLGrammar
  *
- * @version 2.5
+ * @version 2.6
  * @since 2.3
  * @author Pascal Filion
  */
@@ -360,7 +360,7 @@ public abstract class AbstractExpression implements Expression {
 	 * @param expression The {@link Expression} for which its position within the parsed tree needs
 	 * to be determined
 	 * @param length The current cursor position within the JPQL query while digging into the tree
-	 * until the searche reaches the expression
+	 * until the search reaches the expression
 	 * @return The length of the string representation for what is coming before the given {@link Expression}
 	 * @since 2.4
 	 */
@@ -432,12 +432,9 @@ public abstract class AbstractExpression implements Expression {
 	}
 
 	/**
-	 * Retrieves the {@link JPQLQueryBNF} that was used to parse the given {@link Expression}.
-	 *
-	 * @param expression The {@link Expression} for which its BNF is needed
-	 * @return The {@link JPQLQueryBNF} that was used to parse the given expression
+	 * {@inheritDoc}
 	 */
-	public JPQLQueryBNF findQueryBNF(AbstractExpression expression) {
+	public JPQLQueryBNF findQueryBNF(Expression expression) {
 		return getQueryBNF();
 	}
 
@@ -535,7 +532,8 @@ public abstract class AbstractExpression implements Expression {
 	 * Returns the encapsulated text of this {@link AbstractExpression}, which can be used in various
 	 * ways, it can be a keyword, a literal, etc.
 	 *
-	 * @return The full text of this expression or a keyword, or only what this expression encapsulates
+	 * @return Either the JPQL identifier for this {@link AbstractExpression}, the literal it
+	 * encapsulates or an empty string
 	 */
 	protected String getText() {
 		return text;
@@ -624,7 +622,6 @@ public abstract class AbstractExpression implements Expression {
 		       wordParser.startsWithIdentifier(START_WITH)        ||
 		       wordParser.startsWithIdentifier(CONNECT_BY)        ||
 		       wordParser.startsWithIdentifier(ORDER_SIBLINGS_BY) ||
-		       word.equalsIgnoreCase(UNION)                       ||
 		       word.equalsIgnoreCase(UNION)                       ||
 		       word.equalsIgnoreCase(INTERSECT)                   ||
 		       word.equalsIgnoreCase(EXCEPT);
@@ -722,6 +719,9 @@ public abstract class AbstractExpression implements Expression {
 
 			child = null;
 
+			//
+			// Step 1
+			//
 			// Right away create a SubExpression and parse the encapsulated expression
 			if (character == LEFT_PARENTHESIS) {
 
@@ -755,7 +755,7 @@ public abstract class AbstractExpression implements Expression {
 				character = wordParser.character();
 
 				// Store the SubExpression
-				currentInfo = (rootInfo == null) ? (rootInfo = new Info()) : (currentInfo.next = new Info());
+				currentInfo = (rootInfo == null) ? (rootInfo = new Info()) : (currentInfo.next = new Info(currentInfo));
 				currentInfo.expression = expression;
 				currentInfo.space = count > 0;
 			}
@@ -773,6 +773,9 @@ public abstract class AbstractExpression implements Expression {
 					break;
 				}
 
+				//
+				// Step 2
+				//
 				// Parse using the ExpressionFactory that is mapped with a JPQL identifier (word)
 				if (shouldParseWithFactoryFirst() &&
 				    (wordParser.getWordType() == WordType.WORD)) {
@@ -787,7 +790,13 @@ public abstract class AbstractExpression implements Expression {
 							// The new expression is a child of the previous expression,
 							// remove it from the collection since it's already parented
 							if ((expression != null) && child.isAncestor(expression)) {
-								currentInfo = (currentInfo == rootInfo) ? (rootInfo = null) : rootInfo;
+								if (currentInfo == rootInfo) {
+									rootInfo = null;
+									currentInfo = null;
+								}
+								else if (currentInfo != null) {
+									currentInfo = currentInfo.previous;
+								}
 							}
 
 							// Something has been parsed, which means it's not the beginning anymore
@@ -803,6 +812,9 @@ public abstract class AbstractExpression implements Expression {
 					}
 				}
 
+				//
+				// Step 3
+				//
 				// No factories could be used, use the fall back ExpressionFactory
 				if (child == null) {
 					child = buildExpressionFromFallingBack(wordParser, word, queryBNF, expression, tolerant);
@@ -812,7 +824,13 @@ public abstract class AbstractExpression implements Expression {
 						// The new expression is a child of the previous expression,
 						// remove it from the collection since it's already parented
 						if ((expression != null) && child.isAncestor(expression)) {
-							currentInfo = (currentInfo == rootInfo) ? (rootInfo = null) : rootInfo;
+							if (currentInfo == rootInfo) {
+								rootInfo = null;
+								currentInfo = null;
+							}
+							else if (currentInfo != null) {
+								currentInfo = currentInfo.previous;
+							}
 						}
 
 						// Something has been parsed, which means it's not the beginning anymore
@@ -827,6 +845,9 @@ public abstract class AbstractExpression implements Expression {
 					}
 				}
 
+				//
+				// Step 4
+				//
 				// If nothing was parsed, then attempt to parse the fragment by retrieving the factory
 				// directory from the JPQL grammar and not from the one registered with the current BNF
 				if (tolerant && (child == null)) {
@@ -846,7 +867,13 @@ public abstract class AbstractExpression implements Expression {
 								// The new expression is a child of the previous expression,
 								// remove it from the collection since it's already parented
 								if ((expression != null) && child.isAncestor(expression)) {
-									currentInfo = (currentInfo == rootInfo) ? (rootInfo = null) : rootInfo;
+									if (currentInfo == rootInfo) {
+										rootInfo = null;
+										currentInfo = null;
+									}
+									else if (currentInfo != null) {
+										currentInfo = currentInfo.previous;
+									}
 								}
 
 								// Something has been parsed, which means it's not the beginning anymore
@@ -875,7 +902,7 @@ public abstract class AbstractExpression implements Expression {
 			// Store the child but skip a very special case, which happens when parsing
 			// two subqueries in a collection expression. Example: (SELECT ... ), (SELECT ... )
 			if ((expression == null) || (child != null)) {
-				currentInfo = (rootInfo == null) ? (rootInfo = new Info()) : (currentInfo.next = new Info());
+				currentInfo = (rootInfo == null) ? (rootInfo = new Info()) : (currentInfo.next = new Info(currentInfo));
 				currentInfo.expression = child;
 				currentInfo.space = count > 1;
 			}
@@ -890,9 +917,7 @@ public abstract class AbstractExpression implements Expression {
 
 				// The current expression does not handle collection, then stop the
 				// parsing here so the parent can continue to parse
-				if (!handleCollection(queryBNF) ||
-				    isParsingComplete(wordParser, word, expression)) {
-
+				if (!handleCollection(queryBNF) || tolerant && isParsingComplete(wordParser, word, expression)) {
 					break;
 				}
 
@@ -922,7 +947,7 @@ public abstract class AbstractExpression implements Expression {
 					count = 0;
 
 					// Add a null Expression since the expression ends with a comma
-					currentInfo = (rootInfo == null) ? (rootInfo = new Info()) : (currentInfo.next = new Info());
+					currentInfo = (rootInfo == null) ? (rootInfo = new Info()) : (currentInfo.next = new Info(currentInfo));
 
 					// Nothing else to parse
 					if (stopParsing) {
@@ -1166,9 +1191,31 @@ public abstract class AbstractExpression implements Expression {
 		Info next;
 
 		/**
+		 * The parent within the chain of this one.
+		 */
+		Info previous;
+
+		/**
 		 * Flag indicating a whitespace follows the parsed {@link #expression}.
 		 */
 		boolean space;
+
+		/**
+		 * Creates a new <code>Info</code>.
+		 */
+		Info() {
+			super();
+		}
+
+		/**
+		 * Creates a new <code>Info</code>.
+		 *
+		 * @param previous The parent within the chain of this one
+		 */
+		Info(Info previous) {
+			super();
+			this.previous = previous;
+		}
 
 		private void addChild(ArrayList<AbstractExpression> children) {
 			children.add(expression);

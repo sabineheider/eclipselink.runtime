@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 1998, 2012 Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1998, 2013 Oracle and/or its affiliates. All rights reserved.
  * This program and the accompanying materials are made available under the 
  * terms of the Eclipse Public License v1.0 and Eclipse Distribution License v. 1.0 
  * which accompanies this distribution. 
@@ -12,8 +12,9 @@
  ******************************************************************************/  
 package org.eclipse.persistence.internal.oxm;
 
-import java.io.UnsupportedEncodingException;
+import java.nio.charset.Charset;
 import java.util.StringTokenizer;
+
 import javax.xml.namespace.QName;
 
 import org.eclipse.persistence.internal.oxm.mappings.Field;
@@ -37,6 +38,7 @@ public class XPathFragment <
     public static final String SELF_XPATH = ".";
     public static final XPathFragment SELF_FRAGMENT = new XPathFragment(SELF_XPATH);
     public static final XPathFragment ANY_FRAGMENT = null;
+    public static final Charset CHARSET = Charset.forName(Constants.DEFAULT_XML_ENCODING);
 
     private XPathFragment nextFragment;
     private XML_FIELD xmlField;
@@ -48,9 +50,10 @@ public class XPathFragment <
     private int indexValue = -1;//if containsIndex, then this is the value of the index.
     private boolean shouldExecuteSelectNodes = false;
     private String shortName;
-    private byte[] shortNameBytes;
     private String prefix;
+    private byte[] prefixBytes;
     private String localName;
+    private byte[] localNameBytes;
     private String namespaceURI;
     protected boolean nameIsText = false;
     protected boolean isSelfFragment = false;
@@ -190,18 +193,15 @@ public class XPathFragment <
         return shortName;
     }
 
-    public byte[] getShortNameBytes() {
-        if(null == shortNameBytes) {
-            try {
-                shortNameBytes = getShortName().getBytes(Constants.DEFAULT_XML_ENCODING);
-            } catch (UnsupportedEncodingException e) {
-            }
-        }
-        return shortNameBytes;
-    }
-
     public String getPrefix() {
         return prefix;
+    }
+
+    public byte[] getPrefixBytes() {
+        if(null == prefixBytes && null != prefix) {
+            prefixBytes = prefix.getBytes(CHARSET);
+        }
+        return prefixBytes;
     }
 
     public void setPrefix(String prefix) {
@@ -211,6 +211,13 @@ public class XPathFragment <
 
     public String getLocalName() {
         return localName;
+    }
+
+    public byte[] getLocalNameBytes() {
+        if(null == localNameBytes && null != localName) {
+            localNameBytes = localName.getBytes(CHARSET);
+        }
+        return localNameBytes;
     }
 
     public void setLocalName(String localName) {
@@ -327,6 +334,9 @@ public class XPathFragment <
         }
         try {
             XPathFragment xPathFragment = (XPathFragment) object;
+            if (hasAttribute && !xPathFragment.hasAttribute) {
+                return false;
+            }
             if (nameIsText && xPathFragment.nameIsText) {
                 return true;
             }
@@ -402,6 +412,7 @@ public class XPathFragment <
     
     private void resetShortName(){
     	shortName = null;
-    	shortNameBytes = null;
-    }   
+    	prefixBytes = null;
+    	localNameBytes = null;
+    }
 }

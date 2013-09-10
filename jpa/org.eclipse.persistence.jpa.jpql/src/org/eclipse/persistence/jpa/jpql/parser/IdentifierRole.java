@@ -16,7 +16,7 @@ package org.eclipse.persistence.jpa.jpql.parser;
 /**
  * A role describes the purpose of the JPQL identifier.
  *
- * @version 2.4
+ * @version 2.5
  * @since 2.3
  * @author Pascal Filion
  */
@@ -24,7 +24,7 @@ public enum IdentifierRole {
 
 	/**
 	 * Indicates the identifier aggregates two expressions together. The identifiers are <b>AND</b>,
-	 * <b>OR</b>, +, -, * and /.
+	 * <b>OR</b>, and the arithmetic operators.
 	 */
 	AGGREGATE,
 
@@ -38,13 +38,12 @@ public enum IdentifierRole {
 	 * Indicates the identifier is used to complement an expression, it is not required for creating
 	 * an expression. Examples are <b>AS</b> or <b>OUTER</b>.
 	 */
-	COMPLETEMENT,
+	COMPLEMENT,
 
 	/**
-	 * Indicates the identifier is kind of a function, it does not return a value but it is used to
-	 * perform some operation over some expression. The expression can have an expression before and
-	 * then after but it's not used to aggregate those two expression. An example is <b>x MEMBER
-	 * y</b>.
+	 * Indicates the identifier is a kind of function, it does not return a value but it is used to
+	 * perform some operation over an expression. The expression can have an expression before and
+	 * after but it's not used to aggregate those two expression. An example is <b>x MEMBER y</b>.
 	 */
 	COMPOUND_FUNCTION,
 

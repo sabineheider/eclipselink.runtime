@@ -517,7 +517,7 @@ public class OneToOneMapping extends ObjectReferenceMapping implements Relationa
      */
     public List<Object> createMapComponentsFromSerializableKeyInfo(Object[] keyInfo, AbstractSession session){
         List<Object> orderedResult = new ArrayList<Object>(keyInfo.length);
-        Map<Object, Object> fromCache = session.getIdentityMapAccessor().getAllFromIdentityMapWithEntityPK(keyInfo, referenceDescriptor);
+        Map<Object, Object> fromCache = session.getIdentityMapAccessorInstance().getAllFromIdentityMapWithEntityPK(keyInfo, referenceDescriptor);
         DatabaseRecord translationRow = new DatabaseRecord();
         List foreignKeyValues = new ArrayList(keyInfo.length - fromCache.size());
         
@@ -748,8 +748,10 @@ public class OneToOneMapping extends ObjectReferenceMapping implements Relationa
         super.postPrepareNestedBatchQuery(batchQuery, query);
         // Force a distinct to filter out m-1 duplicates.
         // Only set if really a m-1, not a 1-1
-        if (!isOneToOneRelationship()) {
-            ((ObjectLevelReadQuery)batchQuery).useDistinct();
+        if (!this.isOneToOneRelationship && ((ObjectLevelReadQuery)batchQuery).getBatchFetchPolicy().isJOIN()) {
+            if (!((ObjectLevelReadQuery)batchQuery).isDistinctComputed() && (batchQuery.getSession().getPlatform().isLobCompatibleWithDistinct() || !Helper.hasLob(batchQuery.getDescriptor().getSelectionFields((ObjectLevelReadQuery)batchQuery)))) {
+                ((ObjectLevelReadQuery)batchQuery).useDistinct();
+            }
         }
         if (this.mechanism != null) {
             this.mechanism.postPrepareNestedBatchQuery(batchQuery, query);
@@ -955,8 +957,8 @@ public class OneToOneMapping extends ObjectReferenceMapping implements Relationa
      * Get all the fields for the map key
      */
     public List<DatabaseField> getAllFieldsForMapKey(){
-        List<DatabaseField> fields = new ArrayList(getReferenceDescriptor().getAllFields().size() + getForeignKeyFields().size());
-        fields.addAll(getReferenceDescriptor().getAllFields());
+        List<DatabaseField> fields = new ArrayList(getReferenceDescriptor().getAllSelectionFields().size() + getForeignKeyFields().size());
+        fields.addAll(getReferenceDescriptor().getAllSelectionFields());
         fields.addAll(getForeignKeyFields());
         return fields;
     }
@@ -1166,13 +1168,6 @@ public class OneToOneMapping extends ObjectReferenceMapping implements Relationa
         }
 
         setFields(collectFields());
-        
-        if (getReferenceDescriptor().hasTablePerClassPolicy()) {
-            // This will do nothing if we have already prepared for this 
-            // source mapping or if the source mapping does not require
-            // any special prepare logic.
-            getReferenceDescriptor().getTablePerClassPolicy().prepareChildrenSelectionQuery(this, session);              
-        }
     }
 
     /**
@@ -1187,6 +1182,9 @@ public class OneToOneMapping extends ObjectReferenceMapping implements Relationa
             Map.Entry<DatabaseField, DatabaseField> entry = iterator.next();
             DatabaseField sourceField = entry.getKey();
             sourceField = getDescriptor().buildField(sourceField, keyTableForMapKey);
+            if (usesIndirection()) {
+                sourceField.setKeepInRow(true);
+            }
             DatabaseField targetField = entry.getValue();
             targetField = getReferenceDescriptor().buildField(targetField, keyTableForMapKey);
             newSourceToTargetKeyFields.put(sourceField, targetField);
@@ -1214,6 +1212,9 @@ public class OneToOneMapping extends ObjectReferenceMapping implements Relationa
             //grab the only element out of the map
             DatabaseField sourceField = getSourceToTargetKeyFields().keySet().iterator().next();
             sourceField = getDescriptor().buildField(sourceField);
+            if (usesIndirection()) {
+                sourceField.setKeepInRow(true);
+            }
             getSourceToTargetKeyFields().clear();
             getTargetToSourceKeyFields().clear();
             getSourceToTargetKeyFields().put(sourceField, targetKeys.get(0));
@@ -1752,6 +1753,7 @@ public class OneToOneMapping extends ObjectReferenceMapping implements Relationa
         ObjectLevelReadQuery nestedQuery = prepareNestedJoinQueryClone(row, null, joinManager, sourceQuery, executionSession);
         nestedQuery.setTranslationRow(targetRow);
         nestedQuery.setRequiresDeferredLocks(sourceQuery.requiresDeferredLocks());
+        nestedQuery.setPrefetchedCacheKeys(sourceQuery.getPrefetchedCacheKeys());
         referenceObject = this.referenceDescriptor.getObjectBuilder().buildObject(nestedQuery, targetRow);
 
         // For bug 3641713 buildObject doesn't wrap if called on a UnitOfWork for performance reasons,
@@ -1768,20 +1770,22 @@ public class OneToOneMapping extends ObjectReferenceMapping implements Relationa
      * Check for batch + aggregation reading.
      */
     @Override
-    protected Object valueFromRowInternal(AbstractRecord row, JoinedAttributeManager joinManager, ObjectBuildingQuery sourceQuery, AbstractSession executionSession) throws DatabaseException {
+    protected Object valueFromRowInternal(AbstractRecord row, JoinedAttributeManager joinManager, ObjectBuildingQuery sourceQuery, AbstractSession executionSession, boolean shouldUseSopObject) throws DatabaseException {
         // If any field in the foreign key is null then it means there are no referenced objects
         // Skip for partial objects as fk may not be present.
-        int size = this.fields.size();
-        for (int index = 0; index < size; index++) {
-            DatabaseField field = this.fields.get(index);
-            if (row.get(field) == null) {
-                return this.indirectionPolicy.nullValueFromRow();
+        if (!shouldUseSopObject) {
+            int size = this.fields.size();
+            for (int index = 0; index < size; index++) {
+                DatabaseField field = this.fields.get(index);
+                if (row.get(field) == null) {
+                    return this.indirectionPolicy.nullValueFromRow();
+                }
             }
         }
 
         // Call the default which executes the selection query,
         // or wraps the query with a value holder.
-        return super.valueFromRowInternal(row, joinManager, sourceQuery, executionSession);
+        return super.valueFromRowInternal(row, joinManager, sourceQuery, executionSession, shouldUseSopObject);
     }
 
     /**

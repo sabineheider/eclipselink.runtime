@@ -108,6 +108,12 @@ public class DatabaseField implements Cloneable, Serializable, CoreField  {
      * Returns true if this field was translated.
      */
     protected boolean isTranslated = false;
+    
+    /**
+     * Indicates whether the field should be kept in the record after the object is created.
+     * Used by ObjectLevelReadQuery ResultSetAccessOptimization.
+     */
+    public boolean keepInRow;
 
     public DatabaseField() {
         this("", new DatabaseTable());
@@ -268,8 +274,6 @@ public class DatabaseField implements Cloneable, Serializable, CoreField  {
 
         return false;
     }
-    
-    /**
     
     /**
      * Get the SQL fragment that is used when generating the DDL for the column.
@@ -457,6 +461,10 @@ public class DatabaseField implements Cloneable, Serializable, CoreField  {
         return (! isUpdatable && ! isInsertable);
     }
     
+    public boolean keepInRow() {
+        return keepInRow;
+    }
+
     /**
      * Returns whether the column should be included in SQL INSERT
      * statements. 
@@ -503,6 +511,10 @@ public class DatabaseField implements Cloneable, Serializable, CoreField  {
      */
     public void setInsertable(boolean isInsertable) {
         this.isInsertable = isInsertable;
+    }
+    
+    public void setKeepInRow(boolean keepInRow) {
+        this.keepInRow = keepInRow;
     }
     
     /**

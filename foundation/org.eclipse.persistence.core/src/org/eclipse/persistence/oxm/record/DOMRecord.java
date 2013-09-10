@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 1998, 2012 Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1998, 2013 Oracle and/or its affiliates. All rights reserved.
  * This program and the accompanying materials are made available under the
  * terms of the Eclipse Public License v1.0 and Eclipse Distribution License v. 1.0
  * which accompanies this distribution.
@@ -517,7 +517,7 @@ public class DOMRecord extends XMLRecord {
                 int index = schemaType.indexOf(XMLConstants.COLON);
                 if (index == -1) {
                     qname = new QName(schemaType);
-                    Class convertClass = key.getJavaClass(qname);
+                    Class convertClass = key.getJavaClass(qname, xmlCnvMgr);
                     return xmlCnvMgr.convertObject(value, convertClass);
                 } else {
                     String prefix = schemaType.substring(0, index);
@@ -525,7 +525,7 @@ public class DOMRecord extends XMLRecord {
                     XMLPlatform xmlPlatform = XMLPlatformFactory.getInstance().getXMLPlatform();
                     String url = xmlPlatform.resolveNamespacePrefix(node, prefix);
                     qname = new QName(url, localPart);
-                    Class convertClass = key.getJavaClass(qname);
+                    Class convertClass = key.getJavaClass(qname, xmlCnvMgr);
                     return xmlCnvMgr.convertObject(value, convertClass, qname);
                 }
             }

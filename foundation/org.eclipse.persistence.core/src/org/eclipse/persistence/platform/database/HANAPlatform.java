@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2012 SAP. All rights reserved.
+ * Copyright (c) 2012, 2013 SAP. All rights reserved.
  * This program and the accompanying materials are made available under the
  * terms of the Eclipse Public License v1.0 and Eclipse Distribution License v. 1.0
  * which accompanies this distribution.
@@ -210,10 +210,10 @@ public final class HANAPlatform extends DatabasePlatform {
 
     /**
      * Creates the expression operator representing the JPQL function current_timestamp as defined
-     * by § 4.6.17.2.3 of the JPA 2.0 specification
+     * by 4.6.17.2.3 of the JPA 2.0 specification
      * 
      * @return the expression operator representing the JPQL function current_timestamp as defined
-     *         by § 4.6.17.2.3 of the JPA 2.0 specification
+     *         by 4.6.17.2.3 of the JPA 2.0 specification
      */
     private static final ExpressionOperator createTodayExpressionOperator() {
         return ExpressionOperator.simpleLogicalNoParens(ExpressionOperator.Today,
@@ -221,10 +221,10 @@ public final class HANAPlatform extends DatabasePlatform {
     }
 
     /**
-     * Creates the expression operator representing the JPQL function current_date as defined by §
+     * Creates the expression operator representing the JPQL function current_date as defined by 
      * 4.6.17.2.3 of the JPA 2.0 specification
      * 
-     * @return the expression operator representing the JPQL function current_date as defined by §
+     * @return the expression operator representing the JPQL function current_date as defined by 
      *         4.6.17.2.3 of the JPA 2.0 specification
      */
     private static final ExpressionOperator createCurrentDateExpressionOperator() {
@@ -234,10 +234,10 @@ public final class HANAPlatform extends DatabasePlatform {
 
     /**
      * Creates the expression operator representing the JPQL function current_timestamp as defined
-     * by § 4.6.17.2.3 of the JPA 2.0 specification
+     * by 4.6.17.2.3 of the JPA 2.0 specification
      * 
      * @return the expression operator representing the JPQL function current_timestamp as defined
-     *         by § 4.6.17.2.3 of the JPA 2.0 specification
+     *         by 4.6.17.2.3 of the JPA 2.0 specification
      */
     private static final ExpressionOperator createCurrentTimeExpressionOperator() {
         return ExpressionOperator.simpleLogicalNoParens(ExpressionOperator.CurrentTime,

@@ -1,5 +1,5 @@
 /*******************************************************************************
-* Copyright (c) 1998, 2012 Oracle and/or its affiliates. All rights reserved.
+* Copyright (c) 1998, 2013 Oracle and/or its affiliates. All rights reserved.
 * This program and the accompanying materials are made available under the
 * terms of the Eclipse Public License v1.0 and Eclipse Distribution License v. 1.0
 * which accompanies this distribution.
@@ -108,7 +108,14 @@ public class JAXBExceptionResource extends ListResourceBundle {
         {"50086", "An exception occured while invoking the createPropertyAccessor method on the AccessorFactory {0}"},
         {"50087", "An exception occured while attempting to invoke the {0} method on the Accessor {1}"},
         {"50088", "Enum value {0} is not valid for an XmlEnum with class {1}"},
-        {"50089", "The java interface {0} can not be mapped by JAXB as it has multiple mappable parent interfaces. Multiple inheritence is not supported"}
+        {"50089", "The java interface {0} can not be mapped by JAXB as it has multiple mappable parent interfaces. Multiple inheritence is not supported"},
+        {"50090", "Invalid value for object graph: {0}. The value must be a string or an instance of ObjectGraph."},
+        {"50091", "The element name {0} has more than one mapping."},
+        {"50092", "Only one XmlElementRef property of type {0} allowed on class {1}."},
+        {"50093", "The class {0} is not a mapped type in the JAXBContext."},
+        {"50094", "The property {0} specified on the XmlVariableNode annotation was not found on the class {1}."},
+        {"50095", "The property {0} of type {1} on the class {2} is not valid for a XmlVariableNode.  Only properties of type String or QName are allowed."},
+        {"50096", "The @XmlAttribute property {0} in type {1} must reference a type that maps to text in XML.  {2} cannot be mapped to a text value."}
     };
 
     /**

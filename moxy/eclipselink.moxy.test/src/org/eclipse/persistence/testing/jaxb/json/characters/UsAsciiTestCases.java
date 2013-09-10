@@ -12,10 +12,18 @@
  ******************************************************************************/
 package org.eclipse.persistence.testing.jaxb.json.characters;
 
+import java.io.ByteArrayOutputStream;
+import java.io.OutputStreamWriter;
+import java.nio.charset.Charset;
 import java.util.Map;
 
+import javax.json.Json;
+import javax.json.JsonObject;
+import javax.json.JsonObjectBuilder;
+import javax.json.JsonWriter;
 import javax.xml.bind.Marshaller;
 
+import org.eclipse.persistence.oxm.json.JsonObjectBuilderResult;
 import org.eclipse.persistence.testing.jaxb.json.JSONMarshalUnmarshalTestCases;
 
 public class UsAsciiTestCases  extends JSONMarshalUnmarshalTestCases {
@@ -43,5 +51,13 @@ public class UsAsciiTestCases  extends JSONMarshalUnmarshalTestCases {
         control.characters.add('b');
         return control;
     }
+    
+    public void testJSONMarshalToBuilderResult() throws Exception{
+        //Currently not supported
+    }
 
+    public void testJSONMarshalToGeneratorResult() throws Exception{
+        //Currently not supported
+
+    }
 }

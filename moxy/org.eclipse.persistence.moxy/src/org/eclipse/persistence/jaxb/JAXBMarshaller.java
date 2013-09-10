@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 1998, 2012 Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1998, 2013 Oracle and/or its affiliates. All rights reserved.
  * This program and the accompanying materials are made available under the 
  * terms of the Eclipse Public License v1.0 and Eclipse Distribution License v. 1.0 
  * which accompanies this distribution. 
@@ -41,26 +41,27 @@ import java.lang.reflect.Type;
 
 import org.w3c.dom.Node;
 import org.xml.sax.ContentHandler;
-
 import org.eclipse.persistence.oxm.CharacterEscapeHandler;
 import org.eclipse.persistence.oxm.JSONWithPadding;
 import org.eclipse.persistence.oxm.MediaType;
 import org.eclipse.persistence.oxm.NamespacePrefixMapper;
+import org.eclipse.persistence.oxm.XMLMarshalListener;
 import org.eclipse.persistence.oxm.XMLMarshaller;
 import org.eclipse.persistence.oxm.record.MarshalRecord;
 import org.eclipse.persistence.oxm.record.XMLEventWriterRecord;
 import org.eclipse.persistence.oxm.record.XMLStreamWriterRecord;
+import org.eclipse.persistence.core.queries.CoreAttributeGroup;
 import org.eclipse.persistence.descriptors.ClassDescriptor;
 import org.eclipse.persistence.exceptions.XMLMarshalException;
 import org.eclipse.persistence.internal.core.helper.CoreClassConstants;
+import org.eclipse.persistence.internal.helper.ClassConstants;
 import org.eclipse.persistence.internal.jaxb.many.ManyValue;
+import org.eclipse.persistence.internal.jaxb.ObjectGraphImpl;
 import org.eclipse.persistence.internal.jaxb.WrappedValue;
 import org.eclipse.persistence.internal.oxm.Constants;
 import org.eclipse.persistence.internal.oxm.Root;
-import org.eclipse.persistence.internal.oxm.record.CharacterEscapeHandlerWrapper;
 import org.eclipse.persistence.internal.oxm.record.namespaces.MapNamespacePrefixMapper;
 import org.eclipse.persistence.internal.oxm.record.namespaces.NamespacePrefixMapperWrapper;
-
 import org.eclipse.persistence.jaxb.JAXBContext.RootLevelXmlAdapter;
 import org.eclipse.persistence.jaxb.attachment.*;
 
@@ -100,9 +101,12 @@ public class JAXBMarshaller implements javax.xml.bind.Marshaller {
     private static final String SUN_INDENT_STRING = "com.sun.xml.bind.indentString";
     private static final String SUN_JSE_INDENT_STRING = "com.sun.xml.internal.bind.indentString";
 
-    private static final String SUN_CHARACTER_ESCAPE_HANDLER = "com.sun.xml.bind.marshaller.CharacterEscapeHandler";
-    private static final String SUN_JSE_CHARACTER_ESCAPE_HANDLER = "com.sun.xml.internal.bind.marshaller.CharacterEscapeHandler";
+    private static final String SUN_CHARACTER_ESCAPE_HANDLER_MARSHALLER = "com.sun.xml.bind.marshaller.CharacterEscapeHandler";
+    private static final String SUN_JSE_CHARACTER_ESCAPE_HANDLER_MARSHALLER = "com.sun.xml.internal.bind.marshaller.CharacterEscapeHandler";
 
+    private static final String SUN_CHARACTER_ESCAPE_HANDLER= "com.sun.xml.bind.characterEscapeHandler";
+    private static final String SUN_JSE_CHARACTER_ESCAPE_HANDLER = "com.sun.xml.internal.bind.characterEscapeHandler";
+    
     // XML_DECLARATION is the "opposite" to JAXB_FRAGMENT.  If XML_DECLARATION is set to false it means JAXB_FRAGMENT should be set to true.
     private static final String XML_DECLARATION = "com.sun.xml.bind.xmlDeclaration";
 
@@ -234,7 +238,11 @@ public class JAXBMarshaller implements javax.xml.bind.Marshaller {
     }
 
     public Marshaller.Listener getListener() {
-        return ((JAXBMarshalListener) xmlMarshaller.getMarshalListener()).getListener();
+        XMLMarshalListener xmlMarshalListener = xmlMarshaller.getMarshalListener();
+        if(null != xmlMarshalListener) {
+            return ((JAXBMarshalListener) xmlMarshalListener).getListener();
+        }
+        return null;
     }
 
     public Node getNode(Object object) throws JAXBException {
@@ -281,7 +289,9 @@ public class JAXBMarshaller implements javax.xml.bind.Marshaller {
             return xmlMarshaller.getValueWrapper(); 
         } else if (MarshallerProperties.JSON_NAMESPACE_SEPARATOR.equals(key)) {
             return xmlMarshaller.getNamespaceSeparator();
-        } else if (SUN_CHARACTER_ESCAPE_HANDLER.equals(key) || SUN_JSE_CHARACTER_ESCAPE_HANDLER.equals(key)) {
+        } else if (MarshallerProperties.JSON_WRAPPER_AS_ARRAY_NAME.equals(key)) {
+            return xmlMarshaller.isWrapperAsCollectionName();
+        } else if (SUN_CHARACTER_ESCAPE_HANDLER.equals(key) || SUN_JSE_CHARACTER_ESCAPE_HANDLER.equals(key) ||SUN_CHARACTER_ESCAPE_HANDLER_MARSHALLER.equals(key) || SUN_JSE_CHARACTER_ESCAPE_HANDLER_MARSHALLER.equals(key)) {
             if (xmlMarshaller.getCharacterEscapeHandler() instanceof CharacterEscapeHandlerWrapper) {
                 CharacterEscapeHandlerWrapper wrapper = (CharacterEscapeHandlerWrapper) xmlMarshaller.getCharacterEscapeHandler();
                 return wrapper.getHandler();
@@ -293,6 +303,12 @@ public class JAXBMarshaller implements javax.xml.bind.Marshaller {
             	return null;
             }
             return wrapper.getPrefixMapper();
+        } else if (MarshallerProperties.OBJECT_GRAPH.equals(key)) {
+            Object graph = xmlMarshaller.getMarshalAttributeGroup();
+            if(graph instanceof CoreAttributeGroup) {
+                return new ObjectGraphImpl((CoreAttributeGroup)graph);
+            }
+            return graph;
         }
         throw new PropertyException(key);
     }
@@ -306,12 +322,24 @@ public class JAXBMarshaller implements javax.xml.bind.Marshaller {
             throw new IllegalArgumentException();
         }
 
-        object = modifyObjectIfNeeded(object);
+        Listener listener = getListener();
+        if(listener != null) {
+            if(object instanceof JAXBElement) {
+                listener.beforeMarshal(object);
+            }
+        }
 
+        Object oxmObject = modifyObjectIfNeeded(object);
         try {
-            xmlMarshaller.marshal(object, contentHandler);
+            xmlMarshaller.marshal(oxmObject, contentHandler);
         } catch (Exception e) {
             throw new MarshalException(e);
+        }
+
+        if(listener != null) {
+            if(object instanceof JAXBElement) {
+                listener.afterMarshal(object);
+            }
         }
     }
 
@@ -330,14 +358,27 @@ public class JAXBMarshaller implements javax.xml.bind.Marshaller {
         if (object == null || eventWriter == null) {
             throw new IllegalArgumentException();
         }
-        object = modifyObjectIfNeeded(object);
 
+        Listener listener = getListener();
+        if(listener != null) {
+            if(object instanceof JAXBElement) {
+                listener.beforeMarshal(object);
+            }
+        }
+
+        Object oxmObject = modifyObjectIfNeeded(object);
         try {
             XMLEventWriterRecord record = new XMLEventWriterRecord(eventWriter);
             record.setMarshaller(this.xmlMarshaller);
-            this.xmlMarshaller.marshal(object, record);
+            this.xmlMarshaller.marshal(oxmObject, record);
         } catch (Exception ex) {
             throw new MarshalException(ex);
+        }
+
+        if(listener != null) {
+            if(object instanceof JAXBElement) {
+                listener.afterMarshal(object);
+            }
         }
     }
 
@@ -371,12 +412,25 @@ public class JAXBMarshaller implements javax.xml.bind.Marshaller {
         if (object == null || node == null) {
             throw new IllegalArgumentException();
         }
-        object = modifyObjectIfNeeded(object);
 
+        Listener listener = getListener();
+        if(listener != null) {
+            if(object instanceof JAXBElement) {
+                listener.beforeMarshal(object);
+            }
+        }
+
+        Object oxmObject = modifyObjectIfNeeded(object);
         try {
-            xmlMarshaller.marshal(object, node);
+            xmlMarshaller.marshal(oxmObject, node);
         } catch (Exception e) {
             throw new MarshalException(e);
+        }
+
+        if(listener != null) {
+            if(object instanceof JAXBElement) {
+                listener.afterMarshal(object);
+            }
         }
     }
 
@@ -384,12 +438,25 @@ public class JAXBMarshaller implements javax.xml.bind.Marshaller {
         if (object == null || outputStream == null) {
             throw new IllegalArgumentException();
         }
-        object = modifyObjectIfNeeded(object);
 
+        Listener listener = getListener();
+        if(listener != null) {
+            if(object instanceof JAXBElement) {
+                listener.beforeMarshal(object);
+            }
+        }
+
+        Object oxmObject = modifyObjectIfNeeded(object);
         try {
-            xmlMarshaller.marshal(object, outputStream);
+            xmlMarshaller.marshal(oxmObject, outputStream);
         } catch (Exception e) {
             throw new MarshalException(e);
+        }
+
+        if(listener != null) {
+            if(object instanceof JAXBElement) {
+                listener.afterMarshal(object);
+            }
         }
     }
 
@@ -451,14 +518,27 @@ public class JAXBMarshaller implements javax.xml.bind.Marshaller {
         if (object == null || streamWriter == null) {
             throw new IllegalArgumentException();
         }
-        object = modifyObjectIfNeeded(object);
-        
+
+        Listener listener = getListener();
+        if(listener != null) {
+            if(object instanceof JAXBElement) {
+                listener.beforeMarshal(object);
+            }
+        }
+
+        Object oxmObject = modifyObjectIfNeeded(object);
         try {
             XMLStreamWriterRecord record = new XMLStreamWriterRecord(streamWriter);
             record.setMarshaller(this.xmlMarshaller);
-            this.xmlMarshaller.marshal(object, record);
+            this.xmlMarshaller.marshal(oxmObject, record);
         } catch (Exception ex) {
             throw new MarshalException(ex);
+        }
+
+        if(listener != null) {
+            if(object instanceof JAXBElement) {
+                listener.afterMarshal(object);
+            }
         }
     }
     
@@ -587,12 +667,25 @@ public class JAXBMarshaller implements javax.xml.bind.Marshaller {
         if (object == null || writer == null) {
             throw new IllegalArgumentException();
         }
-        object = modifyObjectIfNeeded(object);
 
+        Listener listener = getListener();
+        if(listener != null) {
+            if(object instanceof JAXBElement) {
+                listener.beforeMarshal(object);
+            }
+        }
+
+        Object oxmObject = modifyObjectIfNeeded(object);
         try {
-            xmlMarshaller.marshal(object, writer);
+            xmlMarshaller.marshal(oxmObject, writer);
         } catch (Exception e) {
             throw new MarshalException(e);
+        }
+
+        if(listener != null) {
+            if(object instanceof JAXBElement) {
+                listener.afterMarshal(object);
+            }
         }
     }
 
@@ -728,10 +821,12 @@ public class JAXBMarshaller implements javax.xml.bind.Marshaller {
             } else if (MarshallerProperties.JSON_MARSHAL_EMPTY_COLLECTIONS.equals(key)){
             	xmlMarshaller.setMarshalEmptyCollections((Boolean) value);
             } else if (MarshallerProperties.JSON_REDUCE_ANY_ARRAYS.equals(key)){
-            	xmlMarshaller.setReduceAnyArrays((Boolean) value);
+                xmlMarshaller.setReduceAnyArrays((Boolean) value);
+            } else if (MarshallerProperties.JSON_WRAPPER_AS_ARRAY_NAME.equals(key)) {
+                xmlMarshaller.setWrapperAsCollectionName((Boolean) value);
             } else if (MarshallerProperties.CHARACTER_ESCAPE_HANDLER.equals(key)) {
                 xmlMarshaller.setCharacterEscapeHandler((CharacterEscapeHandler) value);
-            } else if (SUN_CHARACTER_ESCAPE_HANDLER.equals(key) || SUN_JSE_CHARACTER_ESCAPE_HANDLER.equals(key)) {
+            } else if (SUN_CHARACTER_ESCAPE_HANDLER.equals(key) || SUN_JSE_CHARACTER_ESCAPE_HANDLER.equals(key)  ||SUN_CHARACTER_ESCAPE_HANDLER_MARSHALLER.equals(key) || SUN_JSE_CHARACTER_ESCAPE_HANDLER_MARSHALLER.equals(key)) {
                 if (value == null) {
                     xmlMarshaller.setCharacterEscapeHandler(null);
                 } else {
@@ -778,6 +873,16 @@ public class JAXBMarshaller implements javax.xml.bind.Marshaller {
                  	throw new PropertyException(key, Constants.EMPTY_STRING);                	
                  }
                 xmlMarshaller.setNamespaceSeparator((Character)value);
+            } else if(MarshallerProperties.OBJECT_GRAPH.equals(key)) {
+                if(value == null) {
+                    xmlMarshaller.setMarshalAttributeGroup(null);
+                } else if(value instanceof ObjectGraphImpl) {
+                    xmlMarshaller.setMarshalAttributeGroup(((ObjectGraphImpl)value).getAttributeGroup());
+                } else if(value.getClass() == ClassConstants.STRING){
+                    xmlMarshaller.setMarshalAttributeGroup(value);
+                } else {
+                    throw org.eclipse.persistence.exceptions.JAXBException.invalidValueForObjectGraph(value);
+                }
             } else {
                 throw new PropertyException(key, value);
             }
@@ -806,4 +911,11 @@ public class JAXBMarshaller implements javax.xml.bind.Marshaller {
         return this.xmlMarshaller;
     }
 
+    private static class CharacterEscapeHandlerWrapper extends org.eclipse.persistence.internal.oxm.record.CharacterEscapeHandlerWrapper implements CharacterEscapeHandler {
+
+        public CharacterEscapeHandlerWrapper(Object sunHandler) {
+            super(sunHandler);
+        }
+
+    }
 }

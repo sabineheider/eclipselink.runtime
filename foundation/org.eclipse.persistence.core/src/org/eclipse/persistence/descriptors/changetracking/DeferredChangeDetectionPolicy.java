@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 1998, 2012 Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1998, 2013 Oracle and/or its affiliates. All rights reserved.
  * This program and the accompanying materials are made available under the 
  * terms of the Eclipse Public License v1.0 and Eclipse Distribution License v. 1.0 
  * which accompanies this distribution. 
@@ -117,10 +117,12 @@ public class DeferredChangeDetectionPolicy implements ObjectChangePolicy, java.i
         }
         if (!changes.hasForcedChangesFromCascadeLocking() && unitOfWork.hasOptimisticReadLockObjects()) {
             Boolean modifyVersionField = (Boolean)unitOfWork.getOptimisticReadLockObjects().get(clone);
-            if (unitOfWork instanceof RepeatableWriteUnitOfWork && ((RepeatableWriteUnitOfWork) unitOfWork).getCumulativeUOWChangeSet() != null) {
+            if ((modifyVersionField != null) && (unitOfWork instanceof RepeatableWriteUnitOfWork) && (((RepeatableWriteUnitOfWork)unitOfWork).getCumulativeUOWChangeSet() != null)) {
                 // modify the version field if the UOW cumulative change set does not contain a changeset for this clone 
-                modifyVersionField = ((RepeatableWriteUnitOfWork)unitOfWork).getCumulativeUOWChangeSet().getObjectChangeSetForClone(clone) == null;
-            }            
+                if (((RepeatableWriteUnitOfWork)unitOfWork).getCumulativeUOWChangeSet().getObjectChangeSetForClone(clone) == null) {
+                    modifyVersionField = Boolean.TRUE;
+                }
+            }
             changes.setShouldModifyVersionField(modifyVersionField);
         }
         if (changes.hasChanges() || changes.hasForcedChanges()) {

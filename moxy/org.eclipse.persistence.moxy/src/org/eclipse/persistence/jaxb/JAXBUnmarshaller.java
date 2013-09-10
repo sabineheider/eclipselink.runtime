@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 1998, 2012 Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1998, 2013 Oracle and/or its affiliates. All rights reserved.
  * This program and the accompanying materials are made available under the
  * terms of the Eclipse Public License v1.0 and Eclipse Distribution License v. 1.0
  * which accompanies this distribution.
@@ -53,6 +53,7 @@ import org.eclipse.persistence.oxm.NamespaceResolver;
 import org.eclipse.persistence.oxm.XMLUnmarshaller;
 import org.eclipse.persistence.oxm.record.UnmarshalRecord;
 
+import org.eclipse.persistence.core.queries.CoreAttributeGroup;
 import org.eclipse.persistence.exceptions.XMLMarshalException;
 import org.eclipse.persistence.internal.oxm.Constants;
 import org.eclipse.persistence.internal.oxm.Root;
@@ -72,6 +73,7 @@ import org.eclipse.persistence.jaxb.JAXBContext.RootLevelXmlAdapter;
 import org.eclipse.persistence.jaxb.attachment.AttachmentUnmarshallerAdapter;
 import org.eclipse.persistence.internal.core.helper.CoreClassConstants;
 import org.eclipse.persistence.internal.jaxb.IDResolverWrapper;
+import org.eclipse.persistence.internal.jaxb.ObjectGraphImpl;
 import org.eclipse.persistence.internal.jaxb.WrappedValue;
 import org.eclipse.persistence.internal.jaxb.many.ManyValue;
 
@@ -794,6 +796,16 @@ public class JAXBUnmarshaller implements Unmarshaller {
         	}else {
                     setIDResolver(new IDResolverWrapper(value));
         	}
+        } else if (UnmarshallerProperties.OBJECT_GRAPH.equals(key)) {
+            if(value instanceof ObjectGraphImpl) {
+                xmlUnmarshaller.setUnmarshalAttributeGroup(((ObjectGraphImpl)value).getAttributeGroup());
+            } else if(value instanceof String || value == null) {
+                xmlUnmarshaller.setUnmarshalAttributeGroup(value);
+            } else {
+                throw org.eclipse.persistence.exceptions.JAXBException.invalidValueForObjectGraph(value);
+            }
+        } else if (UnmarshallerProperties.JSON_WRAPPER_AS_ARRAY_NAME.equals(key)) {
+            xmlUnmarshaller.setWrapperAsCollectionName((Boolean) value);
         } else {
             throw new PropertyException(key, value);
         }
@@ -847,6 +859,14 @@ public class JAXBUnmarshaller implements Unmarshaller {
             	return null;
             }
             return wrapper.getResolver();
+        } else if (UnmarshallerProperties.OBJECT_GRAPH.equals(key)) {
+            Object graph = xmlUnmarshaller.getUnmarshalAttributeGroup();
+            if(graph instanceof CoreAttributeGroup) {
+                return new ObjectGraphImpl((CoreAttributeGroup)graph);
+            }
+            return graph;
+        } else if(UnmarshallerProperties.JSON_WRAPPER_AS_ARRAY_NAME.equals(key)) {
+            return xmlUnmarshaller.isWrapperAsCollectionName();
         }
         throw new PropertyException(key);
     }

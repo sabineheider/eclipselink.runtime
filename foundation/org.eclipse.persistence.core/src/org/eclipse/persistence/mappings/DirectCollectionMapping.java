@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 1998, 2012 Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1998, 2013 Oracle and/or its affiliates. All rights reserved.
  * This program and the accompanying materials are made available under the 
  * terms of the Eclipse Public License v1.0 and Eclipse Distribution License v. 1.0 
  * which accompanies this distribution. 
@@ -15,10 +15,13 @@
  *       - 374377: OrderBy with ElementCollection doesn't work
  *     14/05/2012-2.4 Guy Pelletier   
  *       - 376603: Provide for table per tenant support for multitenant applications
- *      *     30/05/2012-2.4 Guy Pelletier    
+ *     30/05/2012-2.4 Guy Pelletier    
  *       - 354678: Temp classloader is still being used during metadata processing
  *     08/01/2012-2.5 Chris Delahunt
- *       - 371950: Metadata caching 
+ *       - 371950: Metadata caching
+ *     06/03/2013-2.5.1 Guy Pelletier    
+ *       - 402380: 3 jpa21/advanced tests failed on server with 
+ *         "java.lang.NoClassDefFoundError: org/eclipse/persistence/testing/models/jpa21/advanced/enums/Gender"  
  ******************************************************************************/  
 package org.eclipse.persistence.mappings;
 
@@ -121,12 +124,6 @@ public class DirectCollectionMapping extends CollectionMapping implements Relati
      * */
     protected transient Class attributeClassification;
     protected String attributeClassificationName;    
-    /** 
-     * @since Java Persistence API 2.0
-     * Referenced by MapAttributeImpl to pick up the BasicMap value parameter type 
-     * PERF: Also store object class of attribute in case of primitive. 
-     * */
-    protected transient Class attributeObjectClassification;
 
     /**
      * PUBLIC:
@@ -882,18 +879,9 @@ public class DirectCollectionMapping extends CollectionMapping implements Relati
         
         // Tell the direct field to convert any class names (type name).
         directField.convertClassNamesToClasses(classLoader);
-
-        if (valueConverter != null) {
-            if (valueConverter instanceof TypeConversionConverter){
-                ((TypeConversionConverter)valueConverter).convertClassNamesToClasses(classLoader);
-                // Set the attribute classification from the type converter (ignoring any attribute classification name).
-                attributeClassification = ((TypeConversionConverter) valueConverter).getObjectClass();
-            } else if (valueConverter instanceof ObjectTypeConverter) {
-                // To avoid 1.5 dependencies with the EnumTypeConverter check
-                // against ObjectTypeConverter.
-                ((ObjectTypeConverter) valueConverter).convertClassNamesToClasses(classLoader);
-            }
-        }
+        
+        // Convert and any Converter class names.
+        convertConverterClassNamesToClasses(valueConverter, classLoader);
         
         // Instantiate any custom converter class
         if (valueConverterClassName != null) {
@@ -948,11 +936,6 @@ public class DirectCollectionMapping extends CollectionMapping implements Relati
                 // Still nothing, default to the type from the direct field.
                 attributeClassification = getDirectField().getType();
             }
-        }
-        
-        // This mirror attribute object classification is bizarre to me ...
-        if (attributeClassification != null) {
-            attributeObjectClassification = Helper.getObjectClass(attributeClassification);
         }
     }
 
@@ -1394,6 +1377,17 @@ public class DirectCollectionMapping extends CollectionMapping implements Relati
 
     /**
      * INTERNAL:
+     * Indicates whether the mapping (or at least one of its nested mappings, at any nested depth) 
+     * references an entity.
+     * To return true the mapping (or nested mapping) should be ForeignReferenceMapping with non-null and non-aggregate reference descriptor.  
+     */
+    @Override
+    public boolean hasNestedIdentityReference() {
+        return false; 
+    }
+        
+    /**
+     * INTERNAL:
      * Initialize and validate the mapping properties.
      */
     @Override
@@ -1428,6 +1422,13 @@ public class DirectCollectionMapping extends CollectionMapping implements Relati
             this.initializeListOrderField(session);
         }
         getContainerPolicy().initialize(session, this.referenceTable);
+        
+        // Initialize the value converter sooner since it likely will finish
+        // configuring field and attribute classifications.
+        if (getValueConverter() != null) {
+            getValueConverter().initialize(this, session);
+        }
+        
         if (!hasCustomSelectionQuery()){
             initOrRebuildSelectQuery();
             getSelectionQuery().setName(getAttributeName());
@@ -1455,9 +1456,6 @@ public class DirectCollectionMapping extends CollectionMapping implements Relati
         initializeUpdateAtIndexQuery(session);
         if (getHistoryPolicy() != null) {
             getHistoryPolicy().initialize(session);
-        }
-        if (getValueConverter() != null) {
-            getValueConverter().initialize(this, session);
         }
         super.initialize(session);
     }
@@ -1784,6 +1782,9 @@ public class DirectCollectionMapping extends CollectionMapping implements Relati
     protected void initializeSourceKeys(AbstractSession session) {
         for (int index = 0; index < getSourceKeyFields().size(); index++) {
             DatabaseField field = getDescriptor().buildField(getSourceKeyFields().get(index));
+            if (usesIndirection()) {
+                field.setKeepInRow(true);
+            }
             getSourceKeyFields().set(index, field);
         }
     }
@@ -1795,7 +1796,11 @@ public class DirectCollectionMapping extends CollectionMapping implements Relati
     protected void initializeSourceKeysWithDefaults(AbstractSession session) {
         List<DatabaseField> primaryKeyFields = getDescriptor().getPrimaryKeyFields();
         for (int index = 0; index < primaryKeyFields.size(); index++) {
-            getSourceKeyFields().addElement(primaryKeyFields.get(index));
+            DatabaseField field = primaryKeyFields.get(index);
+            if (usesIndirection()) {
+                field.setKeepInRow(true);
+            }
+            getSourceKeyFields().addElement(field);
         }
     }
     
@@ -3105,6 +3110,9 @@ public class DirectCollectionMapping extends CollectionMapping implements Relati
             } else if (!this.isCacheable && !isTargetProtected && cacheKey != null) {
                 return this.indirectionPolicy.buildIndirectObject(new ValueHolder(null));
             }
+        }
+        if (row.hasSopObject()) {
+            return getAttributeValueFromObject(row.getSopObject());
         }
         if (sourceQuery.isObjectLevelReadQuery() && (((ObjectLevelReadQuery)sourceQuery).isAttributeBatchRead(this.descriptor, getAttributeName())
                 || (sourceQuery.isReadAllQuery() && shouldUseBatchReading()))) {

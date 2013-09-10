@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2011, 2012 Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2011, 2013 Oracle and/or its affiliates. All rights reserved.
  * This program and the accompanying materials are made available under the
  * terms of the Eclipse Public License v1.0 and Eclipse Distribution License v. 1.0
  * which accompanies this distribution.
@@ -13,11 +13,10 @@
 package org.eclipse.persistence.oxm.record;
 
 import java.io.IOException;
+import java.io.OutputStream;
 import java.io.Writer;
 
-import org.eclipse.persistence.exceptions.JAXBException;
 import org.eclipse.persistence.exceptions.XMLMarshalException;
-import org.eclipse.persistence.internal.helper.Helper;
 import org.eclipse.persistence.internal.oxm.Constants;
 import org.eclipse.persistence.internal.oxm.NamespaceResolver;
 import org.eclipse.persistence.internal.oxm.XPathFragment;
@@ -51,17 +50,24 @@ import org.xml.sax.SAXException;
 public class JSONFormattedWriterRecord extends JSONWriterRecord {
 
     private String tab;
-    private int numberOfTabs;
-    private boolean complexType;
+    private int numberOfTabs;    
     private boolean isLastEventText;
-
+    
     public JSONFormattedWriterRecord() {
-        numberOfTabs = 0;
-        complexType = true;
-        isLastEventText = false;
-        space = " ";
+        numberOfTabs = 0;        
+        isLastEventText = false;    
     }
     
+    public JSONFormattedWriterRecord(OutputStream outputStream){
+        this();
+        this.writer = new OutputStreamOutput(outputStream);
+    }
+    
+    public JSONFormattedWriterRecord(OutputStream outputStream, String callbackName){
+        this(outputStream);
+        setCallbackName(callbackName);
+    }
+
     public JSONFormattedWriterRecord(Writer writer){
     	this();
     	setWriter(writer);
@@ -95,7 +101,7 @@ public class JSONFormattedWriterRecord extends JSONWriterRecord {
 
     @Override
     protected void closeComplex() throws IOException {
-        writer.write(Helper.cr());
+        writer.writeCR();
         for (int x = 0; x < numberOfTabs; x++) {
             writeValue(tab(), false);            
         }
@@ -107,65 +113,54 @@ public class JSONFormattedWriterRecord extends JSONWriterRecord {
      */
     public void openStartElement(XPathFragment xPathFragment, NamespaceResolver namespaceResolver) {
         try {
-        	Level newLevel = null;
-            Level position = null;
-            if(levels.isEmpty()) {
-            	newLevel = new Level(true, true);
-                levels.push(newLevel);
+            if(level.isFirst()) {
+                level.setFirst(false);
             } else {
-                position = levels.peek();
-                newLevel = new Level(true, true);
-                levels.push(newLevel);
-                if(position.isFirst()) {
-                    position.setFirst(false);
-                } else {
-                    writer.write(',');
-                }
+                writer.write(',');                    
             }
             if(xPathFragment.nameIsText()){
-               if(position != null && position.isCollection() && position.isEmptyCollection()) {
-            	    if(!charactersAllowed){
-              		     throw JAXBException.jsonValuePropertyRequired("[");   
-              	    }
+                if(level.isCollection() && level.isEmptyCollection()) {           	    
                     writer.write('[');
                     writer.write(' ');
-                    position.setEmptyCollection(false);
-                    position.setNeedToOpenComplex(false);
-                    numberOfTabs++;
+                    level.setEmptyCollection(false);
+                    level.setNeedToOpenComplex(false);
+                    level = new Level(true, true, level);
+                    numberOfTabs++;                    
                     return;
                 }
             }
-
-            this.addPositionalNodes(xPathFragment, namespaceResolver);
-                if(position.isNeedToOpenComplex()){
-                    writer.write('{');
-                    position.setNeedToOpenComplex(false);
-                    position.setNeedToCloseComplex(true);
-                }
+            
+            if(level.isNeedToOpenComplex()){
+                writer.write('{');
+                level.setNeedToOpenComplex(false);
+                level.setNeedToCloseComplex(true);
+            }
             if (!isLastEventText) {
-                if(position.isCollection() && !position.isEmptyCollection()) {
+                if(level.isCollection() && !level.isEmptyCollection()) {
                     writer.write(' ');
                 } else {
-                    writer.write(Helper.cr());
+                    writer.writeCR();
                     for (int x = 0; x < numberOfTabs; x++) {
                         writeValue(tab(), false);
                     }
                 }
             }
             
-            //write the key unless this is a a non-empty collection
-            if(!(position.isCollection() && !position.isEmptyCollection())){
+          //write the key unless this is a a non-empty collection
+            if(!(level.isCollection() && !level.isEmptyCollection())){
      		   super.writeKey(xPathFragment);
-     		   if(position.isCollection() && position.isEmptyCollection()){
-           		   writer.write('[');
-           		   writer.write(' ');
-           		  position.setEmptyCollection(false);         		
-         	   }
-     	   }
-            
+                //if it is the first thing in the collection also add the [
+                if(level.isCollection() && level.isEmptyCollection()){
+                     writer.write('[');
+                     writer.write(' ');
+                     level.setEmptyCollection(false);                   
+                }
+            }
+         
             numberOfTabs++;
             isLastEventText = false;
             charactersAllowed = true;
+            level = new Level(true, true, level);
         } catch (IOException e) {
             throw XMLMarshalException.marshalException(e);
         }
@@ -175,22 +170,19 @@ public class JSONFormattedWriterRecord extends JSONWriterRecord {
      * INTERNAL:
      */
     public void element(XPathFragment frag) {
-        try {
-            isLastEventText = false;
-            if (isStartElementOpen) {
-                writer.write('>');
-                isStartElementOpen = false;
-            }
-            writer.write(Helper.cr());
-            for (int x = 0; x < numberOfTabs; x++) {
-                writeValue(tab(), false);
-            }
-            super.element(frag);
-        } catch (IOException e) {
-            throw XMLMarshalException.marshalException(e);
-        }
+    } 
+    
+    protected void writeListSeparator() throws IOException{
+        super.writeListSeparator();
+        writer.write(' ');
     }
-
+    
+    protected void writeSeparator() throws IOException{
+    	writer.write(' ');
+        writer.write(Constants.COLON);
+        writer.write(' ');
+    }
+    
     /**
      * INTERNAL:
      */
@@ -202,7 +194,7 @@ public class JSONFormattedWriterRecord extends JSONWriterRecord {
 
     @Override
     public void startCollection() {
-        if(levels.isEmpty()) {
+        if(null == level) {
             try {
                 super.startCollection();
                 writer.write(' ');
@@ -234,7 +226,6 @@ public class JSONFormattedWriterRecord extends JSONWriterRecord {
     public void characters(String value) {
         super.characters(value);
         isLastEventText = true;
-        complexType = false;
     }
 
     /**
@@ -279,7 +270,7 @@ public class JSONFormattedWriterRecord extends JSONWriterRecord {
 
     @Override
     protected void writeKey(XPathFragment xPathFragment) throws IOException {
-        writer.write(Helper.cr());
+        writer.writeCR();
         for (int x = 0; x < numberOfTabs; x++) {
             writeValue(tab(), false);
         }
@@ -305,20 +296,7 @@ public class JSONFormattedWriterRecord extends JSONWriterRecord {
         	JSONFormattedWriterRecord.this.endElement(xPathFragment, namespaceResolver);        
         }
 
-    // --------------------- LEXICALHANDLER METHODS --------------------- //
-    public void comment(char[] ch, int start, int length) throws SAXException {
-            try {
-                if (isStartElementOpen) {
-                    writer.write('>');
-                    writer.write(Helper.cr());
-                    isStartElementOpen = false;
-                }
-                writeComment(ch, start, length);
-                complexType = false;
-            } catch (IOException e) {
-                throw XMLMarshalException.marshalException(e);
-            }
-        }
+
     }
 
 }

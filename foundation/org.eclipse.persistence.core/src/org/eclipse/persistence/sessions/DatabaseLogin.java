@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 1998, 2012 Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1998, 2013 Oracle and/or its affiliates. All rights reserved.
  * This program and the accompanying materials are made available under the 
  * terms of the Eclipse Public License v1.0 and Eclipse Distribution License v. 1.0 
  * which accompanies this distribution. 
@@ -1839,9 +1839,16 @@ public class DatabaseLogin extends DatasourceLogin {
      * INTERNAL:
      * Validate if set, or no timeout.
      */
-    public boolean isConnectionHealthValidatedOnError(DatabaseCall call) {
+    public boolean isConnectionHealthValidatedOnError(DatabaseCall call, DatabaseAccessor accessor) {
         if (this.connectionHealthValidatedOnError == null) {
-            return (getPingSQL() == null) || (call == null) || (call.getQueryTimeout() == 0);
+            if (getPingSQL() != null){
+                if (call == null || call.getQueryTimeout() == 0 || accessor.isPossibleFailure()){
+                    return true;
+                }else{
+                    accessor.setPossibleFailure(true);
+                }
+            }
+            return false;
         }
         return this.connectionHealthValidatedOnError;
     }
@@ -1859,7 +1866,7 @@ public class DatabaseLogin extends DatasourceLogin {
      */
     public boolean isConnectionHealthValidatedOnError() {
         if (this.connectionHealthValidatedOnError == null) {
-            return (getPingSQL() == null);
+            return (getPingSQL() != null);
         }
         return this.connectionHealthValidatedOnError;
     }

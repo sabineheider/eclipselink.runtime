@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2009 Oracle. All rights reserved.
+ * Copyright (c) 2009, 2013 Oracle and/or its affiliates. All rights reserved.
  * This program and the accompanying materials are made available under the 
  * terms of the Eclipse Public License v1.0 and Eclipse Distribution License v. 1.0 
  * which accompanies this distribution. 
@@ -142,5 +142,11 @@ public class CacheAuditor extends CacheInterceptor {
         // TODO Auto-generated method stub
         return null;
     }
+
+    @Override
+    public Map<Object, CacheKey> getAllCacheKeysFromIdentityMapWithEntityPK(Object[] pkList, ClassDescriptor descriptor, AbstractSession session) {
+        // TODO Auto-generated method stub
+        return null;
+}
 }
 

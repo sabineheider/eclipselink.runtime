@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 1998, 2012 Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1998, 2013 Oracle and/or its affiliates. All rights reserved.
  * This program and the accompanying materials are made available under the 
  * terms of the Eclipse Public License v1.0 and Eclipse Distribution License v. 1.0 
  * which accompanies this distribution. 
@@ -25,6 +25,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import org.eclipse.persistence.internal.core.helper.CoreTable;
 import org.eclipse.persistence.internal.databaseaccess.*;
 import org.eclipse.persistence.internal.expressions.ExpressionSQLPrinter;
 import org.eclipse.persistence.tools.schemaframework.ForeignKeyConstraint;
@@ -39,7 +40,7 @@ import org.eclipse.persistence.tools.schemaframework.IndexDefinition;
  *    </ul>
  *@see DatabaseField
  */
-public class DatabaseTable implements Cloneable, Serializable {
+public class DatabaseTable implements CoreTable, Cloneable, Serializable {
     protected String name;
     protected String tableQualifier;
     protected String qualifiedName;
@@ -156,15 +157,18 @@ public class DatabaseTable implements Cloneable, Serializable {
         if (this == table) {
             return true;
         }
-        if (DatabasePlatform.shouldIgnoreCaseOnFieldComparisons()) {
-            if (getName().equalsIgnoreCase(table.getName())) {
-                if ((getTableQualifier().length() == 0) || (table.getTableQualifier().length() == 0) || (getTableQualifier().equalsIgnoreCase(table.getTableQualifier()))) {
+        if (table == null) {
+            return false;
+        }
+        if (DatabasePlatform.shouldIgnoreCaseOnFieldComparisons) {
+            if (this.name.equalsIgnoreCase(table.name)) {
+                if ((this.tableQualifier.length() == 0) || (table.tableQualifier.length() == 0) || (this.tableQualifier.equalsIgnoreCase(table.tableQualifier))) {
                     return true;
                 }
             }
         } else {
-            if (getName().equals(table.getName())) {
-                if ((getTableQualifier().length() == 0) || (table.getTableQualifier().length() == 0) || (getTableQualifier().equals(table.getTableQualifier()))) {
+            if (this.name.equals(table.name)) {
+                if ((this.tableQualifier.length() == 0) || (table.tableQualifier.length() == 0) || (this.tableQualifier.equals(table.tableQualifier))) {
                     return true;
                 }
             }

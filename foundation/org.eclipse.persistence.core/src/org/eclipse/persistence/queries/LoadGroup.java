@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2011, 2012 Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2011, 2013 Oracle and/or its affiliates. All rights reserved.
  * This program and the accompanying materials are made available under the 
  * terms of the Eclipse Public License v1.0 and Eclipse Distribution License v. 1.0 
  * which accompanies this distribution. 
@@ -11,6 +11,8 @@
  *     ailitchev - Bug 244124 - New support for loading 
  ******************************************************************************/  
 package org.eclipse.persistence.queries;
+
+import org.eclipse.persistence.core.queries.CoreAttributeGroup;
 
 /**
  * <b>Purpose</b>: Used to load specified relationship attributes and nested
@@ -40,7 +42,7 @@ public class LoadGroup extends AttributeGroup {
     }
 
     @Override
-    protected LoadGroup newGroup(String name, AttributeGroup parent) {
+    protected LoadGroup newGroup(String name, CoreAttributeGroup parent) {
         return new LoadGroup(name);
     }
     
@@ -63,8 +65,8 @@ public class LoadGroup extends AttributeGroup {
     }
 
     @Override
-    public void addAttribute(String attributeNameOrPath, AttributeGroup group) {
-        super.addAttribute(attributeNameOrPath, (group != null ? group.toLoadGroup() : null));
+    public void addAttribute(String attributeNameOrPath, CoreAttributeGroup group) {
+        super.addAttribute(attributeNameOrPath, (group != null ? ((AttributeGroup)group).toLoadGroup() : null));
     }
 
     public void addAttribute(String attributeNameOrPath, LoadGroup group) {

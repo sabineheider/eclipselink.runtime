@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 1998, 2012 Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1998, 2013 Oracle and/or its affiliates. All rights reserved.
  * This program and the accompanying materials are made available under the 
  * terms of the Eclipse Public License v1.0 and Eclipse Distribution License v. 1.0 
  * which accompanies this distribution. 
@@ -234,7 +234,7 @@ public abstract class EISInteraction extends DatasourceCall {
                 // ideally this would be a property on the row.
                 String recordName = elementName;
                 if (valuesRow.size() > 0) {
-                    recordName = ((DatabaseField)valuesRow.getFields().get(0)).getTableName();
+                    recordName = valuesRow.getFields().get(0).getTableName();
                 }
                 MappedRecord record = accessor.getRecordFactory().createMappedRecord(recordName);
                 for (Iterator keysIterator = valuesRow.getFields().iterator();

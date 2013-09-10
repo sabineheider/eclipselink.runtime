@@ -153,8 +153,6 @@
     <property name="version.string"      value="${release.version}.${version.qualifier}"/>
     <property name="release.designation" value="EclipseLink DeveloperBuild"/>
 
-    <property name="modelgen.processor.jar" value="${eclipselink.modelgen.processor.prefix}_${version.string}.jar"/>
-
     <path id="javadoc.path">
         <pathelement path="${eclipselink.jar}"/>
         <pathelement path="${eclipselink.sdo.plugins}/${commonj.sdo.jar}"/>
@@ -245,26 +243,22 @@
                 <available file="${eclipse.install.dir}/plugins" type="dir"/>
             </and>
         </condition>
-        <!-- Test to see if local repo should be generated: if not exist and if can -->
+        <!-- Test to see if local repo should be generated: if local set and if can -->
         <condition property="generate.compdeps">
-            <and>
-                <not>
-                    <available file="${eclipselink.compdeps}/p2repo" type="dir"/>
-                </not>
                 <equals arg1="${local.compdeps}" arg2="true"/>
-            </and>
         </condition>
         <echo message="Compdeps Settings:"/>
         <echo message="    Whether to use a local compdeps p2 repo:"/>
         <echo message="        local.compdeps: '${local.compdeps}'"/>
         <echo message="    Whether a local p2epo needs generating (only true if using local and repo not found):"/>
         <echo message="        generate.compdeps: '${generate.compdeps}'"/>
+        <delete dir="${eclipselink.compdeps}/p2repo" failonerror="false"/>
     </target>
 
     <!-- Cleans all build generated files. -->
     <target name="clean" depends="clean-runtime,clean-testing" description="Clean the build"/>
 
-    <target name="clean-runtime" depends="clean-runtime-checkedin, clean-runtime-built" description="Clean the runtime projects"/>
+    <target name="clean-runtime" depends="generate-local-compdeps, clean-runtime-checkedin, clean-runtime-built" description="Clean the runtime projects"/>
     <!--   This allows testing to call a specific target that won't remove the default
            (or dropped-in copy of) eclipselink and the persistence jar, while still
            allowing unchanged operation by developers and users to clean all built artifacts. -->
@@ -587,6 +581,13 @@
                 <attribute name="Premain-Class"          value="${eclipselink.premain.class}"/>
                 <attribute name="Main-Class"             value="${eclipselink.main.class}"/>
             </manifest>
+            <!-- Include license files first to ensure the right ones are included -->
+            <fileset dir=".">
+                <include name="${about-file}"/>
+                <include name="${readme-file}"/>
+                <include name="${license-files}"/>
+            </fileset>
+            <!-- Include all non-duplicate content from bOSGi bundles -->
             <zipgroupfileset dir="${eclipselink.plugins}">
                 <include name="org.eclipse.persistence*${version.string}.jar"/>
                 <include name="org.eclipse.persistence.asm*.jar"/>
@@ -594,16 +595,26 @@
                 <include name="org.eclipse.persistence.oracle_*.jar"/>
                 <exclude name="*.jpa.jpql*.jar"/>
                 <exclude name="*source*.jar"/>
+                <exclude name="*modelgen*.jar"/>
                 <exclude name="*equinox*.jar"/>
                 <exclude name="*builder*.jar"/>
                 <exclude name="*jpars*.jar"/>
                 <exclude name="*nosql*.jar"/>
+                <exclude name="*extension*.jar"/>
             </zipgroupfileset>
             <!-- Include hermes runtime Only -->
             <fileset dir="${build.dir}/hermes/${classes.dir}">
                 <include name="**/*"/>
                 <exclude name="**/tools*/**"/>
             </fileset>
+            <!-- Include Moxy Dynamicxjc classes -->
+            <fileset
+                dir="${eclipselink.moxy.dynamicxjc}/${classes.dir}"
+                includes="**/*.class,"/>
+            <!-- Include necessary JAXB classes -->
+            <fileset
+                dir="${eclipselink.util.jaxb}/${classes.dir}"
+                includes="**/*.class,"/>
             <!-- JPA 2.0/2.1 concurrent dev solution: New classes from javax.persistence 2.0 & 2.1 -->
             <fileset
                 dir="${build.dir}/javax.persistence/${classes.dir}"
@@ -710,6 +721,7 @@
                     javax/persistence/StoredProcedureQuery.class,
                     javax/persistence/SynchronizationType.class,
                     javax/persistence/AttributeConverter.class,
+                    javax/persistence/ConstraintMode.class,
                     javax/persistence/Convert.class,
                     javax/persistence/Converter.class,
                     javax/persistence/Converts.class,
@@ -727,12 +739,6 @@
                     javax/persistence/criteria/CriteriaUpdate.class,
                     javax/persistence/criteria/CommonAbstractCriteria.class
             "/>
-            <fileset
-                dir="${eclipselink.moxy.dynamicxjc}/${classes.dir}"
-                includes="**/*.class,"/>
-            <fileset
-                dir="${eclipselink.util.jaxb}/${classes.dir}"
-                includes="**/*.class,"/>
         </jar>
     </target>
 
@@ -756,9 +762,15 @@
     <target name="package-eclipselink-bundles">
         <delete file="${eclipselink.plugins.install.prefix}${eclipselink.zip.suffix}" failonerror="false"/>
         <zip destfile="${eclipselink.plugins.install.prefix}${eclipselink.zip.suffix}">
+            <!-- Include license files first to ensure the right ones are included -->
+            <zipfileset dir=".">
+                <include name="${about-file}"/>
+                <include name="${readme-file}"/>
+                <include name="${license-files}"/>
+            </zipfileset>
             <zipfileset dir="${eclipselink.plugins}">
                 <include name="**.jar"/>
-                <exclude name="javax.persistence*1.0.0.jar"/>
+                <exclude name="javax.persistence*.jar"/>
                 <exclude name="*nosql*"/>
                 <exclude name="osgi.cmpn_4.1.0.jar"/>
                 <exclude name="javax.ejb_3.0.0.v200906010428.jar"/>
@@ -766,12 +778,7 @@
                 <exclude name="com.sun*.jar"/>
                 <exclude name="*dynamic*.jar"/>
             </zipfileset>
-            <zipfileset dir=".">
-                <include name="${about-file}"/>
-                <include name="${readme-file}"/>
-                <include name="${license-files}"/>
-            </zipfileset>
-            <zipfileset dir="${eclipselink.jpa.plugins}/" includes="javax.persistence*.jar" excludes="*preview*.jar"/>
+            <zipfileset dir="${eclipselink.jpa.plugins}/" includes="javax.persistence*_2.1*.jar" excludes="*preview*.jar"/>
             <zipfileset dir="${eclipselink.sdo.plugins}/" includes="commonj.sdo*2.1.1*.jar"/>
             <zipfileset dir="${eclipselink.util.plugins}/">
                 <include name="javax.wsdl*.jar"/>
@@ -797,10 +804,17 @@
                 <attribute name="Implementation-Version" value="${version.string}"/>
                 <attribute name="Release-Designation"    value="${release.designation}"/>
             </manifest>
+            <!-- Include license files first to ensure the right ones are included -->
+            <zipfileset dir=".">
+                <include name="${about-file}"/>
+                <include name="${readme-file}"/>
+                <include name="${license-files}"/>
+            </zipfileset>
             <zipgroupfileset dir="${eclipselink.plugins}">
                 <include name="${asm}.source_${version.string}.jar"/>
                 <include name="${antlr}.source_${version.string}.jar"/>
                 <include name="org.eclipse.persistence*.source*.jar"/>
+                <include name="eclipselink-moxy-dynamicxjc.source*.jar"/>
                 <exclude name="*equinox*.jar"/>
                 <exclude name="*builder*.jar"/>
                 <exclude name="*jpars*.jar"/>
@@ -1190,7 +1204,6 @@
     <!-- Packages the installer zip. -->
     <target name="package-installer-zip" description="build EclipseLink installer zip - includes utils and javadocs">
         <delete file="${eclipselink.install.prefix}${eclipselink.zip.suffix}" failonerror="false"/>
-        <copy file="${eclipselink.plugins}/javax.persistence_unsigned_for_testing_1.0.0.jar" tofile="${build.dir}/javax.persistence_1.0.0.jar"/>
         <copy file="${eclipselink.plugins}/org.eclipse.persistence.dbws.builder_${version.string}.jar" tofile="${build.dir}/${dbws-util.jar}"/>
         <unzip src="${eclipselink.jpa.plugins}/${persistence21.src.jar}" dest="${build.dir}/jpa21/src"/>
         <zip destfile="${eclipselink.install.prefix}${eclipselink.zip.suffix}">
@@ -1235,12 +1248,9 @@
                 <include name="readme.html"/>
             </zipfileset>
             <!-- modelgen processor jar -->
-            <zipfileset dir="${eclipselink.plugins}/" includes="${modelgen.processor.jar}" prefix="eclipselink/jlib/jpa"/>
-            <!-- jpa persistence 1.0 jar -->
-            <!-- zipfileset dir="${eclipselink.plugins}/" includes="${persistence10.jar}" prefix="eclipselink/jlib/jpa"/ -->
-            <zipfileset dir="${build.dir}/" includes="javax.persistence_1.0.0.jar" prefix="eclipselink/jlib/jpa"/>
-            <!-- jpa persistence 2.x jars -->
-            <zipfileset dir="${eclipselink.jpa.plugins}/" includes="javax.persistence_2.*.jar" excludes="*preview*" prefix="eclipselink/jlib/jpa"/>
+            <zipfileset dir="${eclipselink.plugins}/" includes="${eclipselink.modelgen.prefix}*_${version.string}.jar" prefix="eclipselink/jlib/jpa"/>
+            <!-- jpa persistence 2.1 jars -->
+            <zipfileset dir="${eclipselink.jpa.plugins}/" includes="javax.persistence*2.1*.jar" prefix="eclipselink/jlib/jpa"/>
             <!-- JPA RS jar -->
             <zipfileset dir="${eclipselink.plugins}/" includes="org.eclipse.persistence.jpars*.jar" prefix="eclipselink/jlib/jpa"/>
             <!-- moxy jar's and zips -->
@@ -1275,14 +1285,15 @@
     <target name="package-eclipselink-nosql-install">
         <delete file="${eclipselink.nosql.install.prefix}${eclipselink.zip.suffix}" failonerror="false"/>
         <zip destfile="${eclipselink.nosql.install.prefix}${eclipselink.zip.suffix}">
-            <zipfileset dir="${eclipselink.plugins}">
-                <include name="*nosql*"/>
-            </zipfileset>
             <zipfileset dir=".">
                 <include name="${about-file}"/>
                 <include name="${readme-file}"/>
                 <include name="${license-files}"/>
                 <include name="${nosql.javadoc.install.prefix}${eclipselink.zip.suffix}"/>
+            </zipfileset>
+            <zipfileset dir="${eclipselink.plugins}">
+                <include name="*nosql*"/>
+                <include name="javax.resource*.jar"/>
             </zipfileset>
         </zip>
     </target>

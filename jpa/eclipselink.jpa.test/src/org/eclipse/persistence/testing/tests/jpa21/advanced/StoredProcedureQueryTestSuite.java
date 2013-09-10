@@ -26,6 +26,7 @@ import junit.framework.TestSuite;
 import junit.framework.Test;
 
 import org.eclipse.persistence.internal.helper.DatabaseField;
+import org.eclipse.persistence.internal.jpa.StoredProcedureQueryImpl;
 import org.eclipse.persistence.jpa.JpaEntityManager;
 
 import org.eclipse.persistence.queries.ResultSetMappingQuery;
@@ -56,6 +57,11 @@ public class StoredProcedureQueryTestSuite extends JUnitTestCase {
         setPuName("MulitPU-1");
     }
     
+    @Override
+    public String getPersistenceUnitName() {
+       return "MulitPU-1";
+    }
+    
     public static Test suite() {
         TestSuite suite = new TestSuite();
         suite.setName("StoredProcedureQueryTestSuite");
@@ -71,8 +77,13 @@ public class StoredProcedureQueryTestSuite extends JUnitTestCase {
         suite.addTest(new StoredProcedureQueryTestSuite("testQueryWithNamedFieldResult"));
         suite.addTest(new StoredProcedureQueryTestSuite("testQueryWithNumberedFieldResult"));
         suite.addTest(new StoredProcedureQueryTestSuite("testQueryWithResultClass"));
+        suite.addTest(new StoredProcedureQueryTestSuite("testQueryWithOutParam"));
         suite.addTest(new StoredProcedureQueryTestSuite("testStoredProcedureParameterAPI"));
-        suite.addTest(new StoredProcedureQueryTestSuite("testStoredProcedureQuerySysCursor"));
+        suite.addTest(new StoredProcedureQueryTestSuite("testStoredProcedureQuerySysCursor_Named"));
+        suite.addTest(new StoredProcedureQueryTestSuite("testStoredProcedureQuerySysCursor_Positional"));
+        suite.addTest(new StoredProcedureQueryTestSuite("testStoredProcedureQuerySysCursor2"));
+        suite.addTest(new StoredProcedureQueryTestSuite("testStoredProcedureQueryExceptionWrapping1"));
+        suite.addTest(new StoredProcedureQueryTestSuite("testStoredProcedureQueryExceptionWrapping2"));
 
         // Add the named Annotation query tests.
         suite.addTest(NamedStoredProcedureQueryTestSuite.suite());
@@ -303,7 +314,7 @@ public class StoredProcedureQueryTestSuite extends JUnitTestCase {
                 
                 boolean result = query.execute();
                 
-                assertTrue("Parameter list was empty, expecting 2.", query.getParameters().size() == 2);
+                assertTrue("Parameter list size was incorrect, actual: " + query.getParameters().size() + ", expecting 3.", query.getParameters().size() == 3);
                 
                 Object parameterValue = query.getParameterValue("new_p_code_v");
                 assertTrue("The IN parameter value was not preserved, expected: " + postalCodeCorrection + ", actual: " + parameterValue, parameterValue.equals(postalCodeCorrection));
@@ -389,15 +400,9 @@ public class StoredProcedureQueryTestSuite extends JUnitTestCase {
                 assertTrue("The postal code was not updated for address 2.", a2.getPostalCode().equals(postalCodeCorrection));
                 Address a3 = em.find(Address.class, address3.getId());
                 assertTrue("The postal code was not updated for address 3.", a3.getPostalCode().equals(postalCodeCorrection));
-            } catch (RuntimeException e) {
-                if (isTransactionActive(em)){
-                    rollbackTransaction(em);
-                }
-                
-                throw e;
             } finally {
                 // The open statement/connection will be closed here.
-                closeEntityManager(em);
+                closeEntityManagerAndTransaction(em);
             }
         }
     }
@@ -552,15 +557,9 @@ public class StoredProcedureQueryTestSuite extends JUnitTestCase {
                 assertTrue("The postal code was not updated for address 2.", a2.getPostalCode().equals(postalCodeCorrection));
                 Address a3 = em.find(Address.class, address3.getId());
                 assertTrue("The postal code was not updated for address 3.", a3.getPostalCode().equals(postalCodeCorrection));
-            } catch (RuntimeException e) {
-                if (isTransactionActive(em)){
-                    rollbackTransaction(em);
-                }
-                
-                throw e;
             } finally {
                 // The open statement/connection will be closed here.
-                closeEntityManager(em);
+                closeEntityManagerAndTransaction(em);
             }
         }
     }
@@ -575,6 +574,17 @@ public class StoredProcedureQueryTestSuite extends JUnitTestCase {
             try {
                 String postalCodeTypo = "R3 1B9";
                 String postalCodeCorrection = "R3B 1B9";
+                
+                StoredProcedureQuery query = em.createStoredProcedureQuery("Update_Address_Postal_Code");
+                query.registerStoredProcedureParameter("new_p_code_v", String.class, ParameterMode.IN);
+                query.registerStoredProcedureParameter("old_p_code_v", String.class, ParameterMode.IN);
+                
+                try {
+                    query.setParameter("new_p_code_v", postalCodeCorrection).setParameter("old_p_code_v", postalCodeTypo).executeUpdate();
+                    fail("TransactionRequiredException not caught");
+                } catch (TransactionRequiredException e) {
+                   // ignore since expected exception.
+                }
                 
                 beginTransaction(em);
                 
@@ -594,26 +604,13 @@ public class StoredProcedureQueryTestSuite extends JUnitTestCase {
                 address2.setCountry("Canada");
                 em.persist(address2);
                 
-                commitTransaction(em);
+                em.flush();
                 
                 // Clear the cache
                 em.clear();
                 clearCache();
                 
-                StoredProcedureQuery query = em.createStoredProcedureQuery("Update_Address_Postal_Code");
-                query.registerStoredProcedureParameter("new_p_code_v", String.class, ParameterMode.IN);
-                query.registerStoredProcedureParameter("old_p_code_v", String.class, ParameterMode.IN);
-                
-                try {
-                    query.setParameter("new_p_code_v", postalCodeCorrection).setParameter("old_p_code_v", postalCodeTypo).executeUpdate();
-                    fail("TransactionRequiredException not caught");
-                } catch (TransactionRequiredException e) {
-                   // ignore since expected exception.
-                }
-                
-                beginTransaction(em);
                 int results = query.setParameter("new_p_code_v", postalCodeCorrection).setParameter("old_p_code_v", postalCodeTypo).executeUpdate();
-                commitTransaction(em);
                 
                 assertTrue("Update count incorrect.", results == 2);
                 
@@ -622,14 +619,8 @@ public class StoredProcedureQueryTestSuite extends JUnitTestCase {
                 assertTrue("The postal code was not updated for address 1.", a1.getPostalCode().equals(postalCodeCorrection));
                 Address a2 = em.find(Address.class, address2.getId());
                 assertTrue("The postal code was not updated for address 2.", a2.getPostalCode().equals(postalCodeCorrection));
-            } catch (RuntimeException e) {
-                if (isTransactionActive(em)){
-                    rollbackTransaction(em);
-                }
-                
-                throw e;
             } finally {
-                closeEntityManager(em);
+                closeEntityManagerAndTransaction(em);
             }
         }
     }
@@ -651,7 +642,7 @@ public class StoredProcedureQueryTestSuite extends JUnitTestCase {
                 address1.setStreet("7424 118 Avenue");
                 address1.setCountry("Canada");
                 em.persist(address1);
-                commitTransaction(em);
+                em.flush();
                 
                 // Clear the cache
                 em.clear();
@@ -670,14 +661,8 @@ public class StoredProcedureQueryTestSuite extends JUnitTestCase {
                 assertTrue("Country content incorrect", addressContent[3].equals(address1.getCountry()));
                 assertTrue("Province content incorrect", addressContent[4].equals(address1.getProvince()));
                 assertTrue("Postal Code content incorrect", addressContent[5].equals(address1.getPostalCode()));
-            } catch (RuntimeException e) {
-                if (isTransactionActive(em)){
-                    rollbackTransaction(em);
-                }
-                
-                throw e;
             } finally {
-                closeEntityManager(em);
+                closeEntityManagerAndTransaction(em);
             }
         }
     }
@@ -793,27 +778,21 @@ public class StoredProcedureQueryTestSuite extends JUnitTestCase {
                 address.setStreet("510 Main Street");
                 address.setCountry("Canada");
                 em.persist(address);
-                commitTransaction(em);
+                em.flush();
                 
                 // Clear the cache
                 em.clear();
                 clearCache();
                 
                 StoredProcedureQuery query = em.createStoredProcedureQuery("Read_Address_Mapped_Named", "address-column-result-map");
-                query.registerStoredProcedureParameter("address_id_v", String.class, ParameterMode.IN);
+                query.registerStoredProcedureParameter("address_id_v", Integer.class, ParameterMode.IN);
                 
                 Object[] values = (Object[]) query.setParameter("address_id_v", address.getId()).getSingleResult();
                 assertTrue("Address data not found or returned using stored procedure", ((values != null) && (values.length == 6)));
                 assertNotNull("No results returned from store procedure call", values[1]);
                 assertTrue("Address not found using stored procedure", address.getStreet().equals(values[1]));
-            } catch (RuntimeException e) {
-                if (isTransactionActive(em)){
-                    rollbackTransaction(em);
-                }
-                
-                throw e;
             } finally {
-                closeEntityManager(em);
+                closeEntityManagerAndTransaction(em);
             }
         }
     }
@@ -836,7 +815,7 @@ public class StoredProcedureQueryTestSuite extends JUnitTestCase {
                 address1.setStreet("321 Main");
                 address1.setCountry("Canada");
                 em.persist(address1);
-                commitTransaction(em);
+                em.flush();
                 
                 // Clear the cache
                 em.clear();
@@ -855,14 +834,8 @@ public class StoredProcedureQueryTestSuite extends JUnitTestCase {
                 assertTrue("Address didn't build correctly using stored procedure", (address1.getCountry().equals(address2.getCountry())));
                 assertTrue("Address didn't build correctly using stored procedure", (address1.getProvince().equals(address2.getProvince())));
                 assertTrue("Address didn't build correctly using stored procedure", (address1.getPostalCode().equals(address2.getPostalCode())));
-            } catch (RuntimeException e) {
-                if (isTransactionActive(em)){
-                    rollbackTransaction(em);
-                }
-                
-                throw e;
             } finally {
-                closeEntityManager(em);
+                closeEntityManagerAndTransaction(em);
             }
         }
     } 
@@ -884,7 +857,7 @@ public class StoredProcedureQueryTestSuite extends JUnitTestCase {
                 address1.setStreet("785 Lampson Street");
                 address1.setCountry("Canada");
                 em.persist(address1);
-                commitTransaction(em);
+                em.flush();
                 
                 // Clear the cache
                 em.clear();
@@ -900,14 +873,44 @@ public class StoredProcedureQueryTestSuite extends JUnitTestCase {
                 assertTrue("Address didn't build correctly using stored procedure", (address1.getCountry().equals(address2.getCountry())));
                 assertTrue("Address didn't build correctly using stored procedure", (address1.getProvince().equals(address2.getProvince())));
                 assertTrue("Address didn't build correctly using stored procedure", (address1.getPostalCode().equals(address2.getPostalCode())));
-            } catch (RuntimeException e) {
-                if (isTransactionActive(em)){
-                    rollbackTransaction(em);
-                }
-                
-                throw e;
             } finally {
-                closeEntityManager(em);
+                closeEntityManagerAndTransaction(em);
+            }
+        }
+    }
+    
+    /**
+     * Tests a StoredProcedureQuery using a class though EM API 
+     */
+    public void testQueryWithOutParam() {
+        if (supportsStoredProcedures() && getPlatform().isMySQL()) {
+            EntityManager em = createEntityManager();
+            
+            try {
+                beginTransaction(em);
+                
+                Address address = new Address();
+                address.setCity("TestCity");
+                address.setPostalCode("V4U 1P2");
+                address.setProvince("Nunavut");
+                address.setStreet("269 Lust Lane");
+                address.setCountry("Canada");
+                em.persist(address);
+                em.flush();
+                
+                // Clear the cache
+                em.clear();
+                clearCache();
+    
+                StoredProcedureQuery query = em.createStoredProcedureQuery("Read_Address_City");
+                query.registerStoredProcedureParameter("address_id_v", Integer.class, ParameterMode.IN);
+                query.registerStoredProcedureParameter("city_v", String.class, ParameterMode.OUT);
+                
+                boolean result = query.setParameter("address_id_v", address.getId()).execute();
+                String city = (String) query.getOutputParameterValue("city_v");
+                assertTrue("Incorrect city was returned.", (address.getCity().equals(city)));
+            } finally {
+                closeEntityManagerAndTransaction(em);
             }
         }
     }
@@ -946,35 +949,149 @@ public class StoredProcedureQueryTestSuite extends JUnitTestCase {
     }
     
     /**
-     * Tests a StoredProcedureQuery using a system cursor. 
+     * Tests a StoredProcedureQuery using a system cursor. Also tests 
+     * getParameters call BEFORE query execution. 
      */
-    public void testStoredProcedureQuerySysCursor() {
+    public void testStoredProcedureQuerySysCursor_Named() {
         if (supportsStoredProcedures() && getPlatform().isOracle() ) {
             EntityManager em = createEntityManager();
             
             try {
                 StoredProcedureQuery query = em.createStoredProcedureQuery("Read_Using_Sys_Cursor", Employee.class);
+                query.registerStoredProcedureParameter("f_name_v", String.class, ParameterMode.IN);
                 query.registerStoredProcedureParameter("p_recordset", void.class, ParameterMode.REF_CURSOR);
                 
-                boolean execute = query.execute();
-                assertFalse("Execute should have returned false.", execute);
+                // Test the getParameters call BEFORE query execution.
+                assertTrue("The number of parameters returned was incorrect, actual: " + query.getParameters().size() + ", expected 2", query.getParameters().size() == 2);
                 
-                // TODO: investigate .. the name parameter "p_recordset" can't be looked up here, must use ordinal, why?
-                List<Employee> employees = (List<Employee>) query.getOutputParameterValue(1);
+                query.setParameter("f_name_v", "Fred");
+                
+                boolean execute = query.execute();
+                
+                assertTrue("Execute returned false.", execute);
+                
+                List<Employee> employees = (List<Employee>) query.getOutputParameterValue("p_recordset");
                 assertFalse("No employees were returned", employees.isEmpty());                
-            } catch (RuntimeException e) {
-                if (isTransactionActive(em)){
-                    rollbackTransaction(em);
-                }
-
-                throw e;
+            } finally {
+                closeEntityManagerAndTransaction(em);
+            }
+        }
+    }
+    
+    /**
+     * Tests a StoredProcedureQuery using a system cursor. Also tests 
+     * getParameters call BEFORE query execution. 
+     */
+    public void testStoredProcedureQuerySysCursor_Positional() {
+        if (supportsStoredProcedures() && getPlatform().isOracle() ) {
+            EntityManager em = createEntityManager();
+            
+            try {
+                StoredProcedureQuery query = em.createStoredProcedureQuery("Read_Using_Sys_Cursor", Employee.class);
+                query.registerStoredProcedureParameter(1, String.class, ParameterMode.IN);
+                query.registerStoredProcedureParameter(2, void.class, ParameterMode.REF_CURSOR);
+                
+                // Test the getParameters call BEFORE query execution.
+                assertTrue("The number of parameters returned was incorrect, actual: " + query.getParameters().size() + ", expected 2", query.getParameters().size() == 2);
+                
+                query.setParameter(1, "Fred");
+                
+                boolean execute = query.execute();
+                
+                assertTrue("Execute returned false.", execute);
+                
+                List<Employee> employees = (List<Employee>) query.getOutputParameterValue(2);
+                assertFalse("No employees were returned", employees.isEmpty());                
             } finally {
                 closeEntityManager(em);
             }
         }
     }
-    @Override
-    public String getPersistenceUnitName() {
-       return "MulitPU-1";
+
+    /**
+     * Tests a StoredProcedureQuery using a system cursor. Also tests 
+     * getParameters call AFTER query execution.
+     */
+    public void testStoredProcedureQuerySysCursor2() {
+        if (supportsStoredProcedures() && getPlatform().isOracle() ) {
+            EntityManager em = createEntityManager();
+            
+            try {
+                // Test stored procedure query created through API. //
+                beginTransaction(em);
+                
+                StoredProcedureQuery query = em.createStoredProcedureQuery("Read_Using_Sys_Cursor");
+                query.registerStoredProcedureParameter("f_name_v", String.class, ParameterMode.IN);
+                query.registerStoredProcedureParameter("p_recordset", void.class, ParameterMode.REF_CURSOR);
+                
+                query.setParameter("f_name_v", "Fred");
+                
+                boolean execute = query.execute();
+                
+                assertTrue("Execute returned false.", execute);
+                
+                // Test the getParameters call AFTER query execution.
+                assertTrue("The number of paramters returned was incorrect, actual: " + query.getParameters().size() + ", expected 2", query.getParameters().size() == 2);
+                
+                List<Object[]> employees = (List<Object[]>) query.getOutputParameterValue("p_recordset");
+                assertFalse("No employees were returned", employees.isEmpty());
+                
+                commitTransaction(em);
+                
+                // Test now with the named stored procedure. //
+                beginTransaction(em);
+                
+                StoredProcedureQuery query2 = em.createNamedStoredProcedureQuery("read_using_sys_cursor");
+                query2.setParameter("f_name_v", "Fred");
+                Object paramValue = query2.getParameterValue("f_name_v");
+                
+                boolean execute2 = query2.execute();
+                
+                List<Object[]> employees2 = (List<Object[]>) query2.getOutputParameterValue("p_recordset");
+                assertFalse("No employees were returned from name stored procedure query.", employees2.isEmpty());
+                
+                commitTransaction(em);
+            } finally {
+                closeEntityManagerAndTransaction(em);
+            }
+        }
+    }
+
+    /**
+     * Tests StoredProcedureQuery exception wrapping. 
+     */
+    public void testStoredProcedureQueryExceptionWrapping1() {
+        EntityManager em = createEntityManager();
+        try {
+            javax.persistence.Query query = em.createNativeQuery("DoesNotExist", Employee.class);
+
+            Object execute = query.getResultList();
+            fail("Executing a bad native SQL query did not throw a PersistenceException and instead returned: "+execute);
+        } catch (javax.persistence.PersistenceException pe) {
+            //expected.
+        } catch (RuntimeException re) {
+            fail("Executing a bad native SQL query did not throw a PersistenceException and instead threw: "+re);
+        } finally {
+            closeEntityManager(em);
+        }
+    }
+
+    /**
+     * Tests StoredProcedureQuery exception wrapping. 
+     */
+    public void testStoredProcedureQueryExceptionWrapping2() {
+        EntityManager em = createEntityManager();
+        try {
+            StoredProcedureQuery query = em.createStoredProcedureQuery("DoesNotExist", Employee.class);
+
+            boolean execute = query.execute();
+            fail("Executing a non-existent stored procedure did not throw a PersistenceException and instead returned: "+execute);
+        } catch (javax.persistence.PersistenceException pe) {
+            //expected.
+        } catch (RuntimeException re) {
+            fail("Executing a non-existent stored procedure did not throw a PersistenceException and instead threw: "+re);
+        } finally {
+            closeEntityManager(em);
+        }
     }
 }

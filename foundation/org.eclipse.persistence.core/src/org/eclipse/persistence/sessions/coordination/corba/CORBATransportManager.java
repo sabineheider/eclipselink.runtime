@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 1998, 2012 Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1998, 2013 Oracle and/or its affiliates. All rights reserved.
  * This program and the accompanying materials are made available under the 
  * terms of the Eclipse Public License v1.0 and Eclipse Distribution License v. 1.0 
  * which accompanies this distribution. 
@@ -140,16 +140,19 @@ public abstract class CORBATransportManager extends TransportManager {
      * that implements the method byte[]  executeCommand(byte[] command)
      *
      */
-    public static byte[] processCommand(byte[] command, RemoteCommandManager aRCM) {
+    public static byte[] processCommand(byte[] command, RemoteCommandManager rcm) {
         try {
-            // deserialize byte [] to Command object
-            Command deserializedCmd = (Command)SerializationHelper.deserialize(command);
-
-            aRCM.processCommandFromRemoteConnection(deserializedCmd);
+            if (rcm.getSerializer() != null) {
+                rcm.processCommandFromRemoteConnection(command);                
+            } else {
+                // deserialize byte [] to Command object
+                Command deserializedCmd = (Command)SerializationHelper.deserialize(command);    
+                rcm.processCommandFromRemoteConnection(deserializedCmd);
+            }
         } catch (Exception e) {
             // Log the problem encountered during deserialization or rcm processing command 
             Object[] args = { Helper.getShortClassName(command), Helper.printStackTraceToString(e) };
-            aRCM.logWarning("error_executing_remote_command", args);
+            rcm.logWarning("error_executing_remote_command", args);
 
             // Return the byte[] of exception String in case the exception doesn't exist on the other side
             return e.toString().getBytes();

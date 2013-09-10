@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 1998, 2012 Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1998, 2013 Oracle and/or its affiliates. All rights reserved.
  * This program and the accompanying materials are made available under the 
  * terms of the Eclipse Public License v1.0 and Eclipse Distribution License v. 1.0 
  * which accompanies this distribution. 
@@ -34,9 +34,9 @@ public class LoadBuildProject extends org.eclipse.persistence.sessions.Project {
         org.eclipse.persistence.sessions.DatabaseLogin login = new org.eclipse.persistence.sessions.DatabaseLogin();
 
         login.setUserName("sys as sysdba");
-        login.setPassword("password");
+        login.setPassword("orasys9");
         login.setDriverClassName("oracle.jdbc.OracleDriver");
-        login.setConnectionString("jdbc:oracle:thin:@ottvm074.ca.oracle.com:1521:orcl");
+        login.setConnectionString("jdbc:oracle:thin:@ottvm074.ca.oracle.com:1521:toplink");
         login.setPlatformClassName("org.eclipse.persistence.platform.database.OraclePlatform");
         NativeSequence sequence = new NativeSequence();
         sequence.setPreallocationSize(500);

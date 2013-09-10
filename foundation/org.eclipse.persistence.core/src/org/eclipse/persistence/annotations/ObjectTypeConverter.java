@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 1998, 2012 Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1998, 2013 Oracle and/or its affiliates. All rights reserved.
  * This program and the accompanying materials are made available under the 
  * terms of the Eclipse Public License v1.0 and Eclipse Distribution License v. 1.0 
  * which accompanies this distribution. 
@@ -31,7 +31,7 @@ import static java.lang.annotation.RetentionPolicy.RUNTIME;
  * an Entity, MappedSuperclass and Embeddable class.
  * 
  * The usage of an ObjectTypeConverter is specified via the Convert annotation 
- * and is supported on a Basic, BasicMap or BasicCollection mapping.
+ * and is supported on a Basic, or ElementCollection mapping.
  * 
  * @see org.eclipse.persistence.annotations.Convert
  * @author Guy Pelletier

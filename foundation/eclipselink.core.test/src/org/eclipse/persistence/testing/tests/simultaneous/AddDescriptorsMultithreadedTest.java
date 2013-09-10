@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2011, 2012 Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2011, 2013 Oracle and/or its affiliates. All rights reserved.
  * This program and the accompanying materials are made available under the 
  * terms of the Eclipse Public License v1.0 and Eclipse Distribution License v. 1.0 
  * which accompanies this distribution. 
@@ -157,7 +157,7 @@ public class AddDescriptorsMultithreadedTest extends MultithreadTestCase {
             // if numberOfTests = 10 then the first test uses k = 0, 10, 20 etc; the second k = 1, 11, 21 etc. 
             for (int k = testNumber; k < nSize; k = k + numberOfTests) {
                 ClassDescriptor descriptor = project.getOrderedDescriptors().get(k);
-                getAbstractSession().log(SessionLog.FINEST, "AddDescriptorsTest adding descriptor for class = " + Helper.getShortClassName(descriptor.getJavaClass()), new Object[]{}, null, false);
+                getAbstractSession().log(SessionLog.FINEST, SessionLog.MISC, "AddDescriptorsTest adding descriptor for class = " + Helper.getShortClassName(descriptor.getJavaClass()), new Object[]{}, null, false);
                 DatabaseField sequenceNumberField = descriptor.getMappingForAttributeName("id").getField();
                 descriptor.setSequenceNumberField(sequenceNumberField);
                 String seqName = "SEQ_" + sequenceNumberField.getTableName();

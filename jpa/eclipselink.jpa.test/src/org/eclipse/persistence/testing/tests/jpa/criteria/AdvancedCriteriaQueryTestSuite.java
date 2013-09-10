@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 1998,Oracle. All rights reserved.
+ * Copyright (c) 1998, 2013 Oracle and/or its affiliates. All rights reserved.
  * This program and the accompanying materials are made available under the 
  * terms of the Eclipse Public License v1.0 and Eclipse Distribution License v. 1.0 
  * which accompanies this distribution. 
@@ -24,6 +24,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.Vector;
 
 import javax.persistence.EntityManager;
 import javax.persistence.Parameter;
@@ -32,9 +33,11 @@ import javax.persistence.Tuple;
 import javax.persistence.TypedQuery;
 import javax.persistence.criteria.CriteriaBuilder;
 import javax.persistence.criteria.CriteriaQuery;
+import javax.persistence.criteria.Expression;
 import javax.persistence.criteria.Fetch;
 import javax.persistence.criteria.Join;
 import javax.persistence.criteria.JoinType;
+import javax.persistence.criteria.ParameterExpression;
 import javax.persistence.criteria.Path;
 import javax.persistence.criteria.Predicate;
 import javax.persistence.criteria.Root;
@@ -112,13 +115,20 @@ public class AdvancedCriteriaQueryTestSuite extends JUnitTestCase {
         suite.addTest(new AdvancedCriteriaQueryTestSuite("testSetup"));
         suite.addTest(new AdvancedCriteriaQueryTestSuite("testInCollectionEntity"));
         suite.addTest(new AdvancedCriteriaQueryTestSuite("testInCollectionPrimitives"));
+        suite.addTest(new AdvancedCriteriaQueryTestSuite("testInParameterCollection"));
         suite.addTest(new AdvancedCriteriaQueryTestSuite("testProd"));
         suite.addTest(new AdvancedCriteriaQueryTestSuite("testSize"));
         suite.addTest(new AdvancedCriteriaQueryTestSuite("testJoinDistinct"));
         suite.addTest(new AdvancedCriteriaQueryTestSuite("testSome"));
         suite.addTest(new AdvancedCriteriaQueryTestSuite("testWhereConjunction"));
+        suite.addTest(new AdvancedCriteriaQueryTestSuite("testWhereNotConjunction"));
         suite.addTest(new AdvancedCriteriaQueryTestSuite("testWhereDisjunction"));
+        suite.addTest(new AdvancedCriteriaQueryTestSuite("testWhereNotDisjunction"));
         suite.addTest(new AdvancedCriteriaQueryTestSuite("testWhereConjunctionAndDisjunction"));
+        suite.addTest(new AdvancedCriteriaQueryTestSuite("testWhereDisjunctionAndConjunction"));
+        suite.addTest(new AdvancedCriteriaQueryTestSuite("testWhereConjunctionOrDisjunction"));
+        suite.addTest(new AdvancedCriteriaQueryTestSuite("testWhereUsingAndWithPredicates"));
+        suite.addTest(new AdvancedCriteriaQueryTestSuite("testWhereUsingOrWithPredicates"));
         suite.addTest(new AdvancedCriteriaQueryTestSuite("testVerySimpleJoin"));
         suite.addTest(new AdvancedCriteriaQueryTestSuite("testGroupByHaving"));
         suite.addTest(new AdvancedCriteriaQueryTestSuite("testAlternateSelection"));
@@ -370,6 +380,28 @@ public class AdvancedCriteriaQueryTestSuite extends JUnitTestCase {
             closeEntityManager(em);
         } 
     }
+
+    /*
+     * bug 349477 - Using criteria.in(...) with ParameterExpression of type Collection creates invalid SQL
+     */
+    public void testInParameterCollection(){
+        EntityManager em = createEntityManager();
+        beginTransaction(em);
+        List respons = new Vector();
+        respons.add("NoResults");
+        respons.add("Bug fixes");
+        try {
+            CriteriaBuilder qbuilder = em.getCriteriaBuilder();
+            CriteriaQuery<Employee> cquery =qbuilder.createQuery(Employee.class);
+            Root<Employee> emp = cquery.from(Employee.class);
+            ParameterExpression pe = qbuilder.parameter(java.util.Collection.class, "param");
+            cquery.where(emp.join("responsibilities").in(pe));
+            List<Employee> result = em.createQuery(cquery).setParameter("param",respons).getResultList();
+            assertFalse("testInParameterCollection failed: No Employees were returned", result.isEmpty());
+        } finally {
+            closeEntityManagerAndTransaction(em);
+        } 
+    }
     public void testInlineInParameter(){
         EntityManager em = createEntityManager();
         beginTransaction(em);
@@ -527,7 +559,11 @@ public class AdvancedCriteriaQueryTestSuite extends JUnitTestCase {
             CriteriaBuilder qb = em.getCriteriaBuilder();
             Root<Employee> root = cq.from(em.getMetamodel().entity(Employee.class));
             root.join("phoneNumbers");
-            cq.distinct(true);
+            if (usesSOP() && getServerSession().getPlatform().isOracle()) {
+            	// distinct is incompatible with blob in selection clause on Oracle
+            } else {
+            	cq.distinct(true);
+            }
             TypedQuery<Employee> tq = em.createQuery(cq);
             List<Employee> result = tq.getResultList();
             for (Employee emp : result){
@@ -592,6 +628,23 @@ public class AdvancedCriteriaQueryTestSuite extends JUnitTestCase {
         }
     }
 
+    //Added for bug 413084
+    public void testWhereNotDisjunction(){
+        EntityManager em = createEntityManager();
+        beginTransaction(em);
+        try{
+            CriteriaQuery<Employee> cq = em.getCriteriaBuilder().createQuery(Employee.class);
+            CriteriaBuilder qb = em.getCriteriaBuilder();
+            cq.where(qb.disjunction().not());
+            TypedQuery<Employee> tq = em.createQuery(cq);
+            List<Employee> result = tq.getResultList();
+            assertFalse("Employees were not returned", result.isEmpty());
+        } finally {
+            rollbackTransaction(em);
+            closeEntityManager(em);
+        }
+    }
+
     public void testWhereConjunction(){
         EntityManager em = createEntityManager();
         beginTransaction(em);
@@ -601,7 +654,23 @@ public class AdvancedCriteriaQueryTestSuite extends JUnitTestCase {
             cq.where(qb.conjunction());
             TypedQuery<Employee> tq = em.createQuery(cq);
             List<Employee> result = tq.getResultList();
-            assertFalse("Employees were returned", result.isEmpty());
+            assertFalse("Employees were not returned", result.isEmpty());
+        } finally {
+            rollbackTransaction(em);
+            closeEntityManager(em);
+        }
+    }
+    
+    public void testWhereNotConjunction(){
+        EntityManager em = createEntityManager();
+        beginTransaction(em);
+        try{
+            CriteriaQuery<Employee> cq = em.getCriteriaBuilder().createQuery(Employee.class);
+            CriteriaBuilder qb = em.getCriteriaBuilder();
+            cq.where(qb.conjunction().not());
+            TypedQuery<Employee> tq = em.createQuery(cq);
+            List<Employee> result = tq.getResultList();
+            assertTrue("Employees were returned", result.isEmpty());
         } finally {
             rollbackTransaction(em);
             closeEntityManager(em);
@@ -617,8 +686,12 @@ public class AdvancedCriteriaQueryTestSuite extends JUnitTestCase {
         Root<Employee> customer = cquery.from(Employee.class);
         Fetch<Employee, Project> o = customer.fetch("phoneNumbers", JoinType.LEFT);
         cquery.where(customer.get("address").get("city").in("Ottawa", "Halifax"));
-        cquery.select(customer).distinct(true);
+    	cquery.select(customer).distinct(true);
         TypedQuery<Employee> tquery = em.createQuery(cquery);
+        if (usesSOP() && getServerSession().getPlatform().isOracle()) {
+        	// distinct is incompatible with blob in selection clause on Oracle
+        	tquery.setHint(QueryHints.SERIALIZED_OBJECT, "false");
+        }
         List<Employee> result = tquery.getResultList();
         assertFalse ("No results found", result.isEmpty());
         Long count = (Long)em.createQuery("Select count(e) from Employee e where e.address.city in ('Ottawa', 'Halifax')").getSingleResult();
@@ -640,6 +713,88 @@ public class AdvancedCriteriaQueryTestSuite extends JUnitTestCase {
             TypedQuery<Employee> tq = em.createQuery(cq);
             List<Employee> result = tq.getResultList();
             assertTrue("Employees were returned", result.isEmpty());
+        } finally {
+            rollbackTransaction(em);
+            closeEntityManager(em);
+        }
+    }
+    
+    public void testWhereDisjunctionAndConjunction(){
+        EntityManager em = createEntityManager();
+        beginTransaction(em);
+        try{
+            CriteriaQuery<Employee> cq = em.getCriteriaBuilder().createQuery(Employee.class);
+            CriteriaBuilder qb = em.getCriteriaBuilder();
+            cq.where(qb.and(qb.conjunction(), qb.disjunction()));
+            TypedQuery<Employee> tq = em.createQuery(cq);
+            List<Employee> result = tq.getResultList();
+            assertTrue("Employees were returned", result.isEmpty());
+        } finally {
+            rollbackTransaction(em);
+            closeEntityManager(em);
+        }
+    }
+    
+    public void testWhereConjunctionOrDisjunction(){
+        EntityManager em = createEntityManager();
+        beginTransaction(em);
+        try{
+            CriteriaQuery<Employee> cq = em.getCriteriaBuilder().createQuery(Employee.class);
+            CriteriaBuilder qb = em.getCriteriaBuilder();
+            cq.where(qb.or(qb.disjunction(), qb.conjunction()));
+            TypedQuery<Employee> tq = em.createQuery(cq);
+            List<Employee> result = tq.getResultList();
+            assertTrue("Employees were not returned", !result.isEmpty());
+        } finally {
+            rollbackTransaction(em);
+            closeEntityManager(em);
+        }
+    }
+    
+    public void testWhereUsingAndWithPredicates(){
+        EntityManager em = createEntityManager();
+        beginTransaction(em);
+        try{
+            CriteriaQuery<Employee> cq = em.getCriteriaBuilder().createQuery(Employee.class);
+            CriteriaBuilder qb = em.getCriteriaBuilder();
+            Root<Employee> root = cq.from(em.getMetamodel().entity(Employee.class));
+            cq.where(qb.and(qb.conjunction(), qb.equal(root.get("lastName"), "Smith")));
+            TypedQuery<Employee> tq = em.createQuery(cq);
+            List<Employee> result = tq.getResultList();
+            assertFalse("Employees were not returned for 'true and lastName='Smith' '", result.isEmpty());
+            
+            cq = em.getCriteriaBuilder().createQuery(Employee.class);
+            qb = em.getCriteriaBuilder();
+            root = cq.from(em.getMetamodel().entity(Employee.class));
+            cq.where(qb.and(qb.equal(root.get("lastName"), "Smith"), qb.conjunction()));
+            tq = em.createQuery(cq);
+            result = tq.getResultList();
+            assertFalse("Employees were not returned for 'lastName='Smith' and true'", result.isEmpty());
+        } finally {
+            rollbackTransaction(em);
+            closeEntityManager(em);
+        }
+    }
+    
+    public void testWhereUsingOrWithPredicates(){
+        EntityManager em = createEntityManager();
+        beginTransaction(em);
+        try{
+            CriteriaQuery<Employee> cq = em.getCriteriaBuilder().createQuery(Employee.class);
+            CriteriaBuilder qb = em.getCriteriaBuilder();
+            Root<Employee> root = cq.from(em.getMetamodel().entity(Employee.class));
+            cq.where(qb.or(qb.disjunction(), qb.equal(root.get("lastName"), "Smith")));
+            TypedQuery<Employee> tq = em.createQuery(cq);
+            List<Employee> result = tq.getResultList();
+            assertFalse("Employees were not returned for 'false or lastName='Smith' '", result.isEmpty());
+            
+            cq = em.getCriteriaBuilder().createQuery(Employee.class);
+            qb = em.getCriteriaBuilder();
+            root = cq.from(em.getMetamodel().entity(Employee.class));
+            cq.where(qb.or(qb.equal(root.get("lastName"), "Smith"), qb.disjunction()));
+            tq = em.createQuery(cq);
+            result = tq.getResultList();
+            assertFalse("Employees were not returned for 'lastName='Smith' or false'", result.isEmpty());
         } finally {
             rollbackTransaction(em);
             closeEntityManager(em);
@@ -752,7 +907,11 @@ public class AdvancedCriteriaQueryTestSuite extends JUnitTestCase {
 
         // Create Main Query with SubQuery         
       cquery.where(qbuilder.equal(orders.<String>get("type"), qbuilder.some(sq)));
-      cquery.distinct(true);
+      if (usesSOP() && getServerSession().getPlatform().isOracle()) {
+      	// distinct is incompatible with blob in selection clause on Oracle
+      } else {
+    	  cquery.distinct(true);
+      }
       em.createQuery(cquery).getResultList();
 
         } finally {
@@ -769,7 +928,12 @@ public class AdvancedCriteriaQueryTestSuite extends JUnitTestCase {
             CriteriaQuery<Employee> cquery = qbuilder.createQuery(Employee.class);
             Root<Employee> customer = cquery.from(Employee.class);
             Join<Employee, Dealer> o = customer.join("dealers");
-            cquery.select(customer).distinct(true);
+            if (usesSOP() && getServerSession().getPlatform().isOracle()) {
+            	// distinct is incompatible with blob in selection clause on Oracle
+                cquery.select(customer);
+            } else {
+                cquery.select(customer).distinct(true);
+            }
             Subquery<Integer> sq = cquery.subquery(Integer.class);
             Root<Dealer> sqo = sq.from(Dealer.class);
             sq.select(qbuilder.min(sqo.<Integer>get("version")));

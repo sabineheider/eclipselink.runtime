@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 1998, 2012 Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1998, 2013 Oracle and/or its affiliates. All rights reserved.
  * This program and the accompanying materials are made available under the 
  * terms of the Eclipse Public License v1.0 and Eclipse Distribution License v. 1.0 
  * which accompanies this distribution. 
@@ -58,8 +58,12 @@ public class MWConfigModelEncryptionTest extends AutoVerifyTestCase {
         String password2 = m_sessionConfig1.getLoginConfig().getPassword();
         String password3 = m_sessionConfig1.getLoginConfig().getEncryptedPassword();
 
-        if (password1.equals(password3)) {
-            throw new TestErrorException("The password was not encrypted on the getPassword() call. Either the password was already encrypted or the detection failed.");
+        if (! password1.equals(password3)) {
+            throw new TestErrorException("Get encrypted password returned different values.");
+        }
+        
+        if (password1.equals(password2)) {
+            throw new TestErrorException("Get password returned an encrypted password."); 
         }
 
         // For the second config test the getPassword() call with a null password

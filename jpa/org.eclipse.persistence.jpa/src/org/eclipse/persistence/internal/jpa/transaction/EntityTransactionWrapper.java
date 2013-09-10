@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 1998, 2012 Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1998, 2013 Oracle and/or its affiliates. All rights reserved.
  * This program and the accompanying materials are made available under the 
  * terms of the Eclipse Public License v1.0 and Eclipse Distribution License v. 1.0 
  * which accompanies this distribution. 
@@ -60,37 +60,16 @@ public class EntityTransactionWrapper extends TransactionWrapperImpl implements 
      * Lazy initialize the EntityTransaction.
      * There can only be one EntityTransaction at a time.
      */
-      public EntityTransaction getTransaction(){
-          if (entityTransaction == null){
-              entityTransaction = new EntityTransactionImpl(this);
-          }
-          return entityTransaction;
-      }
-      
-    public void registerUnitOfWorkWithTxn(UnitOfWorkImpl uow){
-        throw new TransactionRequiredException(ExceptionLocalization.buildMessage("join_trans_called_on_entity_trans"));// no JTA transactions availab
+    public EntityTransaction getTransaction(){
+        if (entityTransaction == null){
+            entityTransaction = new EntityTransactionImpl(this);
+        }
+        return entityTransaction;
     }
-    
-    public void verifyRegisterUnitOfWorkWithTxn(){
-        throw new TransactionRequiredException(ExceptionLocalization.buildMessage("join_trans_called_on_entity_trans"));// no JTA transactions availab
-    }
-    
+
     public boolean isJoinedToTransaction(UnitOfWorkImpl uow){
-        return entityTransaction.isActive();
+        return (entityTransaction != null) && entityTransaction.isActive();
     }
-    
-    /**
-    * Mark the current transaction so that the only possible
-    * outcome of the transaction is for the transaction to be
-    * rolled back.
-    * This is an internal method and if the txn is not active will do nothing
-    */
-    // From old parent
-    //public void setRollbackOnlyInternal(){
-      //  if (entityTransaction != null && entityTransaction.isActive()){
-        //    entityTransaction.setRollbackOnly();
-        //}
-    //}
     
     /**
      * Mark the current transaction so that the only possible
@@ -103,17 +82,12 @@ public class EntityTransactionWrapper extends TransactionWrapperImpl implements 
              this.getTransaction().setRollbackOnly();
          }
      }
-        
-    public boolean shouldFlushBeforeQuery(UnitOfWorkImpl uow){
-        return true;
-    }
-    
-    // From old parent
-    //protected void throwCheckTransactionFailedException() {
-      //  throw TransactionException.transactionNotActive();
-    //}
 
     protected void throwCheckTransactionFailedException() {
         throw new TransactionRequiredException(TransactionException.transactionNotActive().getMessage());
     }    
+
+    public void registerIfRequired(UnitOfWorkImpl uow){
+        throw new TransactionRequiredException(ExceptionLocalization.buildMessage("join_trans_called_on_entity_trans"));// no JTA transactions availab
+    }
 }

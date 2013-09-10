@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 1998, 2012 Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1998, 2013 Oracle and/or its affiliates. All rights reserved.
  * This program and the accompanying materials are made available under the 
  * terms of the Eclipse Public License v1.0 and Eclipse Distribution License v. 1.0 
  * which accompanies this distribution. 
@@ -618,7 +618,7 @@ public abstract class AbstractCompositeCollectionMapping extends AggregateMappin
                     }
                     Object attributeValue = this.getAttributeValueFromObject(cached);
                     Integer refreshCascade = null;
-                    if (sourceQuery != null && sourceQuery.isObjectBuildingQuery() && ((ObjectBuildingQuery)sourceQuery).shouldRefreshIdentityMapResult()){
+                    if (sourceQuery != null && sourceQuery.isObjectBuildingQuery() && sourceQuery.shouldRefreshIdentityMapResult()) {
                         refreshCascade = sourceQuery.getCascadePolicy();
                     }
                     return buildClonePart(cached, null, cacheKey, attributeValue, refreshCascade, executionSession);
@@ -628,6 +628,9 @@ public abstract class AbstractCompositeCollectionMapping extends AggregateMappin
             }else if (!this.isCacheable && !isTargetProtected && cacheKey != null){
                 return null;
             }
+        }
+        if (row.hasSopObject()) {
+            return getAttributeValueFromObject(row.getSopObject());
         }
         ContainerPolicy cp = this.getContainerPolicy();
 

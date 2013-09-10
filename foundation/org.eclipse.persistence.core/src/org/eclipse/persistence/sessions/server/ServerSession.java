@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 1998, 2012 Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1998, 2013 Oracle and/or its affiliates. All rights reserved.
  * This program and the accompanying materials are made available under the 
  * terms of the Eclipse Public License v1.0 and Eclipse Distribution License v. 1.0 
  * which accompanies this distribution. 
@@ -575,22 +575,19 @@ public class ServerSession extends DatabaseSessionImpl implements Server {
             // Don't release the cursoredStream connection until Stream is closed 
             // or unless an exception occurred executing the call.
             if (call.isFinished() || exception != null) {
-                try {
-                    if (accessorAllocated) {
-                        for (Accessor accessor : query.getAccessors()) {
-                            //if connection is using external connection pooling then the event has been risen right before it disconnected.
-                            if (!accessor.usesExternalConnectionPooling()) {
-                                preReleaseConnection(accessor);
-                            }
-                            accessor.getPool().releaseConnection(accessor);
+                if (accessorAllocated) {
+                    try {
+                        releaseConnectionAfterCall(query);
+                    } catch (RuntimeException releaseException) {
+                        if (exception == null) {
+                            throw releaseException;
                         }
-                        query.setAccessors(null);
+                        //else ignore
                     }
-                } catch (RuntimeException releaseException) {
-                    if (exception == null) {
-                        throw releaseException;
-                    }
-                    //else ignore
+                }
+            } else {
+                if (query.isObjectLevelReadQuery()) {
+                    ((DatabaseCall)call).setHasAllocatedConnection(accessorAllocated);
                 }
             }
             if (exception != null) {
@@ -598,6 +595,33 @@ public class ServerSession extends DatabaseSessionImpl implements Server {
             }
         }
         return result;
+    }
+
+    /**
+     * INTERNAL:
+     * Release (if required) connection after call.
+     * @param query
+     * @return
+     */
+    public void releaseConnectionAfterCall(DatabaseQuery query) {
+        RuntimeException exception = null;
+        for (Accessor accessor : query.getAccessors()) {
+            //if connection is using external connection pooling then the event has been risen right before it disconnected.
+            try {
+                if (!accessor.usesExternalConnectionPooling()) {
+                    preReleaseConnection(accessor);
+                }
+                accessor.getPool().releaseConnection(accessor);
+            } catch (RuntimeException ex) {
+                if (exception == null) {
+                    exception = ex;
+                }
+            }
+        }
+        query.setAccessors(null);
+        if (exception != null) {
+            throw exception;
+        }
     }
 
     /**

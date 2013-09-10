@@ -13,6 +13,7 @@
  ******************************************************************************/
 package org.eclipse.persistence.jpa.jpql.parser;
 
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedList;
@@ -113,6 +114,9 @@ public abstract class JPQLQueryBNF {
 	 */
 	private Boolean handleCollection;
 
+	/**
+	 * Determines whether this BNF handles parsing a nested array or not.
+	 */
 	private boolean handleNestedArray;
 
 	/**
@@ -742,12 +746,11 @@ public abstract class JPQLQueryBNF {
 	 * @param sb The builder used to add information about this class
 	 */
 	protected void toString(StringBuilder sb) {
-		sb.append("(id=");
+		sb.append("(");
 		sb.append(id);
-		sb.append(", identifiers=");
+		sb.append(")\n\nidentifiers=");
 		sb.append(getIdentifiers());
-		sb.append(", expressionFactories=");
-		sb.append(getExpressionFactoryIdsImp());
-		sb.append(")");
+		sb.append("\n\nexpressionFactories=");
+		sb.append(Arrays.toString(getExpressionFactoryIdsImp()));
 	}
 }

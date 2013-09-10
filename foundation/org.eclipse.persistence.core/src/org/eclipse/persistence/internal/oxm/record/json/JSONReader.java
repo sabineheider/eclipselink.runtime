@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2011, 2012 Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2011, 2013 Oracle and/or its affiliates. All rights reserved.
  * This program and the accompanying materials are made available under the
  * terms of the Eclipse Public License v1.0 and Eclipse Distribution License v. 1.0
  * which accompanies this distribution.
@@ -35,13 +35,16 @@ import org.eclipse.persistence.internal.libraries.antlr.runtime.TokenRewriteStre
 import org.eclipse.persistence.internal.libraries.antlr.runtime.TokenStream;
 import org.eclipse.persistence.internal.libraries.antlr.runtime.tree.CommonTree;
 import org.eclipse.persistence.internal.libraries.antlr.runtime.tree.Tree;
+import org.eclipse.persistence.internal.oxm.ConversionManager;
+import org.eclipse.persistence.internal.oxm.CollectionGroupingElementNodeValue;
 import org.eclipse.persistence.internal.oxm.Constants;
 import org.eclipse.persistence.internal.oxm.ContainerValue;
+import org.eclipse.persistence.internal.oxm.MappingNodeValue;
 import org.eclipse.persistence.internal.oxm.MediaType;
 import org.eclipse.persistence.internal.oxm.NamespaceResolver;
 import org.eclipse.persistence.internal.oxm.NodeValue;
 import org.eclipse.persistence.internal.oxm.Root;
-import org.eclipse.persistence.internal.oxm.XMLConversionManager;
+import org.eclipse.persistence.internal.oxm.XPathFragment;
 import org.eclipse.persistence.internal.oxm.mappings.Field;
 import org.eclipse.persistence.internal.oxm.record.AbstractUnmarshalRecord;
 import org.eclipse.persistence.internal.oxm.record.SAXUnmarshallerHandler;
@@ -55,6 +58,7 @@ import org.xml.sax.ErrorHandler;
 import org.xml.sax.InputSource;
 import org.xml.sax.SAXException;
 import org.xml.sax.SAXParseException;
+import org.xml.sax.helpers.AttributesImpl;
 
 public class JSONReader extends XMLReaderAdapter {
 
@@ -222,6 +226,9 @@ public class JSONReader extends XMLReaderAdapter {
                 }
             }
             
+        } else {
+            getContentHandler().startDocument();
+            parse(tree);
         }
     }
     
@@ -257,7 +264,7 @@ public class JSONReader extends XMLReaderAdapter {
                         }else{
                             localName = localName.substring(nsIndex + 1);
                         }
-                        if(localName.equals(Constants.SCHEMA_TYPE_ATTRIBUTE) && uri.equals(javax.xml.XMLConstants.W3C_XML_SCHEMA_INSTANCE_NS_URI)){
+                        if(localName.equals(Constants.SCHEMA_TYPE_ATTRIBUTE) && uri != null && uri.equals(javax.xml.XMLConstants.W3C_XML_SCHEMA_INSTANCE_NS_URI)){
                             break;
                         }   
                     }else{
@@ -358,35 +365,61 @@ public class JSONReader extends XMLReaderAdapter {
             	}
             }
             startCollection();
-            
-            if(size == 1){
-				CommonTree ct = (CommonTree) tree.getChild(0);
-				if(ct != null && ct.getType() == JSONLexer.NULL){
-					contentHandler.setNil(true);
-				}
-				if(!isTextValue){
-		         	   contentHandler.startElement(uri, parentLocalName, parentLocalName, attributes.setTree(ct, attributePrefix, namespaces, namespaceSeparator, namespaceAware));
-		         	   }
-		               parse(ct);
-		               if(!isTextValue){
-		                  contentHandler.endElement(uri, parentLocalName, parentLocalName);
-		               }
-			}else{
-            
-            
+			XPathFragment groupingXPathFragment = null;
+			XPathFragment itemXPathFragment = null;
+            if(contentHandler instanceof UnmarshalRecord) {
+                UnmarshalRecord unmarshalRecord = (UnmarshalRecord) contentHandler;
+                if(unmarshalRecord.getUnmarshaller().isWrapperAsCollectionName()) {
+                    XPathNode unmarshalRecordXPathNode = unmarshalRecord.getXPathNode();
+                    if(null != unmarshalRecordXPathNode) {
+                        XPathFragment currentFragment = new XPathFragment();
+                        currentFragment.setLocalName(parentLocalName);
+                        currentFragment.setNamespaceURI(uri);
+                        currentFragment.setNamespaceAware(namespaceAware);
+                        XPathNode groupingXPathNode = unmarshalRecordXPathNode.getNonAttributeChildrenMap().get(currentFragment);
+                        if(groupingXPathNode != null) {
+                            if(groupingXPathNode.getUnmarshalNodeValue() instanceof CollectionGroupingElementNodeValue) {
+                                groupingXPathFragment = groupingXPathNode.getXPathFragment();
+                                contentHandler.startElement(uri, parentLocalName, parentLocalName, new AttributesImpl());
+                                XPathNode itemXPathNode = groupingXPathNode.getNonAttributeChildren().get(0);
+                                itemXPathFragment = itemXPathNode.getXPathFragment();
+                            } else if(groupingXPathNode.getUnmarshalNodeValue() == null) {
+                                XPathNode itemXPathNode = groupingXPathNode.getNonAttributeChildren().get(0);
+                                if(itemXPathNode != null) {
+                                    if(((MappingNodeValue)itemXPathNode.getUnmarshalNodeValue()).isContainerValue()) {
+                                        groupingXPathFragment = groupingXPathNode.getXPathFragment();
+                                        contentHandler.startElement(uri, parentLocalName, parentLocalName, new AttributesImpl());
+                                         itemXPathFragment = itemXPathNode.getXPathFragment();
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
             for(int x=0; x<size; x++) {
         	   CommonTree nextChildTree = (CommonTree) tree.getChild(x);
         	   if(nextChildTree.getType() == JSONLexer.NULL){
         		   ((UnmarshalRecord)contentHandler).setNil(true);
         	   }
         	   if(!isTextValue){
-         	   contentHandler.startElement(uri, parentLocalName, parentLocalName, attributes.setTree(nextChildTree, attributePrefix, namespaces, namespaceSeparator, namespaceAware));
-         	   }
+        	       if(null != itemXPathFragment) {
+                       contentHandler.startElement(itemXPathFragment.getNamespaceURI(), itemXPathFragment.getLocalName(), itemXPathFragment.getLocalName(), attributes.setTree(nextChildTree, attributePrefix, namespaces, namespaceSeparator, namespaceAware));
+        	       } else {
+        	           contentHandler.startElement(uri, parentLocalName, parentLocalName, attributes.setTree(nextChildTree, attributePrefix, namespaces, namespaceSeparator, namespaceAware));
+        	       }
+        	   }
                parse(nextChildTree);
                if(!isTextValue){
-                  contentHandler.endElement(uri, parentLocalName, parentLocalName);
+                   if(null != itemXPathFragment) {
+                       contentHandler.endElement(uri, itemXPathFragment.getLocalName(), itemXPathFragment.getLocalName());
+                   } else {
+                       contentHandler.endElement(uri, parentLocalName, parentLocalName);
+                   }
                }
-            } 
+            }
+            if(null != groupingXPathFragment) {
+                contentHandler.endElement(uri, groupingXPathFragment.getLocalName(), groupingXPathFragment.getLocalName());
             }
             endCollection();
 
@@ -510,7 +543,7 @@ public class JSONReader extends XMLReaderAdapter {
      * @since 2.4
      */
     @Override
-    public Object convertValueBasedOnSchemaType(Field xmlField, Object value, XMLConversionManager xmlConversionManager, AbstractUnmarshalRecord record) {
+    public Object convertValueBasedOnSchemaType(Field xmlField, Object value, ConversionManager conversionManager, AbstractUnmarshalRecord record) {
         if (xmlField.getSchemaType() != null) { 
         	if(Constants.QNAME_QNAME.equals(xmlField.getSchemaType())){
         		String stringValue = (String)value;
@@ -522,7 +555,9 @@ public class JSONReader extends XMLReaderAdapter {
         		    uri = stringValue.substring(indexOpen+1, indexClose);
         		    localName = stringValue.substring(indexClose + 1);
         		}else{
-        			localName = stringValue;
+        			QName obj = (QName)xmlField.convertValueBasedOnSchemaType(stringValue, conversionManager, record);
+        			localName = obj.getLocalPart();
+        			uri = obj.getNamespaceURI();
         		}
         		if(uri != null){
         			return new QName(uri, localName);
@@ -532,9 +567,9 @@ public class JSONReader extends XMLReaderAdapter {
         	}else{
 	            Class fieldType = xmlField.getType();
 	            if (fieldType == null) {
-	                fieldType = xmlField.getJavaClass(xmlField.getSchemaType());
+	                fieldType = xmlField.getJavaClass(xmlField.getSchemaType(), conversionManager);
 	            }            
-	            return xmlConversionManager.convertObject(value, fieldType, xmlField.getSchemaType());
+	            return conversionManager.convertObject(value, fieldType, xmlField.getSchemaType());
         	}
         }
         return value;

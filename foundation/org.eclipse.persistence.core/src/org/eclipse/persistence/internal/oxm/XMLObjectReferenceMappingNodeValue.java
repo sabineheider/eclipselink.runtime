@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 1998, 2012 Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1998, 2013 Oracle and/or its affiliates. All rights reserved.
  * This program and the accompanying materials are made available under the 
  * terms of the Eclipse Public License v1.0 and Eclipse Distribution License v. 1.0 
  * which accompanies this distribution. 
@@ -87,7 +87,7 @@ public class XMLObjectReferenceMappingNodeValue extends MappingNodeValue {
      */
     public void attribute(UnmarshalRecord unmarshalRecord, String namespaceURI, String localName, String value) {
         if (value != null) {           
-            Object realValue = unmarshalRecord.getXMLReader().convertValueBasedOnSchemaType(xmlField, value, (XMLConversionManager) unmarshalRecord.getSession().getDatasourcePlatform().getConversionManager(),unmarshalRecord);
+            Object realValue = unmarshalRecord.getXMLReader().convertValueBasedOnSchemaType(xmlField, value, (ConversionManager) unmarshalRecord.getSession().getDatasourcePlatform().getConversionManager(),unmarshalRecord);
             
             // build a reference which will be resolved after unmarshalling is complete
             xmlObjectReferenceMapping.buildReference(unmarshalRecord, xmlField, realValue, unmarshalRecord.getSession());
@@ -111,12 +111,12 @@ public class XMLObjectReferenceMappingNodeValue extends MappingNodeValue {
         }
         Object value = unmarshalRecord.getCharacters().toString().trim();
         unmarshalRecord.resetStringBuffer();
-        XMLConversionManager xmlConversionManager = (XMLConversionManager) unmarshalRecord.getSession().getDatasourcePlatform().getConversionManager();
+        ConversionManager conversionManager = unmarshalRecord.getConversionManager();
         if (unmarshalRecord.getTypeQName() != null) {
-            Class typeClass = xmlField.getJavaClass(unmarshalRecord.getTypeQName());
-            value = xmlConversionManager.convertObject(value, typeClass, unmarshalRecord.getTypeQName());
+            Class typeClass = xmlField.getJavaClass(unmarshalRecord.getTypeQName(), conversionManager);
+            value = conversionManager.convertObject(value, typeClass, unmarshalRecord.getTypeQName());
         } else {
-            value = unmarshalRecord.getXMLReader().convertValueBasedOnSchemaType(xmlField, value, xmlConversionManager, unmarshalRecord);
+            value = unmarshalRecord.getXMLReader().convertValueBasedOnSchemaType(xmlField, value, conversionManager, unmarshalRecord);
         }
 
         // build a reference which will be resolved after unmarshalling is complete

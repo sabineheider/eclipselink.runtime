@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 1998, 2012 Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1998, 2013 Oracle and/or its affiliates. All rights reserved.
  * This program and the accompanying materials are made available under the 
  * terms of the Eclipse Public License v1.0 and Eclipse Distribution License v. 1.0 
  * which accompanies this distribution. 
@@ -181,7 +181,7 @@ public class DatabasePlatform extends DatasourcePlatform {
     protected transient Map<String, Class> classTypes;
 
     /** Allow for case in field names to be ignored as some databases are not case sensitive and when using custom this can be an issue. */
-    protected static boolean shouldIgnoreCaseOnFieldComparisons = false;
+    public static boolean shouldIgnoreCaseOnFieldComparisons = false;
 
 
     /** Bug#3214927 The default is 32000 for DynamicSQLBatchWritingMechanism.  
@@ -245,6 +245,9 @@ public class DatabasePlatform extends DatasourcePlatform {
 
     /** Allows auto-indexing for foreign keys to be set. */
     protected boolean shouldCreateIndicesOnForeignKeys;
+    
+    protected Boolean useJDBCStoredProcedureSyntax;
+    protected String driverName;
 
     public DatabasePlatform() {
         this.tableQualifier = "";
@@ -267,8 +270,9 @@ public class DatabasePlatform extends DatasourcePlatform {
         this.castSizeForVarcharParameter = 32672;
         this.startDelimiter = "\"";
         this.endDelimiter = "\"";
+        this.useJDBCStoredProcedureSyntax = null;
     }
-
+    
     /**
      * Initialize operators to avoid concurrency issues.
      */
@@ -990,6 +994,15 @@ public class DatabasePlatform extends DatasourcePlatform {
     public String getConstraintDeletionString() {
         return " DROP CONSTRAINT ";
     }
+
+    /**
+     * Used for constraint deletion.
+     */
+    public String getUniqueConstraintDeletionString() {
+        return getConstraintDeletionString();
+    }
+
+    /**
     
     /**
      * Used for view creation.
@@ -1525,6 +1538,16 @@ public class DatabasePlatform extends DatasourcePlatform {
     public boolean isInformixOuterJoin() {
         return false;
     }
+    
+    /**
+     * Returns true if this platform complies with the expected behavior from
+     * a jdbc execute call. Most platforms do, some have issues:
+     * 
+     * @see PostgreSQLPlatform
+     */
+    public boolean isJDBCExecuteCompliant() {
+        return true;
+    }
 
     /**
      * Return true is the given exception occurred as a result of a lock
@@ -1544,6 +1567,14 @@ public class DatabasePlatform extends DatasourcePlatform {
      * Indicates whether SELECT DISTINCT ... FOR UPDATE is allowed by the platform (Oracle doesn't allow this).
      */
     public boolean isForUpdateCompatibleWithDistinct() {
+        return true;
+    }
+    
+    /**
+     * INTERNAL:
+     * Indicates whether SELECT DISTINCT lob FROM ... (where lob is BLOB or CLOB) is allowed by the platform (Oracle doesn't allow this).
+     */
+    public boolean isLobCompatibleWithDistinct() {
         return true;
     }
     
@@ -1762,6 +1793,13 @@ public class DatabasePlatform extends DatasourcePlatform {
         this.cursorCode = cursorCode;
     }
     
+    /**
+     * During auto-detect, the driver name is set on the platform.
+     */
+    public void setDriverName(String driverName) {
+        this.driverName = driverName;
+    }
+    
     protected void setFieldTypes(Hashtable theFieldTypes) {
         fieldTypes = theFieldTypes;
     }
@@ -1883,6 +1921,13 @@ public class DatabasePlatform extends DatasourcePlatform {
         transactionIsolation = isolationLevel;
     }
 
+    /**
+     * Return true if JDBC syntax should be used for stored procedure calls.
+     */
+    public void setUseJDBCStoredProcedureSyntax(Boolean useJDBCStoredProcedureSyntax) {
+        this.useJDBCStoredProcedureSyntax = useJDBCStoredProcedureSyntax;
+    }
+    
     public void setUsesBatchWriting(boolean usesBatchWriting) {
         this.usesBatchWriting = usesBatchWriting;
     }
@@ -2259,14 +2304,21 @@ public class DatabasePlatform extends DatasourcePlatform {
                 resultSet = (ResultSet)((CallableStatement)statement).getObject(dbCall.getCursorOutIndex());
             } else {
                 accessor.executeDirectNoSelect(statement, dbCall, session);
-                result = accessor.buildOutputRow((CallableStatement)statement, dbCall, session);
-
-                //ReadAllQuery may be returning just output params, or they may be executing a DataReadQuery, which also
-                //assumes a vector
-                if (dbCall.areManyRowsReturned()) {
-                    Vector tempResult = new Vector();
-                    tempResult.add(result);
-                    result = tempResult;
+                
+                // Meaning we have at least one out parameter (or out cursors).
+                if (dbCall.shouldBuildOutputRow() || dbCall.hasOutputCursors()) {
+                    result = accessor.buildOutputRow((CallableStatement)statement, dbCall, session);
+                    
+                    // ReadAllQuery may be returning just output params, or they 
+                    // may be executing a DataReadQuery, which also assumes a vector
+                    if (dbCall.areManyRowsReturned()) {
+                        Vector tempResult = new Vector();
+                        tempResult.add(result);
+                        result = tempResult;
+                    }
+                } else {
+                    // No out params whatsover, return an empty list.
+                    result = new Vector(); 
                 }
             }
         } else {
@@ -2274,6 +2326,7 @@ public class DatabasePlatform extends DatasourcePlatform {
             // output params in the case where the user is returning both.  this is a driver limitation
             resultSet = accessor.executeSelect(dbCall, statement, session);
         }
+        
         if (resultSet != null) {
             dbCall.matchFieldOrder(resultSet, accessor, session);
 
@@ -2282,9 +2335,18 @@ public class DatabasePlatform extends DatasourcePlatform {
                 dbCall.setResult(resultSet);
                 return dbCall;
             }
+        
             result = accessor.processResultSet(resultSet, dbCall, statement, session);
-
         }
+        
+        // If the output is not allowed with the result set, we must hold off till the result set has
+        // been processed before accessing the out parameters.
+        if (dbCall.shouldBuildOutputRow() && ! isOutputAllowWithResultSet()) {
+            AbstractRecord outputRow = accessor.buildOutputRow((CallableStatement)statement, dbCall, session);
+            dbCall.getQuery().setProperty("output", outputRow);
+            session.getEventManager().outputParametersDetected(outputRow, dbCall);
+        }
+        
         return result;
     }
     
@@ -2311,8 +2373,9 @@ public class DatabasePlatform extends DatasourcePlatform {
             if (usesStringBinding() && (((String)parameter).length() > getStringBindingSize())) {
                 CharArrayReader reader = new CharArrayReader(((String)parameter).toCharArray());
                 statement.setCharacterStream(index, reader, ((String)parameter).length());
+            } else {
+                statement.setString(index, (String) parameter);
             }
-            statement.setString(index, (String) parameter);
         } else if (parameter instanceof Number) {
             Number number = (Number) parameter;
             if (number instanceof Integer) {
@@ -2667,6 +2730,14 @@ public class DatabasePlatform extends DatasourcePlatform {
      * Override this if the platform cannot handle NULL in select clause.
      */
     public boolean isNullAllowedInSelectClause() {
+        return true;
+    }
+    
+    /**
+     * INTERNAL:
+     * Return true if output parameters can be built with result sets.
+     */
+    public boolean isOutputAllowWithResultSet() {
         return true;
     }
     

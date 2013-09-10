@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 1998, 2012 Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1998, 2013 Oracle and/or its affiliates. All rights reserved.
  * This program and the accompanying materials are made available under the 
  * terms of the Eclipse Public License v1.0 and Eclipse Distribution License v. 1.0 
  * which accompanies this distribution. 
@@ -45,11 +45,13 @@ import org.eclipse.persistence.internal.sessions.AbstractSession;
 import org.eclipse.persistence.internal.sessions.DatabaseSessionImpl;
 import org.eclipse.persistence.internal.sessions.PropertiesHandler;
 import org.eclipse.persistence.jpa.JpaEntityManagerFactory;
+import org.eclipse.persistence.queries.AttributeGroup;
 import org.eclipse.persistence.queries.DatabaseQuery;
 import org.eclipse.persistence.queries.ObjectLevelReadQuery;
 import org.eclipse.persistence.queries.ReadQuery;
 import org.eclipse.persistence.sessions.DatabaseSession;
 import org.eclipse.persistence.sessions.Session;
+import org.eclipse.persistence.sessions.UnitOfWork.CommitOrderType;
 import org.eclipse.persistence.sessions.broker.SessionBroker;
 import org.eclipse.persistence.sessions.server.Server;
 import org.eclipse.persistence.sessions.server.ServerSession;
@@ -127,7 +129,7 @@ public class EntityManagerFactoryDelegate implements EntityManagerFactory, Persi
     protected boolean shouldValidateExistence;    
 
     /** Order updates by id to avoid potential deadlocks. Default is true. */
-    protected boolean shouldOrderUpdates = true;
+    protected CommitOrderType commitOrder = CommitOrderType.ID;
     
     protected boolean commitWithoutPersistRules;
 
@@ -407,7 +409,15 @@ public class EntityManagerFactoryDelegate implements EntityManagerFactory, Persi
         }
         String shouldOrderUpdates = PropertiesHandler.getPropertyValueLogDebug(EntityManagerProperties.ORDER_UPDATES, properties, this.session, true);
         if (shouldOrderUpdates != null) {
-            this.shouldOrderUpdates = "true".equalsIgnoreCase(shouldOrderUpdates);
+            if ("true".equalsIgnoreCase(shouldOrderUpdates)) {
+                this.commitOrder = CommitOrderType.ID;
+            } else {
+                this.commitOrder = CommitOrderType.NONE;
+            }
+        }
+        String commitOrder = PropertiesHandler.getPropertyValueLogDebug(EntityManagerProperties.PERSISTENCE_CONTEXT_COMMIT_ORDER, properties, this.session, true);
+        if (commitOrder != null) {
+            this.commitOrder = CommitOrderType.valueOf(commitOrder.toUpperCase());
         }
         String flushClearCache = PropertiesHandler.getPropertyValueLogDebug(EntityManagerProperties.FLUSH_CLEAR_CACHE, properties, this.session, true);
         if (flushClearCache != null) {
@@ -714,19 +724,17 @@ public class EntityManagerFactoryDelegate implements EntityManagerFactory, Persi
     }
 
     /**
-     * ADVANCED:
      * Return if updates should be ordered by primary key, to avoid potential database deadlocks.
      */
-    public boolean shouldOrderUpdates() {
-        return shouldOrderUpdates;
+    public CommitOrderType getCommitOrder() {
+        return commitOrder;
     }
 
     /**
-     * ADVANCED:
      * Set update ordering by primary key, to avoid potential database deadlocks.
      */
-    public void setShouldOrderUpdates(boolean shouldOrderUpdates) {
-        this.shouldOrderUpdates = shouldOrderUpdates;
+    public void setCommitOrder(CommitOrderType commitOrder) {
+        this.commitOrder = commitOrder;
     }
     
     public void addNamedQuery(String name, Query query) {
@@ -735,7 +743,10 @@ public class EntityManagerFactoryDelegate implements EntityManagerFactory, Persi
             ((ObjectLevelReadQuery)unwrapped).setLockModeType(((QueryImpl)query).lockMode.name(), session);
         }
         if (unwrapped.isReadQuery()){
-            ((ReadQuery)unwrapped).setInternalMax((((QueryImpl)query).getMaxResults()));
+            ((ReadQuery)unwrapped).setInternalMax((((QueryImpl)query).getMaxResultsInternal()));
+            if (query.getFirstResult() != QueryImpl.UNDEFINED){
+                ((ReadQuery)unwrapped).setFirstResult(query.getFirstResult());
+            }
         }
         this.getServerSession().addQuery(name, unwrapped, true);
     }
@@ -758,8 +769,10 @@ public class EntityManagerFactoryDelegate implements EntityManagerFactory, Persi
     }
 
     public <T> void addNamedEntityGraph(String graphName, EntityGraph<T> entityGraph) {
-        this.getAbstractSession().getAttributeGroups().put(graphName, ((EntityGraphImpl)entityGraph).getAttributeGroup());
-        this.getAbstractSession().getDescriptor(((EntityGraphImpl)entityGraph).getClassType()).addAttributeGroup(((EntityGraphImpl)entityGraph).getAttributeGroup());
+        AttributeGroup group = ((EntityGraphImpl)entityGraph).getAttributeGroup().clone();
+        group.setName(graphName);
+        this.getAbstractSession().getAttributeGroups().put(graphName, group);
+        this.getAbstractSession().getDescriptor(((EntityGraphImpl)entityGraph).getClassType()).addAttributeGroup(group);
     }
 
 }

@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 1998, 2012 Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1998, 2013 Oracle and/or its affiliates. All rights reserved.
  * This program and the accompanying materials are made available under the 
  * terms of the Eclipse Public License v1.0 and Eclipse Distribution License v. 1.0 
  * which accompanies this distribution. 
@@ -414,6 +414,16 @@ public class AdvancedTableCreator extends TogglingFastTableCreator {
         field4.setUnique(false);
         field4.setIsIdentity(false);
         table.addField(field4);
+        
+        FieldDefinition field5 = new FieldDefinition();
+        field5.setName("BID");
+        field5.setTypeName("VARCHAR");
+        field5.setSize(10);
+        field5.setShouldAllowNull(true);
+        field5.setIsPrimaryKey(false);
+        field5.setUnique(false);
+        field5.setIsIdentity(false);
+        table.addField(field5);
         
         return table;
     }

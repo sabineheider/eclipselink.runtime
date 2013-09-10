@@ -1,5 +1,5 @@
 /*******************************************************************************
-* Copyright (c) 1998, 2012 Oracle and/or its affiliates. All rights reserved.
+* Copyright (c) 1998, 2013 Oracle and/or its affiliates. All rights reserved.
 * This program and the accompanying materials are made available under the
 * terms of the Eclipse Public License v1.0 and Eclipse Distribution License v. 1.0
 * which accompanies this distribution.
@@ -105,7 +105,15 @@ public class ElementDeclaration {
      * Add an element to the list of elements which can be substituted for this element (ie: has this element in their substitutionGroup)
      */
     public void addSubstitutableElement(ElementDeclaration element) {
-        this.substitutableElements.add(element);
+        if (element != this && element != null) {
+            QName elementName = element.getElementName();
+            for (ElementDeclaration substitutableElement : substitutableElements) {
+                if (substitutableElement.getElementName().equals(elementName)) {
+                    return;
+                }
+            }
+            this.substitutableElements.add(element);
+        }
     }
     
     /**

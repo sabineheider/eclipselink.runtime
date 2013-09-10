@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2011, 2012 Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2011, 2013 Oracle and/or its affiliates. All rights reserved.
  * This program and the accompanying materials are made available under the 
  * terms of the Eclipse Public License v1.0 and Eclipse Distribution License v. 1.0 
  * which accompanies this distribution. 
@@ -22,8 +22,8 @@ import java.io.OutputStreamWriter;
 import java.util.List;
 
 import javax.ws.rs.WebApplicationException;
+import javax.ws.rs.core.HttpHeaders;
 import javax.ws.rs.core.MediaType;
-import javax.ws.rs.core.Response.Status;
 import javax.ws.rs.core.StreamingOutput;
 import javax.xml.bind.JAXBContext;
 import javax.xml.bind.JAXBException;
@@ -33,7 +33,8 @@ import org.eclipse.persistence.dynamic.DynamicEntity;
 import org.eclipse.persistence.internal.dynamic.DynamicEntityImpl;
 import org.eclipse.persistence.jaxb.MarshallerProperties;
 import org.eclipse.persistence.jpa.rs.PersistenceContext;
-import org.eclipse.persistence.jpa.rs.util.list.MultiResultQueryList;
+import org.eclipse.persistence.jpa.rs.exceptions.JPARSException;
+import org.eclipse.persistence.jpa.rs.util.list.ReportQueryResultList;
 import org.eclipse.persistence.jpa.rs.util.xmladapters.LinkAdapter;
 
 /**
@@ -45,7 +46,6 @@ import org.eclipse.persistence.jpa.rs.util.xmladapters.LinkAdapter;
  * @since EclipseLink 2.4.0
  */
 public class StreamingOutputMarshaller implements StreamingOutput {
-    public static final String NO_ROUTE_JAXB_ELEMENT_LABEL = "result";
     private PersistenceContext context;
     private Object result;
     private MediaType mediaType;
@@ -63,22 +63,22 @@ public class StreamingOutputMarshaller implements StreamingOutput {
     @Override
     public void write(OutputStream output) throws IOException, WebApplicationException {
         if (result instanceof byte[] && this.mediaType.equals(MediaType.APPLICATION_OCTET_STREAM_TYPE)) {
-            output.write((byte[])result);
+            output.write((byte[]) result);
             output.flush();
             output.close();
-        } else if (result instanceof String){
+        } else if (result instanceof String) {
             OutputStreamWriter writer = new OutputStreamWriter(output);
-            writer.write((String)result);
+            writer.write((String) result);
             writer.flush();
             writer.close();
         } else {
-            if ((this.context != null && this.context.getJAXBContext() != null && this.result != null) && 
+            if ((this.context != null && this.context.getJAXBContext() != null && this.result != null) &&
                     (this.mediaType.equals(MediaType.APPLICATION_JSON_TYPE) || this.mediaType.equals(MediaType.APPLICATION_XML_TYPE))) {
                 try {
-                    if (result instanceof MultiResultQueryList) {
+                    if (result instanceof ReportQueryResultList) {
                         if (mediaType == MediaType.APPLICATION_JSON_TYPE) {
                             // avoid outer QueryResultList class (outer grouping name) in JSON responses
-                            context.marshallEntity(((MultiResultQueryList) result).getItems(), mediaType, output);
+                            context.marshallEntity(((ReportQueryResultList) result).getItems(), mediaType, output);
                         } else {
                             context.marshallEntity(result, mediaType, output);
                         }
@@ -86,13 +86,13 @@ public class StreamingOutputMarshaller implements StreamingOutput {
                         context.marshallEntity(result, mediaType, output);
                     }
                     return;
-                } catch (Exception e) {
-                    JPARSLogger.exception("jpars_caught_exception", new Object[]{}, e);
-                    throw new WebApplicationException();
+                } catch (Exception ex) {
+                    JPARSLogger.exception("jpars_caught_exception", new Object[] {}, ex);
+                    throw JPARSException.exceptionOccurred(ex);
                 }
-            } 
+            }
 
-            if (this.mediaType.equals(MediaType.APPLICATION_OCTET_STREAM_TYPE)){
+            if (this.mediaType.equals(MediaType.APPLICATION_OCTET_STREAM_TYPE)) {
                 // could not marshall, try serializing
                 ByteArrayOutputStream baos = new ByteArrayOutputStream();
                 ObjectOutputStream oos = new ObjectOutputStream(baos);
@@ -101,12 +101,11 @@ public class StreamingOutputMarshaller implements StreamingOutput {
                 oos.close();
                 output.write(baos.toByteArray());
             } else {
-                JPARSLogger.fine("jpars_could_marshal_requested_result_to_requested_type", new Object[]{result});
+                JPARSLogger.error("jpars_could_not_marshal_requested_result_to_requested_type", new Object[] { result });
                 throw new WebApplicationException();
             }
         }
     }
-
 
     /**
      * Identify the preferred {@link MediaType} from the list provided. This
@@ -115,15 +114,12 @@ public class StreamingOutputMarshaller implements StreamingOutput {
      * @param types
      *            List of {@link MediaType} values;
      * @return selected {@link MediaType}
-     * @throws WebApplicationException
-     *             with Status.UNSUPPORTED_MEDIA_TYPE if neither the JSON or XML
-     *             values are found.
      */
     public static MediaType mediaType(List<MediaType> types) {
+        MediaType aMediaType = MediaType.APPLICATION_JSON_TYPE;
         if ((types != null) && (!types.isEmpty())) {
-            JPARSLogger.fine("jpars_requested_type", new Object[] { types });
             for (int i = 0; i < types.size(); i++) {
-                MediaType aMediaType = types.get(i);
+                aMediaType = types.get(i);
                 if (aMediaType.isCompatible(MediaType.APPLICATION_JSON_TYPE)) {
                     return MediaType.APPLICATION_JSON_TYPE;
                 }
@@ -135,26 +131,41 @@ public class StreamingOutputMarshaller implements StreamingOutput {
                 }
             }
         }
-        throw new WebApplicationException(Status.UNSUPPORTED_MEDIA_TYPE);
+        // An unsupported media type never comes to resource, no need to throw exception here.
+        return MediaType.APPLICATION_JSON_TYPE;
     }
 
-    public static Marshaller createMarshaller(PersistenceContext context, MediaType mediaType) throws JAXBException{
+    public static Marshaller createMarshaller(PersistenceContext context, MediaType mediaType) throws JAXBException {
         Marshaller marshaller = context.getJAXBContext().createMarshaller();
         marshaller.setProperty(MarshallerProperties.MEDIA_TYPE, mediaType.toString());
         marshaller.setProperty(MarshallerProperties.JSON_INCLUDE_ROOT, false);
         marshaller.setAdapter(new LinkAdapter(context.getBaseURI().toString(), context));
         marshaller.setListener(new Marshaller.Listener() {
             @Override
-            public void beforeMarshal(Object source) {   
-                if (source instanceof DynamicEntity){
-                    DynamicEntityImpl sourceImpl = (DynamicEntityImpl)source;
+            public void beforeMarshal(Object source) {
+                if (source instanceof DynamicEntity) {
+                    DynamicEntityImpl sourceImpl = (DynamicEntityImpl) source;
                     PropertyChangeListener listener = sourceImpl._persistence_getPropertyChangeListener();
                     sourceImpl._persistence_setPropertyChangeListener(null);
-                    ((DynamicEntity)source).set("self", source);
+                    ((DynamicEntity) source).set("self", source);
                     sourceImpl._persistence_setPropertyChangeListener(listener);
                 }
             }
         });
         return marshaller;
+    }
+
+    public static MediaType getResponseMediaType(HttpHeaders headers) {
+        MediaType mediaType = MediaType.TEXT_PLAIN_TYPE;
+        if (headers != null) {
+            List<MediaType> accepts = headers.getAcceptableMediaTypes();
+            if (accepts != null && accepts.size() > 0) {
+                try {
+                    mediaType = StreamingOutputMarshaller.mediaType(accepts);
+                } catch (Exception ex) {
+                }
+            }
+        }
+        return mediaType;
     }
 }

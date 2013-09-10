@@ -1,8 +1,23 @@
+/*******************************************************************************
+ * Copyright (c) 2013 Oracle and/or its affiliates. All rights reserved.
+ * This program and the accompanying materials are made available under the 
+ * terms of the Eclipse Public License v1.0 and Eclipse Distribution License v. 1.0 
+ * which accompanies this distribution. 
+ * The Eclipse Public License is available at http://www.eclipse.org/legal/epl-v10.html
+ * and the Eclipse Distribution License is available at 
+ * http://www.eclipse.org/org/documents/edl-v10.php.
+ *
+ * Contributors:
+ *     tware - initial implementation
+ ******************************************************************************/
 package org.eclipse.persistence.internal.jpa.rs.metadata.model;
 
 import org.eclipse.persistence.oxm.annotations.XmlPath;
 
 public class Link {
+    private String rel;
+    private String method;
+    private String href;
 
     public Link() {
     }
@@ -12,10 +27,6 @@ public class Link {
         this.method = method;
         this.href = href;
     }
-
-    private String rel;
-    private String method;
-    private String href;
 
     @XmlPath("_link/@rel")
     public String getRel() {

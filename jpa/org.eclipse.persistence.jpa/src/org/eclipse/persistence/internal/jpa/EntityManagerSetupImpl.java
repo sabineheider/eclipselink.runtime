@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 1998, 2012 Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1998, 2013 Oracle and/or its affiliates. All rights reserved.
  * This program and the accompanying materials are made available under the 
  * terms of the Eclipse Public License v1.0 and Eclipse Distribution License v. 1.0 
  * which accompanies this distribution. 
@@ -51,6 +51,27 @@
  ******************************************************************************/  
 package org.eclipse.persistence.internal.jpa;
 
+import static org.eclipse.persistence.config.PersistenceUnitProperties.DDL_GENERATION;
+import static org.eclipse.persistence.config.PersistenceUnitProperties.NONE;
+import static org.eclipse.persistence.config.PersistenceUnitProperties.SCHEMA_GENERATION_CREATE_ACTION;
+import static org.eclipse.persistence.config.PersistenceUnitProperties.SCHEMA_GENERATION_CREATE_DATABASE_SCHEMAS;
+import static org.eclipse.persistence.config.PersistenceUnitProperties.SCHEMA_GENERATION_CREATE_SCRIPT_SOURCE;
+import static org.eclipse.persistence.config.PersistenceUnitProperties.SCHEMA_GENERATION_CREATE_SOURCE;
+import static org.eclipse.persistence.config.PersistenceUnitProperties.SCHEMA_GENERATION_DATABASE_ACTION;
+import static org.eclipse.persistence.config.PersistenceUnitProperties.SCHEMA_GENERATION_DROP_ACTION;
+import static org.eclipse.persistence.config.PersistenceUnitProperties.SCHEMA_GENERATION_DROP_AND_CREATE_ACTION;
+import static org.eclipse.persistence.config.PersistenceUnitProperties.SCHEMA_GENERATION_DROP_SCRIPT_SOURCE;
+import static org.eclipse.persistence.config.PersistenceUnitProperties.SCHEMA_GENERATION_DROP_SOURCE;
+import static org.eclipse.persistence.config.PersistenceUnitProperties.SCHEMA_GENERATION_METADATA_SOURCE;
+import static org.eclipse.persistence.config.PersistenceUnitProperties.SCHEMA_GENERATION_METADATA_THEN_SCRIPT_SOURCE;
+import static org.eclipse.persistence.config.PersistenceUnitProperties.SCHEMA_GENERATION_NONE_ACTION;
+import static org.eclipse.persistence.config.PersistenceUnitProperties.SCHEMA_GENERATION_SCRIPTS_ACTION;
+import static org.eclipse.persistence.config.PersistenceUnitProperties.SCHEMA_GENERATION_SCRIPTS_CREATE_TARGET;
+import static org.eclipse.persistence.config.PersistenceUnitProperties.SCHEMA_GENERATION_SCRIPTS_DROP_TARGET;
+import static org.eclipse.persistence.config.PersistenceUnitProperties.SCHEMA_GENERATION_SCRIPT_SOURCE;
+import static org.eclipse.persistence.config.PersistenceUnitProperties.SCHEMA_GENERATION_SCRIPT_THEN_METADATA_SOURCE;
+import static org.eclipse.persistence.config.PersistenceUnitProperties.SCHEMA_GENERATION_SQL_LOAD_SCRIPT_SOURCE;
+import static org.eclipse.persistence.internal.jpa.EntityManagerFactoryProvider.generateDefaultTables;
 import static org.eclipse.persistence.internal.jpa.EntityManagerFactoryProvider.getConfigProperty;
 import static org.eclipse.persistence.internal.jpa.EntityManagerFactoryProvider.getConfigPropertyAsString;
 import static org.eclipse.persistence.internal.jpa.EntityManagerFactoryProvider.getConfigPropertyAsStringLogDebug;
@@ -60,37 +81,10 @@ import static org.eclipse.persistence.internal.jpa.EntityManagerFactoryProvider.
 import static org.eclipse.persistence.internal.jpa.EntityManagerFactoryProvider.mergeMaps;
 import static org.eclipse.persistence.internal.jpa.EntityManagerFactoryProvider.translateOldProperties;
 import static org.eclipse.persistence.internal.jpa.EntityManagerFactoryProvider.warnOldProperties;
-import static org.eclipse.persistence.internal.jpa.EntityManagerFactoryProvider.generateDefaultTables;
 
-import static org.eclipse.persistence.config.PersistenceUnitProperties.DDL_GENERATION;
-import static org.eclipse.persistence.config.PersistenceUnitProperties.NONE;
-
-import static org.eclipse.persistence.config.PersistenceUnitProperties.SCHEMA_GENERATION_CREATE_ACTION;
-import static org.eclipse.persistence.config.PersistenceUnitProperties.SCHEMA_GENERATION_CREATE_DATABASE_SCHEMAS;
-import static org.eclipse.persistence.config.PersistenceUnitProperties.SCHEMA_GENERATION_CREATE_SOURCE;
-import static org.eclipse.persistence.config.PersistenceUnitProperties.SCHEMA_GENERATION_CREATE_SCRIPT_SOURCE;
-import static org.eclipse.persistence.config.PersistenceUnitProperties.SCHEMA_GENERATION_DATABASE_ACTION;
-import static org.eclipse.persistence.config.PersistenceUnitProperties.SCHEMA_GENERATION_DROP_ACTION;
-import static org.eclipse.persistence.config.PersistenceUnitProperties.SCHEMA_GENERATION_DROP_AND_CREATE_ACTION;
-import static org.eclipse.persistence.config.PersistenceUnitProperties.SCHEMA_GENERATION_DROP_SCRIPT_SOURCE;
-import static org.eclipse.persistence.config.PersistenceUnitProperties.SCHEMA_GENERATION_DROP_SOURCE;
-import static org.eclipse.persistence.config.PersistenceUnitProperties.SCHEMA_GENERATION_NONE_ACTION;
-import static org.eclipse.persistence.config.PersistenceUnitProperties.SCHEMA_GENERATION_METADATA_SOURCE;
-import static org.eclipse.persistence.config.PersistenceUnitProperties.SCHEMA_GENERATION_METADATA_THEN_SCRIPT_SOURCE;
-import static org.eclipse.persistence.config.PersistenceUnitProperties.SCHEMA_GENERATION_SCRIPT_SOURCE;
-import static org.eclipse.persistence.config.PersistenceUnitProperties.SCHEMA_GENERATION_SCRIPT_THEN_METADATA_SOURCE;
-import static org.eclipse.persistence.config.PersistenceUnitProperties.SCHEMA_GENERATION_SCRIPTS_ACTION;
-import static org.eclipse.persistence.config.PersistenceUnitProperties.SCHEMA_GENERATION_SCRIPTS_CREATE_TARGET;
-import static org.eclipse.persistence.config.PersistenceUnitProperties.SCHEMA_GENERATION_SCRIPTS_DROP_TARGET;
-import static org.eclipse.persistence.config.PersistenceUnitProperties.SCHEMA_GENERATION_SQL_LOAD_SCRIPT_SOURCE;
-
-import java.rmi.Naming;
-import java.rmi.RemoteException;
-import java.security.AccessController;
-import java.security.PrivilegedActionException;
 import java.io.File;
-import java.io.FileWriter;
 import java.io.FileOutputStream;
+import java.io.FileWriter;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.Reader;
@@ -99,9 +93,14 @@ import java.io.Writer;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
+import java.net.MalformedURLException;
 import java.net.URL;
 import java.net.URLConnection;
 import java.net.URLDecoder;
+import java.rmi.Naming;
+import java.rmi.RemoteException;
+import java.security.AccessController;
+import java.security.PrivilegedActionException;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
@@ -112,6 +111,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.StringTokenizer;
 
+import javax.persistence.OptimisticLockException;
 import javax.persistence.PersistenceException;
 import javax.persistence.ValidationMode;
 import javax.persistence.metamodel.Attribute;
@@ -121,54 +121,6 @@ import javax.persistence.spi.ClassTransformer;
 import javax.persistence.spi.PersistenceUnitInfo;
 import javax.persistence.spi.PersistenceUnitTransactionType;
 
-import javax.persistence.OptimisticLockException;
-
-import org.eclipse.persistence.internal.databaseaccess.BatchWritingMechanism;
-import org.eclipse.persistence.internal.databaseaccess.DatabaseAccessor;
-import org.eclipse.persistence.internal.databaseaccess.DatasourcePlatform;
-import org.eclipse.persistence.internal.descriptors.OptimisticLockingPolicy;
-import org.eclipse.persistence.internal.descriptors.OptimisticLockingPolicy.LockOnChange;
-import org.eclipse.persistence.internal.jpa.weaving.PersistenceWeaver;
-import org.eclipse.persistence.internal.jpa.weaving.TransformerFactory;
-import org.eclipse.persistence.sessions.JNDIConnector;
-import org.eclipse.persistence.logging.AbstractSessionLog;
-import org.eclipse.persistence.logging.DefaultSessionLog;
-import org.eclipse.persistence.logging.SessionLog;
-import org.eclipse.persistence.internal.security.PrivilegedAccessHelper;
-import org.eclipse.persistence.internal.security.PrivilegedClassForName;
-import org.eclipse.persistence.internal.security.PrivilegedGetDeclaredField;
-import org.eclipse.persistence.internal.security.PrivilegedGetDeclaredMethod;
-import org.eclipse.persistence.internal.security.PrivilegedMethodInvoker;        
-import org.eclipse.persistence.internal.sessions.AbstractSession;
-import org.eclipse.persistence.internal.sessions.DatabaseSessionImpl;
-import org.eclipse.persistence.internal.sessions.PropertiesHandler;
-import org.eclipse.persistence.internal.sessions.remote.RemoteConnection;
-import org.eclipse.persistence.sequencing.Sequence;
-import org.eclipse.persistence.sessions.*;
-import org.eclipse.persistence.sessions.remote.RemoteSession;
-import org.eclipse.persistence.sessions.remote.rmi.RMIConnection;
-import org.eclipse.persistence.sessions.remote.rmi.RMIServerSessionManager;
-import org.eclipse.persistence.sessions.remote.rmi.RMIServerSessionManagerDispatcher;
-import org.eclipse.persistence.sessions.server.ConnectionPolicy;
-import org.eclipse.persistence.sessions.server.ConnectionPool;
-import org.eclipse.persistence.sessions.server.ExternalConnectionPool;
-import org.eclipse.persistence.sessions.server.ReadConnectionPool;
-import org.eclipse.persistence.sessions.server.ServerSession;
-import org.eclipse.persistence.internal.jpa.metadata.MetadataHelper;
-import org.eclipse.persistence.internal.jpa.metadata.MetadataLogger;
-import org.eclipse.persistence.internal.jpa.metadata.MetadataProcessor;
-import org.eclipse.persistence.internal.jpa.metadata.MetadataProject;
-import org.eclipse.persistence.internal.jpa.metadata.accessors.objects.MetadataAsmFactory;
-import org.eclipse.persistence.internal.jpa.metamodel.MetamodelImpl;
-import org.eclipse.persistence.sessions.broker.SessionBroker;
-import org.eclipse.persistence.sessions.coordination.MetadataRefreshListener;
-import org.eclipse.persistence.sessions.coordination.RemoteCommandManager;
-import org.eclipse.persistence.sessions.coordination.TransportManager;
-import org.eclipse.persistence.sessions.coordination.jms.JMSTopicTransportManager;
-import org.eclipse.persistence.sessions.coordination.jms.JMSPublishingTransportManager;
-import org.eclipse.persistence.sessions.coordination.rmi.RMITransportManager;
-import org.eclipse.persistence.sessions.factories.SessionManager;
-import org.eclipse.persistence.sessions.factories.XMLSessionConfigLoader;
 import org.eclipse.persistence.annotations.IdValidation;
 import org.eclipse.persistence.config.BatchWriting;
 import org.eclipse.persistence.config.CacheCoordinationProtocol;
@@ -189,12 +141,17 @@ import org.eclipse.persistence.eis.EISPlatform;
 import org.eclipse.persistence.exceptions.ConversionException;
 import org.eclipse.persistence.exceptions.DatabaseException;
 import org.eclipse.persistence.exceptions.DescriptorException;
+import org.eclipse.persistence.exceptions.EclipseLinkException;
 import org.eclipse.persistence.exceptions.EntityManagerSetupException;
 import org.eclipse.persistence.exceptions.ExceptionHandler;
-import org.eclipse.persistence.exceptions.EclipseLinkException;
 import org.eclipse.persistence.exceptions.IntegrityException;
 import org.eclipse.persistence.exceptions.PersistenceUnitLoadingException;
 import org.eclipse.persistence.exceptions.ValidationException;
+import org.eclipse.persistence.internal.databaseaccess.BatchWritingMechanism;
+import org.eclipse.persistence.internal.databaseaccess.DatabaseAccessor;
+import org.eclipse.persistence.internal.databaseaccess.DatasourcePlatform;
+import org.eclipse.persistence.internal.descriptors.OptimisticLockingPolicy;
+import org.eclipse.persistence.internal.descriptors.OptimisticLockingPolicy.LockOnChange;
 import org.eclipse.persistence.internal.helper.ClassConstants;
 import org.eclipse.persistence.internal.helper.ConcurrencyManager;
 import org.eclipse.persistence.internal.helper.Helper;
@@ -204,13 +161,34 @@ import org.eclipse.persistence.internal.jpa.deployment.BeanValidationInitializat
 import org.eclipse.persistence.internal.jpa.deployment.PersistenceUnitProcessor;
 import org.eclipse.persistence.internal.jpa.deployment.SEPersistenceUnitInfo;
 import org.eclipse.persistence.internal.jpa.jdbc.DataSourceImpl;
+import org.eclipse.persistence.internal.jpa.metadata.MetadataHelper;
+import org.eclipse.persistence.internal.jpa.metadata.MetadataLogger;
+import org.eclipse.persistence.internal.jpa.metadata.MetadataProcessor;
+import org.eclipse.persistence.internal.jpa.metadata.MetadataProject;
+import org.eclipse.persistence.internal.jpa.metadata.accessors.objects.MetadataAsmFactory;
+import org.eclipse.persistence.internal.jpa.metadata.xml.XMLEntityMappingsReader;
+import org.eclipse.persistence.internal.jpa.metamodel.MetamodelImpl;
+import org.eclipse.persistence.internal.jpa.weaving.PersistenceWeaver;
+import org.eclipse.persistence.internal.jpa.weaving.TransformerFactory;
 import org.eclipse.persistence.internal.localization.ExceptionLocalization;
+import org.eclipse.persistence.internal.security.PrivilegedAccessHelper;
+import org.eclipse.persistence.internal.security.PrivilegedClassForName;
+import org.eclipse.persistence.internal.security.PrivilegedGetDeclaredField;
+import org.eclipse.persistence.internal.security.PrivilegedGetDeclaredMethod;
+import org.eclipse.persistence.internal.security.PrivilegedMethodInvoker;
 import org.eclipse.persistence.internal.security.PrivilegedNewInstanceFromClass;
 import org.eclipse.persistence.internal.security.SecurableObjectHolder;
+import org.eclipse.persistence.internal.sessions.AbstractSession;
+import org.eclipse.persistence.internal.sessions.DatabaseSessionImpl;
+import org.eclipse.persistence.internal.sessions.PropertiesHandler;
+import org.eclipse.persistence.internal.sessions.remote.RemoteConnection;
 import org.eclipse.persistence.jpa.metadata.FileBasedProjectCache;
 import org.eclipse.persistence.jpa.metadata.MetadataSource;
 import org.eclipse.persistence.jpa.metadata.ProjectCache;
 import org.eclipse.persistence.jpa.metadata.XMLMetadataSource;
+import org.eclipse.persistence.logging.AbstractSessionLog;
+import org.eclipse.persistence.logging.DefaultSessionLog;
+import org.eclipse.persistence.logging.SessionLog;
 import org.eclipse.persistence.platform.database.converters.StructConverter;
 import org.eclipse.persistence.platform.database.events.DatabaseEventListener;
 import org.eclipse.persistence.platform.database.partitioning.DataPartitioningCallback;
@@ -218,14 +196,37 @@ import org.eclipse.persistence.platform.server.CustomServerPlatform;
 import org.eclipse.persistence.platform.server.ServerPlatform;
 import org.eclipse.persistence.platform.server.ServerPlatformBase;
 import org.eclipse.persistence.queries.QueryResultsCachePolicy;
+import org.eclipse.persistence.sequencing.Sequence;
+import org.eclipse.persistence.sessions.Connector;
 import org.eclipse.persistence.sessions.DatabaseLogin;
 import org.eclipse.persistence.sessions.DatasourceLogin;
 import org.eclipse.persistence.sessions.DefaultConnector;
 import org.eclipse.persistence.sessions.ExternalTransactionController;
+import org.eclipse.persistence.sessions.JNDIConnector;
 import org.eclipse.persistence.sessions.Project;
 import org.eclipse.persistence.sessions.Session;
 import org.eclipse.persistence.sessions.SessionEventListener;
 import org.eclipse.persistence.sessions.SessionProfiler;
+import org.eclipse.persistence.sessions.broker.SessionBroker;
+import org.eclipse.persistence.sessions.coordination.MetadataRefreshListener;
+import org.eclipse.persistence.sessions.coordination.RemoteCommandManager;
+import org.eclipse.persistence.sessions.coordination.TransportManager;
+import org.eclipse.persistence.sessions.coordination.jms.JMSPublishingTransportManager;
+import org.eclipse.persistence.sessions.coordination.jms.JMSTopicTransportManager;
+import org.eclipse.persistence.sessions.coordination.rmi.RMITransportManager;
+import org.eclipse.persistence.sessions.factories.SessionManager;
+import org.eclipse.persistence.sessions.factories.XMLSessionConfigLoader;
+import org.eclipse.persistence.sessions.remote.RemoteSession;
+import org.eclipse.persistence.sessions.remote.rmi.RMIConnection;
+import org.eclipse.persistence.sessions.remote.rmi.RMIServerSessionManager;
+import org.eclipse.persistence.sessions.remote.rmi.RMIServerSessionManagerDispatcher;
+import org.eclipse.persistence.sessions.serializers.JavaSerializer;
+import org.eclipse.persistence.sessions.serializers.Serializer;
+import org.eclipse.persistence.sessions.server.ConnectionPolicy;
+import org.eclipse.persistence.sessions.server.ConnectionPool;
+import org.eclipse.persistence.sessions.server.ExternalConnectionPool;
+import org.eclipse.persistence.sessions.server.ReadConnectionPool;
+import org.eclipse.persistence.sessions.server.ServerSession;
 import org.eclipse.persistence.tools.profiler.PerformanceMonitor;
 import org.eclipse.persistence.tools.profiler.PerformanceProfiler;
 import org.eclipse.persistence.tools.profiler.QueryMonitor;
@@ -550,9 +551,12 @@ public class EntityManagerSetupImpl implements MetadataRefreshListener {
         
         ClassLoader classLoaderToUse = realClassLoader;
         
-        if (additionalProperties.containsKey(PersistenceUnitProperties.CLASSLOADER)){
-            classLoaderToUse = (ClassLoader)additionalProperties.get(PersistenceUnitProperties.CLASSLOADER);
+        if (additionalProperties.containsKey(PersistenceUnitProperties.CLASSLOADER)) {
+            classLoaderToUse = (ClassLoader) additionalProperties.get(PersistenceUnitProperties.CLASSLOADER);
+        } else if ((this.processor != null) && (this.processor.getProject() != null) && (this.processor.getProject().hasVirtualClasses()) && (this.state == STATE_PREDEPLOYED) && (!(classLoaderToUse instanceof DynamicClassLoader))) {
+            classLoaderToUse = new DynamicClassLoader(classLoaderToUse);
         }
+        
         // indicates whether session has failed to connect, determines whether HALF_DEPLOYED state should be kept in case of exception.
         boolean isLockAcquired = false;
         try {
@@ -674,6 +678,7 @@ public class EntityManagerSetupImpl implements MetadataRefreshListener {
                         } else {
                             try {
                                 updateTunerDeploy(deployProperties, classLoaderToUse);
+                                updateFreeMemory(deployProperties);
                                 if (this.isSessionLoadedFromSessionsXML) {
                                     getDatabaseSession().login();
                                 } else {
@@ -2024,7 +2029,18 @@ public class EntityManagerSetupImpl implements MetadataRefreshListener {
         try {
             if (protocol != null) {
                 RemoteCommandManager rcm = new RemoteCommandManager(this.session);        
-                if (protocol.equalsIgnoreCase(CacheCoordinationProtocol.JMS) || protocol.equalsIgnoreCase(CacheCoordinationProtocol.JMSPublishing)) {
+                if (protocol.equalsIgnoreCase(CacheCoordinationProtocol.JGROUPS)) {
+                    property = PersistenceUnitProperties.COORDINATION_PROTOCOL;                    
+                    value = "org.eclipse.persistence.sessions.coordination.jgroups.JGroupsTransportManager";
+                    // Avoid compile and runtime dependency.
+                    Class transportClass = findClassForProperty(value, PersistenceUnitProperties.COORDINATION_PROTOCOL, loader);
+                    TransportManager transport = (TransportManager)transportClass.newInstance();
+                    rcm.setTransportManager(transport);                    
+                    String config = getConfigPropertyAsStringLogDebug(PersistenceUnitProperties.COORDINATION_JGROUPS_CONFIG, m, this.session);
+                    if (config != null) {
+                        transport.setConfig(config);
+                    }                    
+                } else if (protocol.equalsIgnoreCase(CacheCoordinationProtocol.JMS) || protocol.equalsIgnoreCase(CacheCoordinationProtocol.JMSPublishing)) {
                     JMSPublishingTransportManager transport = null;
                     if (protocol.equalsIgnoreCase(CacheCoordinationProtocol.JMS)) {
                          transport = new JMSTopicTransportManager(rcm);
@@ -2088,6 +2104,14 @@ public class EntityManagerSetupImpl implements MetadataRefreshListener {
                     Class transportClass = findClassForProperty(protocol, PersistenceUnitProperties.COORDINATION_PROTOCOL, loader);
                     rcm.setTransportManager((TransportManager)transportClass.newInstance());
                 }
+                String serializer = getConfigPropertyAsStringLogDebug(PersistenceUnitProperties.COORDINATION_SERIALIZER, m, this.session);
+                if (serializer != null) {
+                    property = PersistenceUnitProperties.COORDINATION_SERIALIZER;
+                    value = serializer;
+                    Class transportClass = findClassForProperty(serializer, PersistenceUnitProperties.COORDINATION_SERIALIZER, loader);
+                    rcm.setSerializer((Serializer)transportClass.newInstance());
+                }
+                
                 String naming = getConfigPropertyAsStringLogDebug(PersistenceUnitProperties.COORDINATION_NAMING_SERVICE, m, this.session);
                 if (naming != null) {
                     if (naming.equalsIgnoreCase("jndi")) {
@@ -2134,6 +2158,35 @@ public class EntityManagerSetupImpl implements MetadataRefreshListener {
         }
     }
         
+    /**
+     * Update session serializer.
+     */
+    protected void updateSerializer(Map m, ClassLoader loader) {
+	    String serializer = getConfigPropertyAsStringLogDebug(PersistenceUnitProperties.SERIALIZER, m, this.session);
+	    if (serializer != null) {
+	    	if (serializer.length() > 0) {
+		        try {
+		        	Class transportClass = findClassForProperty(serializer, PersistenceUnitProperties.SERIALIZER, loader);
+		        	this.session.setSerializer((Serializer)transportClass.newInstance());
+		        } catch (Exception exception) {
+		            this.session.handleException(ValidationException.invalidValueForProperty(serializer, PersistenceUnitProperties.SERIALIZER, exception));
+		        }
+	    	} else {
+	    		this.session.setSerializer(JavaSerializer.instance);
+	    	}
+	    }
+    }
+
+    /**
+     * Update whether session ShouldOptimizeResultSetAccess.
+     */
+    protected void updateShouldOptimizeResultSetAccess(Map m) {
+	    String resultSetAccessOptimization = PropertiesHandler.getPropertyValueLogDebug(PersistenceUnitProperties.JDBC_RESULT_SET_ACCESS_OPTIMIZATION, m, this.session);
+	    if (resultSetAccessOptimization != null) {
+	    	this.session.setShouldOptimizeResultSetAccess(resultSetAccessOptimization.equals("true"));
+	    }
+    }
+    
     /**
      * Override the default login creation method.
      * If persistenceInfo is available, use the information from it to setup the login
@@ -2280,7 +2333,10 @@ public class EntityManagerSetupImpl implements MetadataRefreshListener {
                 jndiConnector = new JNDIConnector(mainDatasource);                                
             }
             login.setConnector(jndiConnector);
-            login.setUsesExternalConnectionPooling(true);
+            String useInternalConnectionPool = getConfigPropertyAsStringLogDebug(PersistenceUnitProperties.CONNECTION_POOL_INTERNALLY_POOL_DATASOURCE, m, this.session);
+            if (!"true".equalsIgnoreCase(useInternalConnectionPool)){
+                login.setUsesExternalConnectionPooling(true);
+            }
         }
 
         if (this.session.isServerSession()) {
@@ -2588,6 +2644,8 @@ public class EntityManagerSetupImpl implements MetadataRefreshListener {
             }
             updatePartitioning(m, loader);
             updateDatabaseEventListener(m, loader);
+            updateSerializer(m, loader);
+            updateShouldOptimizeResultSetAccess(m);
             
             // Customizers should be processed last
             processDescriptorCustomizers(m, loader);
@@ -2995,6 +3053,22 @@ public class EntityManagerSetupImpl implements MetadataRefreshListener {
     }
 
     /**
+     * Allow the deployment metadata to be freed post-deploy to conserve memory.
+     */
+    protected void updateFreeMemory(Map m) {
+        String freeMemory = EntityManagerFactoryProvider.getConfigPropertyAsStringLogDebug(PersistenceUnitProperties.FREE_METADATA, m, session);
+        if (freeMemory != null) {
+           if (freeMemory.equalsIgnoreCase("true")) {
+               XMLEntityMappingsReader.clear();
+           } else if (freeMemory.equalsIgnoreCase("false")) {
+               // default.
+           } else {
+               session.handleException(ValidationException.invalidBooleanValueForProperty(freeMemory, PersistenceUnitProperties.FREE_METADATA));
+           }
+        }
+    }
+
+    /**
      * Enable or disable the capability of Native SQL function.  
      * The method needs to be called in deploy stage.
      */
@@ -3324,8 +3398,7 @@ public class EntityManagerSetupImpl implements MetadataRefreshListener {
                 if (validationMode == ValidationMode.CALLBACK) {
                     throw PersistenceUnitLoadingException.exceptionObtainingRequiredBeanValidatorFactory(e);
                 } // else validationMode == ValidationMode.AUTO. Log a message, Ignore the exception
-                // TODO use proper message string, i18n.
-                session.logMessage("Could not initialize Validation Factory. Encountered following exception: " + e);
+                this.session.log(SessionLog.FINEST, SessionLog.JPA, "validation_factory_not_initialized", new Object[]{ e.getMessage() });
             }
         }
     }
@@ -4018,16 +4091,21 @@ public class EntityManagerSetupImpl implements MetadataRefreshListener {
                 if (source instanceof Reader) {
                     reader = (Reader) source;
                 } else if (source instanceof String) {
+                    // Try to load the resource first, if not assume it as a well formed URL. If not, throw an exception. 
                     URL sourceURL = loader.getResource((String) source);
                     
                     if (sourceURL == null) {
-                        throw new PersistenceException(ExceptionLocalization.buildMessage("jpa21-ddl-source-script-not-found", new Object[]{ source }));
-                    } else {
-                        URLConnection connection = sourceURL.openConnection();
-                        // Set to false to prevent locking of jar files on Windows. EclipseLink issue 249664
-                        connection.setUseCaches(false);
-                        reader = new InputStreamReader(connection.getInputStream(), "UTF-8");
+                        try {
+                            sourceURL = new URL((String) source);
+                        }  catch (MalformedURLException e) {
+                            throw new PersistenceException(ExceptionLocalization.buildMessage("jpa21-ddl-source-script-not-found", new Object[]{ source }), e);
+                        }
                     }
+                    
+                    URLConnection connection = sourceURL.openConnection();
+                    // Set to false to prevent locking of jar files on Windows. EclipseLink issue 249664
+                    connection.setUseCaches(false);
+                    reader = new InputStreamReader(connection.getInputStream(), "UTF-8");
                 } else {
                     throw new PersistenceException(ExceptionLocalization.buildMessage("jpa21-ddl-invalid-source-script-type", new Object[]{ source , source.getClass()}));
                 }
@@ -4050,12 +4128,18 @@ public class EntityManagerSetupImpl implements MetadataRefreshListener {
                             aChar = (char) data;
                         }
 
-                        String sqlString = sqlBuffer.toString();
-                        try {
-                            session.executeNonSelectingSQL(sqlString);
-                        } catch (DatabaseException e) {
-                            // TODO: ignore for now, although the spec seems to want an exception??
-                            //throw new PersistenceException(ExceptionLocalization.buildMessage("jpa21-ddl-source-script-sql-exception", new Object[]{sqlString, source}), e); 
+                        // Remove trailing and leading white space characters.
+                        String sqlString = sqlBuffer.toString().trim();
+                        
+                        // If the string isn't empty, then fire it.
+                        if ((! sqlString.equals("")) && (! sqlString.startsWith("#"))) {
+                            try {
+                                session.executeNonSelectingSQL(sqlString);
+                            } catch (DatabaseException e) {
+                                // Swallow any database exceptions as these could 
+                                // be drop failures of a table that doesn't exist etc.
+                                // SQLExceptions will be thrown to the user.
+                            }
                         }
                             
                         data = reader.read();

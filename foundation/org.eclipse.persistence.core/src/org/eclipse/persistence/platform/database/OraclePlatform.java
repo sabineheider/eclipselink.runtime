@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 1998, 2012 Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1998, 2013 Oracle and/or its affiliates. All rights reserved.
  * This program and the accompanying materials are made available under the 
  * terms of the Eclipse Public License v1.0 and Eclipse Distribution License v. 1.0 
  * which accompanies this distribution. 
@@ -211,6 +211,17 @@ public class OraclePlatform extends org.eclipse.persistence.platform.database.Da
     }
 
     /**
+     * Build the hint string used for first rows.
+     * 
+     * Allows it to be overridden
+     * @param max
+     * @return
+     */
+    protected String buildFirstRowsHint(int max){
+        return HINT_START + HINT_END;
+    }
+    
+    /**
      * INTERNAL:
      * Returns null unless the platform supports call with returning
      */
@@ -394,7 +405,7 @@ public class OraclePlatform extends org.eclipse.persistence.platform.database.Da
      */
     @Override
     public String getProcedureCallHeader() {
-        return "BEGIN ";
+        return useJDBCStoredProcedureSyntax() ? "{CALL " : "BEGIN ";  
     }
 
     /**
@@ -402,7 +413,7 @@ public class OraclePlatform extends org.eclipse.persistence.platform.database.Da
      */
     @Override
     public String getProcedureCallTail() {
-        return "; END;";
+        return useJDBCStoredProcedureSyntax() ? "}" : "; END;";
     }
     
     /**
@@ -758,7 +769,16 @@ public class OraclePlatform extends org.eclipse.persistence.platform.database.Da
         return "SYSDATE";
     }
 
-
+    /**
+     * INTERNAL:
+     * Should the variable name of a stored procedure call be printed as part of the procedure call
+     * e.g. EXECUTE PROCEDURE MyStoredProc(myvariable = ?)
+     */
+    @Override
+    public boolean shouldPrintStoredProcedureArgumentNameInCall() {
+        return ! useJDBCStoredProcedureSyntax();
+    }
+    
     /**
      * JDBC defines and outer join syntax, many drivers do not support this. So we normally avoid it.
      */
@@ -872,9 +892,21 @@ public class OraclePlatform extends org.eclipse.persistence.platform.database.Da
         return connection;
     }
     
+    /**
+     * Return true if JDBC syntax should be used for stored procedure calls.
+     */
+    public boolean useJDBCStoredProcedureSyntax() {
+        if (useJDBCStoredProcedureSyntax == null) {
+            useJDBCStoredProcedureSyntax = this.driverName != null && this.driverName.equals("Oracle");
+        }
+        
+        return useJDBCStoredProcedureSyntax;
+    }
+    
     //Oracle Rownum support
     protected String SELECT = "SELECT * FROM (SELECT ";
-    protected String HINT = "/*+ FIRST_ROWS */ ";
+    protected String HINT_START = "/*+ FIRST_ROWS";
+    protected String HINT_END = " */ ";
     protected String FROM = "a.*, ROWNUM rnum  FROM (";
     protected String END_FROM = ") a ";
     protected String MAX_ROW = "WHERE ROWNUM <= ";
@@ -902,7 +934,7 @@ public class OraclePlatform extends org.eclipse.persistence.platform.database.Da
         } else if ( max > 0 ){
             statement.setUseUniqueFieldAliases(true);
             printer.printString(SELECT);
-            printer.printString(HINT);
+            printer.printString(buildFirstRowsHint(max));
             printer.printString(FROM);
             
             call.setFields(statement.printSQL(printer));
@@ -941,6 +973,15 @@ public class OraclePlatform extends org.eclipse.persistence.platform.database.Da
      */
     @Override
     public boolean isForUpdateCompatibleWithDistinct() {
+        return false;
+    }
+    
+    /**
+     * INTERNAL:
+     * Indicates whether SELECT DISTINCT lob FROM ... (where lob is BLOB or CLOB) is allowed by the platform (Oracle doesn't allow this).
+     */
+    @Override
+    public boolean isLobCompatibleWithDistinct() {
         return false;
     }
     

@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 1998, 2012 Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1998, 2013 Oracle and/or its affiliates. All rights reserved.
  * This program and the accompanying materials are made available under the 
  * terms of the Eclipse Public License v1.0 and Eclipse Distribution License v. 1.0 
  * which accompanies this distribution. 
@@ -50,11 +50,9 @@ public abstract class TransactionWrapperImpl  {
             this.localUOW.clear(true);
         }
     }
-    
-    public abstract void registerUnitOfWorkWithTxn(UnitOfWorkImpl uow);
-    
-    public abstract void verifyRegisterUnitOfWorkWithTxn();
-    
+
+    public abstract void registerIfRequired(UnitOfWorkImpl uow);
+  
     public abstract boolean isJoinedToTransaction(UnitOfWorkImpl uow);
     
     public UnitOfWorkImpl getLocalUnitOfWork(){
@@ -72,11 +70,5 @@ public abstract class TransactionWrapperImpl  {
     * This is an internal method and if the txn is not active will do nothing
     */
     public abstract void setRollbackOnlyInternal();
-    
-    /**
-     * This method will be called when a query is executed.  If changes in the entity manager
-     * should be flushed this method should return true
-     */
-    public abstract boolean shouldFlushBeforeQuery(UnitOfWorkImpl uow);
-    
+
 }

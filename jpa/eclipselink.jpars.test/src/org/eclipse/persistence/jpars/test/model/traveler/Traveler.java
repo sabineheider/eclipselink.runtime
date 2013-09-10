@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2013 Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2011, 2013 Oracle and/or its affiliates. All rights reserved.
  * This program and the accompanying materials are made available under the 
  * terms of the Eclipse Public License v1.0 and Eclipse Distribution License v. 1.0 
  * which accompanies this distribution. 
@@ -20,12 +20,22 @@ import javax.persistence.Entity;
 import javax.persistence.GeneratedValue;
 import javax.persistence.Id;
 import javax.persistence.JoinColumn;
+import javax.persistence.NamedQueries;
+import javax.persistence.NamedQuery;
 import javax.persistence.OneToOne;
 import javax.persistence.Table;
 import javax.persistence.Version;
+import javax.xml.bind.annotation.XmlElement;
+import javax.xml.bind.annotation.XmlRootElement;
 
+@NamedQueries({
+        @NamedQuery(
+                name = "Traveler.deleteAll",
+                query = "DELETE FROM Traveler t")
+})
 @Entity
 @Table(name = "JPARS_TRAVELER")
+@XmlRootElement(namespace = "http://example.org")
 public class Traveler {
 
     @Id
@@ -34,6 +44,7 @@ public class Traveler {
     private int id;
 
     @Column(name = "F_NAME")
+    @XmlElement(namespace = "http://example.org/fname")
     private String firstName;
 
     @Column(name = "L_NAME")
@@ -42,7 +53,7 @@ public class Traveler {
     @Version
     private Long version;
 
-    @OneToOne(cascade = ALL, fetch = LAZY, orphanRemoval=true)
+    @OneToOne(cascade = ALL, fetch = LAZY, orphanRemoval = true)
     @JoinColumn(name = "RSRV_ID")
     private Reservation reservation;
 
@@ -96,6 +107,6 @@ public class Traveler {
     }
 
     public String toString() {
-        return "Employee(" + getId() + ": " + getLastName() + ", " + getFirstName() + ")";
+        return "Traveler(" + id + ": " + firstName + ", " + lastName + ")";
     }
 }

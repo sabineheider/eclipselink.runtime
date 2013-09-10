@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 1998, 2012 Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1998, 2013 Oracle and/or its affiliates. All rights reserved.
  * This program and the accompanying materials are made available under the 
  * terms of the Eclipse Public License v1.0 and Eclipse Distribution License v. 1.0 
  * which accompanies this distribution. 
@@ -222,7 +222,7 @@ public abstract class AbstractCompositeObjectMapping extends AggregateMapping {
                     }
                     Object attributeValue = this.getAttributeValueFromObject(cached);
                     Integer refreshCascade = null;
-                    if (sourceQuery != null && sourceQuery.isObjectBuildingQuery() && ((ObjectBuildingQuery)sourceQuery).shouldRefreshIdentityMapResult()){
+                    if (sourceQuery != null && sourceQuery.isObjectBuildingQuery() && sourceQuery.shouldRefreshIdentityMapResult()){
                         refreshCascade = sourceQuery.getCascadePolicy();
                     }
                     //get the clone root.
@@ -233,6 +233,9 @@ public abstract class AbstractCompositeObjectMapping extends AggregateMapping {
             } else if (!this.isCacheable && !isTargetProtected && (cacheKey != null)) {
                 return null;
             }
+        }
+        if (row.hasSopObject()) {
+            return getAttributeValueFromObject(row.getSopObject());
         }
         Object fieldValue = row.get(this.field);
 

@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 1998, 2012 Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1998, 2013 Oracle and/or its affiliates. All rights reserved.
  * This program and the accompanying materials are made available under the 
  * terms of the Eclipse Public License v1.0 and Eclipse Distribution License v. 1.0 
  * which accompanies this distribution. 
@@ -917,7 +917,7 @@ public class MappedKeyMapContainerPolicy extends MapContainerPolicy implements C
                 addInto(keyObjects.get(i), values[i], result, session);
             }
         } else {
-            Map<Object, Object> fromCache = session.getIdentityMapAccessor().getAllFromIdentityMapWithEntityPK(values, elementDescriptor);
+            Map<Object, Object> fromCache = session.getIdentityMapAccessorInstance().getAllFromIdentityMapWithEntityPK(values, elementDescriptor);
             DatabaseRecord translationRow = new DatabaseRecord();
             List foreignKeyValues = new ArrayList(pks.length - fromCache.size());
             

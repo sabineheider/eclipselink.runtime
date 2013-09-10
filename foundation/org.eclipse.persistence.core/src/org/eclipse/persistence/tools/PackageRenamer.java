@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 1998, 2012 Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1998, 2013 Oracle and/or its affiliates. All rights reserved.
  * This program and the accompanying materials are made available under the 
  * terms of the Eclipse Public License v1.0 and Eclipse Distribution License v. 1.0 
  * which accompanies this distribution. 
@@ -352,14 +352,22 @@ public class PackageRenamer {
     */
     public Properties readChangesFile(String filename) {
         Properties props = new Properties();
+        InputStream in = null;
         try {
-            InputStream in = new FileInputStream(filename);
+            in = new FileInputStream(filename);
             props.load(in);
-            in.close();
         } catch (FileNotFoundException fileNotFoundException) {
             throw new PackageRenamerException("Properties file was not found:" + CR + "  '" + filename + "'");
         } catch (IOException ioException) {
             throw new PackageRenamerException("IO error occurred while reading the properties file:'" + filename + "'" + ioException.getMessage());
+        } finally {
+            if (in != null) {
+                try {
+                    in.close();
+                } catch (Exception e) {
+                    // ignore
+                }
+            }
         }
         logln("Using properties file: " + filename);
         return props;
@@ -436,8 +444,9 @@ public class PackageRenamer {
 
         // Reading file into string.
         // stringContainAllFile = readAllStringsFromFile(sourceFileName);
+        FileInputStream fis = null;
         try {
-            FileInputStream fis = new FileInputStream(new java.io.File(sourceFileName));
+            fis = new FileInputStream(new java.io.File(sourceFileName));
             byte[] buf = new byte[BUFSIZ];
             StringBuffer strBuf = new StringBuffer((int)new java.io.File(sourceFileName).length());
             int i = 0;
@@ -456,6 +465,14 @@ public class PackageRenamer {
 
         } catch (IOException ioException) {
             throw new PackageRenamerException("Unexpected exception was thrown during file manipulation." + ioException.getMessage());
+        } finally {
+            if (fis != null) {
+                try {
+                    fis.close();
+                } catch (Exception e) {
+                    // ignore
+                }
+            }
         }
 
         // Sorting key package name.

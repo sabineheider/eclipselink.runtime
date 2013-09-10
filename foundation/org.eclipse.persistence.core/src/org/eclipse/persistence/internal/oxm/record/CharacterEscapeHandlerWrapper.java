@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2012 Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, 2013 Oracle and/or its affiliates. All rights reserved.
  * This program and the accompanying materials are made available under the
  * terms of the Eclipse Public License v1.0 and Eclipse Distribution License v. 1.0
  * which accompanies this distribution.
@@ -19,8 +19,8 @@ import java.lang.reflect.Method;
 
 import org.eclipse.persistence.exceptions.XMLMarshalException;
 import org.eclipse.persistence.internal.core.helper.CoreClassConstants;
+import org.eclipse.persistence.internal.oxm.CharacterEscapeHandler;
 import org.eclipse.persistence.internal.security.PrivilegedAccessHelper;
-import org.eclipse.persistence.oxm.CharacterEscapeHandler;
 
 /**
  * INTERNAL:

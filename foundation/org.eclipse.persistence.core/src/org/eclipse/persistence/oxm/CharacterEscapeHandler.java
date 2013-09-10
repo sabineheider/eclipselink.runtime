@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2012 Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, 2013 Oracle and/or its affiliates. All rights reserved.
  * This program and the accompanying materials are made available under the
  * terms of the Eclipse Public License v1.0 and Eclipse Distribution License v. 1.0
  * which accompanies this distribution.
@@ -21,7 +21,7 @@ import java.io.Writer;
  * Provide an interface to allow for custom character escaping behaviour.
  * </p>
  */
-public interface CharacterEscapeHandler {
+public interface CharacterEscapeHandler extends org.eclipse.persistence.internal.oxm.CharacterEscapeHandler {
 
     /**
      * <p>
@@ -45,6 +45,7 @@ public interface CharacterEscapeHandler {
      * @param out The resulting escaped characters will be written to this Writer
      * @throws IOException In an error condition, IOException can be thrown to stop the marshalling process
      */
+    @Override
     public void escape(char[] buffer, int start, int length, boolean isAttributeValue, Writer out) throws IOException;
 
 }

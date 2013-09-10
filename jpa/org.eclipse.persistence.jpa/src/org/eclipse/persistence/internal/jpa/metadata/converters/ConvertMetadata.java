@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2012, 2013 Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, 2013, 2013 Oracle and/or its affiliates. All rights reserved.
  * This program and the accompanying materials are made available under the 
  * terms of the Eclipse Public License v1.0 and Eclipse Distribution License v. 1.0 
  * which accompanies this distribution. 
@@ -62,7 +62,7 @@ public class ConvertMetadata extends ORMetadata {
      * Used for XML loading.
      */
     public ConvertMetadata() {
-        super("<convert");
+        super("<convert>");
     }
     
     /**
@@ -72,7 +72,7 @@ public class ConvertMetadata extends ORMetadata {
     public ConvertMetadata(MetadataAnnotation convert, MetadataAccessor accessor) {
         super(convert, accessor);
         
-        m_converterClass = getMetadataClass((String) convert.getAttributeClass("converter", Void.class));
+        m_converterClass = getMetadataClass(convert.getAttributeClass("converter", Void.class));
         m_attributeName = convert.getAttributeString("attributeName");
         m_disableConversion = convert.getAttributeBooleanDefaultFalse("disableConversion");  
     }
@@ -173,6 +173,11 @@ public class ConvertMetadata extends ORMetadata {
     @Override
     public void initXMLObject(MetadataAccessibleObject accessibleObject, XMLEntityMappings entityMappings) {
         super.initXMLObject(accessibleObject, entityMappings);
+        
+        // Trim any leading and trailing white spaces from the text if specified.
+        if (m_text != null) {
+            m_text = m_text.trim();
+        }
         
         // Initialize the converter class name.
         m_converterClass = initXMLClassName(m_converterClassName);

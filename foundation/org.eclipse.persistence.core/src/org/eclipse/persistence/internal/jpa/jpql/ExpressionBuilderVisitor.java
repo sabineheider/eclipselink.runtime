@@ -149,7 +149,7 @@ import org.eclipse.persistence.queries.ReportQuery;
  * JPQL Expression} and creates the corresponding {@link org.eclipse.persistence.expressions.
  * Expression EclipseLink Expression}.
  *
- * @version 2.5
+ * @version 2.6
  * @since 2.3
  * @author Pascal Filion
  * @author John Bracken
@@ -688,9 +688,21 @@ final class ExpressionBuilderVisitor implements EclipseLinkExpressionVisitor {
 			Expression parentExpression = queryExpression;
 
 			// Now create the actual expression
-			String lastPath = pathExpression.getPath(pathExpression.pathSize() - 1);
-			queryExpression = new ExpressionBuilder().equal(entityExpression);
-			queryExpression = parentExpression.noneOf(lastPath, queryExpression);
+			Expression newBuilder = new ExpressionBuilder();
+			Expression collectionBase = newBuilder;
+            for (int i = 1; i < pathExpression.pathSize() - 1; i++) {
+                // nested paths must be single valued.
+                collectionBase = collectionBase.get(pathExpression.getPath(i));
+            }
+            String lastPath = pathExpression.getPath(pathExpression.pathSize() - 1);
+            // The following code is copied from Expression.noneOf and altered a bit
+            Expression criteria = newBuilder.equal(parentExpression).and(collectionBase.anyOf(lastPath).equal(entityExpression));
+            ReportQuery subQuery = new ReportQuery();
+            subQuery.setShouldRetrieveFirstPrimaryKey(true);
+            subQuery.setSelectionCriteria(criteria);
+            // subQuery has the same reference class as parentExpression (which is an ExpressionBuilder).
+            subQuery.setReferenceClass(((ExpressionBuilder)parentExpression).getQueryClass());
+            queryExpression = parentExpression.notExists(subQuery);
 		}
 		else {
 			// Create the expression for the collection-valued path expression
@@ -1234,7 +1246,7 @@ final class ExpressionBuilderVisitor implements EclipseLinkExpressionVisitor {
 		queryExpression = queryExpression.getParameter(parameterName.substring(1), type);
 
 		// Cache the input parameter type
-		queryContext.addInputParameter(parameterName, type);
+		queryContext.addInputParameter(expression, queryExpression);
 	}
 
 	/**
@@ -1557,7 +1569,16 @@ final class ExpressionBuilderVisitor implements EclipseLinkExpressionVisitor {
 
 		// Instantiate a Number object with the value
 		type[0] = queryContext.getType(expression);
-		Number number = queryContext.newInstance(type[0], String.class, expression.getText());
+
+		// Special case for a long number, Long.parseLong() does not handle 'l|L'
+		// but Double.parseDouble() and Float.parseFloat() do handle 'd|D' and 'f|F', respectively
+		String text = expression.getText();
+
+		if ((type[0] == Long.class) && (text.endsWith("L") || text.endsWith("l"))) {
+			text = text.substring(0, text.length() - 1);
+		}
+
+		Number number = queryContext.newInstance(type[0], String.class, text);
 
 		// Now create the numeric expression
 		queryExpression = new ConstantExpression(number, queryContext.getBaseExpression());
@@ -2309,15 +2330,12 @@ final class ExpressionBuilderVisitor implements EclipseLinkExpressionVisitor {
 			if (singleInputParameter) {
 				String parameterName = expression.getParameter();
 
-				// The type is by default Collection
-				Class<?> type = Collection.class;
-
-				// Create the expression
+				// Create the expression with Collection as the default type
 				queryExpression = queryContext.getBaseExpression();
-				queryExpression = queryExpression.getParameter(parameterName.substring(1), type);
+				queryExpression = queryExpression.getParameter(parameterName.substring(1), Collection.class);
 
 				// Cache the input parameter type, which is by default Collection
-				queryContext.addInputParameter(parameterName, type);
+				queryContext.addInputParameter(expression, queryExpression);
 
 				if (hasNot) {
 					queryExpression = leftExpression.notIn(queryExpression);

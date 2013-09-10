@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 1998, 2012 Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1998, 2013 Oracle and/or its affiliates. All rights reserved.
  * This program and the accompanying materials are made available under the
  * terms of the Eclipse Public License v1.0 and Eclipse Distribution License v. 1.0
  * which accompanies this distribution.
@@ -538,6 +538,8 @@ public class ExpressionTestSuite extends TestSuite {
         test.setSupportedInMemory(false);
         test.setDescription("expression function test");
         test.addUnsupportedPlatform(TimesTenPlatform.class);
+        // MaxDB doesn't support CAST function
+        test.addUnsupportedPlatform(MaxDBPlatform.class);
         addTest(test);
     }
 
@@ -1016,6 +1018,7 @@ public class ExpressionTestSuite extends TestSuite {
         test.setDescription("test functions on multiple platforms");
         test.addUnsupportedPlatform(DB2Platform.class);
         test.addUnsupportedPlatform(TimesTenPlatform.class);
+        test.addUnsupportedPlatform(SybasePlatform.class);
         addTest(test);
     }
     
@@ -1039,6 +1042,7 @@ public class ExpressionTestSuite extends TestSuite {
         test.setName("MultiPlatformTest2");
         test.setDescription("test simple Case function on multiple platforms");
         test.addUnsupportedPlatform(DerbyPlatform.class);
+        test.addUnsupportedPlatform(SybasePlatform.class);
         addTest(test);
     }
     
@@ -1065,6 +1069,7 @@ public class ExpressionTestSuite extends TestSuite {
         test.setName("MultiPlatformTest3");
         test.setDescription("test Case function with more complex expressions on multiple platforms");
         /*TODO: add in any unsupported platform checks*/
+        test.addUnsupportedPlatform(SybasePlatform.class);
         addTest(test);
     }
     

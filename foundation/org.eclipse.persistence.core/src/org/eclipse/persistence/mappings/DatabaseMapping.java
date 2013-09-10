@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 1998, 2012 Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1998, 2013 Oracle and/or its affiliates. All rights reserved.
  * This program and the accompanying materials are made available under the 
  * terms of the Eclipse Public License v1.0 and Eclipse Distribution License v. 1.0 
  * which accompanies this distribution. 
@@ -11,8 +11,11 @@
  *     Oracle - initial API and implementation from Oracle TopLink
  *     11/10/2011-2.4 Guy Pelletier 
  *       - 357474: Address primaryKey option from tenant discriminator column
- *      *     30/05/2012-2.4 Guy Pelletier    
+ *     30/05/2012-2.4 Guy Pelletier    
  *       - 354678: Temp classloader is still being used during metadata processing
+ *     06/03/2013-2.5.1 Guy Pelletier    
+ *       - 402380: 3 jpa21/advanced tests failed on server with 
+ *         "java.lang.NoClassDefFoundError: org/eclipse/persistence/testing/models/jpa21/advanced/enums/Gender" 
  ******************************************************************************/  
 package org.eclipse.persistence.mappings;
 
@@ -43,6 +46,7 @@ import org.eclipse.persistence.internal.security.PrivilegedAccessHelper;
 import org.eclipse.persistence.internal.security.PrivilegedClassForName;
 import org.eclipse.persistence.internal.sessions.remote.*;
 import org.eclipse.persistence.internal.sessions.*;
+import org.eclipse.persistence.mappings.converters.Converter;
 import org.eclipse.persistence.queries.*;
 import org.eclipse.persistence.sessions.remote.*;
 import org.eclipse.persistence.sessions.CopyGroup;
@@ -150,6 +154,17 @@ public abstract class DatabaseMapping extends CoreMapping<AttributeAccessor, Abs
     //shared cache.
     protected boolean isCacheable = true;
 
+    /** 
+     * Irrelevant (and not set) unless descriptor has SerializedObjectPolicy (SOP).
+     * If descriptor has SOP, then ObjectLevelReadQuery (with shouldUseSerializedObjectPolicy flag set to true)
+     * reads in row that contain both field/value pairs and sopObject.
+     * This flag indicates whether the data for this mapping is contained in the row's sopObject or in fields/values.
+     *   Boolean.TRUE - sopObject (in sopObject)
+     *   Boolean.FALSE - fields/values (out sopObject);
+     *   null -  both sopObject and fields/values (both in and out sopObject).
+     * While writing to the data base the mapping will be used for writing into sopObject unless this flag is set to Boolean.FALSE;
+     */ 
+    protected Boolean isInSopObject;
 
     /**
      * PUBLIC:
@@ -405,6 +420,16 @@ public abstract class DatabaseMapping extends CoreMapping<AttributeAccessor, Abs
             }
         }
     }
+    
+    /**
+     * Convenience method to ensure converters have an opportunity to convert
+     * any class names to classes during project setup.
+     */
+    protected void convertConverterClassNamesToClasses(Converter converter, ClassLoader classLoader) {
+        if (converter != null && converter instanceof ClassNameConversionRequired) {
+            ((ClassNameConversionRequired)converter).convertClassNamesToClasses(classLoader);
+        } 
+    }
 
     /**
      * INTERNAL:
@@ -435,11 +460,49 @@ public abstract class DatabaseMapping extends CoreMapping<AttributeAccessor, Abs
     /**
      * INTERNAL:
      * Extract the nested attribute expressions that apply to this mapping.
-     * This is used for partial objects and joining.
-     * @param rootExpressionsAllowed true if newRoot itself can be one of the
-     * expressions returned
+     * This is used for partial objects, and batch fetching.
      */
-    protected List<Expression> extractNestedExpressions(List<Expression> expressions, ExpressionBuilder newRoot, boolean rootExpressionsAllowed) {
+    protected List<Expression> extractNestedExpressions(List<Expression> expressions, ExpressionBuilder newRoot) {
+        List<Expression> nestedExpressions = new ArrayList(expressions.size());
+
+        /*
+         * If the expression closest to to the Builder is for this mapping, that expression is rebuilt using
+         * newRoot and added to the nestedExpressions list.  
+         */
+        for (Expression next : expressions) {
+            // The expressionBuilder can be one of the locked expressions in
+            // the ForUpdateOfClause.
+            if (!next.isQueryKeyExpression()) {
+                continue;
+            }
+            QueryKeyExpression expression = (QueryKeyExpression)next;
+            ObjectExpression base = expression;
+            boolean afterBase = false;
+            
+            while (!base.getBaseExpression().isExpressionBuilder()) {
+                base = (ObjectExpression)base.getBaseExpression();
+                afterBase = true;
+            }
+            if (base.getName().equals(getAttributeName())) {
+                // Only add the nested expressions for the mapping (not the mapping itself).
+                if (afterBase) {
+                    nestedExpressions.add(expression.rebuildOn(base, newRoot));
+                }
+            }
+        }
+        return nestedExpressions;
+    }
+
+    /**
+     * INTERNAL:
+     * Extract the nested attribute expressions that apply to this mapping.
+     * This is used for joining, and locking.
+     * For aggregates return the nested foreign reference mapping, not the aggregate, as the aggregates are not joined,
+     * and share their parent's query.
+     * @param rootExpressionsAllowed true if newRoot itself can be one of the
+     * expressions returned (used for locking)
+     */
+    protected List<Expression> extractNestedNonAggregateExpressions(List<Expression> expressions, ExpressionBuilder newRoot, boolean rootExpressionsAllowed) {
         List<Expression> nestedExpressions = new ArrayList(expressions.size());
 
         /*
@@ -751,6 +814,14 @@ public abstract class DatabaseMapping extends CoreMapping<AttributeAccessor, Abs
         // Not lazy by default.
     }
 
+    /**
+     * INTERNAL:
+     * Return whether the specified object is instantiated.
+     */
+    public boolean isAttributeValueFromObjectInstantiated(Object object) {
+        return true;
+    }
+    
     /**
      * INTERNAL:
      * Return the value of an attribute, unwrapping value holders if necessary.
@@ -1325,7 +1396,14 @@ public abstract class DatabaseMapping extends CoreMapping<AttributeAccessor, Abs
     /**
      * Force instantiation of the load group.
      */
-    public void load(final Object object, AttributeItem item, final AbstractSession session) {
+    public void load(final Object object, AttributeItem item, final AbstractSession session, final boolean fromFetchGroup) {
+        // Do nothing by default.
+    }
+    
+    /**
+     * Force instantiation of all indirections.
+     */
+    public void loadAll(Object object, AbstractSession session, IdentityHashSet loaded) {
         // Do nothing by default.
     }
     
@@ -1768,6 +1846,80 @@ public abstract class DatabaseMapping extends CoreMapping<AttributeAccessor, Abs
      */
     public Object valueFromRow(AbstractRecord row, JoinedAttributeManager joinManager, ObjectBuildingQuery query, CacheKey cacheKey, AbstractSession session, boolean isTargetProtected, Boolean[] wasCacheUsed) throws DatabaseException {
         return null;
+    }
+    
+    /**
+     * INTERNAL:
+     * Indicates whether the mapping is in SerializedObjectPolicy's sopObject.
+     */
+    public boolean isInSopObject() {
+        return this.isInSopObject == null || this.isInSopObject; 
+    }
+
+    /**
+     * INTERNAL:
+     * Indicates whether the mapping is in SerializedObjectPolicy's sopObject and not out of it.
+     */
+    public boolean isInOnlySopObject() {
+        return this.isInSopObject != null && this.isInSopObject; 
+    }
+
+    /**
+     * INTERNAL:
+     * Indicates whether the mapping is out of SerializedObjectPolicy's sopObject.
+     */
+    public boolean isOutSopObject() {
+        return this.isInSopObject == null || !this.isInSopObject; 
+    }
+    
+    /**
+     * INTERNAL:
+     * Indicates whether the mapping is out of SerializedObjectPolicy's sopObject and not in it.
+     */
+    public boolean isOutOnlySopObject() {
+        return this.isInSopObject != null && !this.isInSopObject; 
+    }
+    
+    /**
+     * INTERNAL:
+     * Indicates whether the mapping is both in and out of SerializedObjectPolicy's sopObject.
+     */
+    public boolean isInAndOutSopObject() {
+        return this.isInSopObject == null; 
+    }
+    
+    /**
+     * INTERNAL:
+     * Set the mapping is in SerializedObjectPolicy's sopObject.
+     */
+    public void setIsInSopObject() {
+        this.isInSopObject = Boolean.TRUE;
+    }
+
+    /**
+     * INTERNAL:
+     * Set the mapping is out of SerializedObjectPolicy's sopObject.
+     */
+    public void setIsOutSopObject() {
+        this.isInSopObject = Boolean.FALSE;
+    }
+
+    /**
+     * INTERNAL:
+     * Set the mapping is both in and out of SerializedObjectPolicy's sopObject
+     */
+    public void setIsInAndOutSopObject() {
+        this.isInSopObject = null;
+    }
+
+    /**
+     * INTERNAL:
+     * Indicates whether the mapping (or at least one of its nested mappings, at any nested depth) 
+     * references an entity.
+     * To return true the mapping (or nested mapping) should be ForeignReferenceMapping with non-null and non-aggregate reference descriptor.  
+     */
+    public boolean hasNestedIdentityReference() {
+        return false; 
     }
     
     /**

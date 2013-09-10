@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 1998, 2012 Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1998, 2013 Oracle and/or its affiliates. All rights reserved.
  * This program and the accompanying materials are made available under the 
  * terms of the Eclipse Public License v1.0 and Eclipse Distribution License v. 1.0 
  * which accompanies this distribution. 
@@ -20,6 +20,7 @@ import junit.framework.TestSuite;
 
 import javax.persistence.EntityManager;
 
+import org.eclipse.persistence.config.QueryHints;
 import org.eclipse.persistence.internal.sessions.AbstractSession;
 import org.eclipse.persistence.queries.ReadObjectQuery;
 import org.eclipse.persistence.sessions.DatabaseSession;
@@ -29,6 +30,7 @@ import org.eclipse.persistence.testing.models.jpa.advanced.Employee;
 import org.eclipse.persistence.testing.models.jpa.advanced.EmployeePopulator;
 import org.eclipse.persistence.testing.models.jpa.advanced.Project;
 import org.eclipse.persistence.testing.models.jpa.advanced.SmallProject;
+import org.eclipse.persistence.testing.models.jpa.inheritance.AAA;
 import org.eclipse.persistence.testing.models.jpa.inheritance.Engineer;
 import org.eclipse.persistence.testing.models.jpa.inheritance.InheritancePopulator;
 import org.eclipse.persistence.testing.models.jpa.inheritance.InheritanceTableCreator;
@@ -80,6 +82,7 @@ public class JUnitJPQLInheritanceTestSuite extends JUnitTestCase {
         suite.addTest(new JUnitJPQLInheritanceTestSuite("testJoinedInheritanceWithLeftOuterJoin3"));
         suite.addTest(new JUnitJPQLInheritanceTestSuite("testComputer"));
         suite.addTest(new JUnitJPQLInheritanceTestSuite("testAllPeople"));
+        suite.addTest(new JUnitJPQLInheritanceTestSuite("testConverter"));
         
         return suite;
     }
@@ -256,6 +259,26 @@ public class JUnitJPQLInheritanceTestSuite extends JUnitTestCase {
         }
     }
 
+    public void testConverter(){
+        EntityManager em = createEntityManager();
+        beginTransaction(em);
+        try{
+            AAA aaa = new AAA();
+            em.persist(aaa);
+            aaa = new AAA();
+            em.persist(aaa);
+            em.flush();
+            String ejbqlString = "SELECT MAX(aaa.id) FROM AAA aaa";
+            Object result = em.createQuery(ejbqlString).getSingleResult();
+            if (!(result.getClass() == String.class)) {
+                fail("Converter not applied");
+            }
+        } finally{
+            rollbackTransaction(em);
+        }
+
+    }
+    
     // Helper methods and classes for constructor query test cases
     public static boolean equals(Object o1, Object o2) {
         if (o1 == o2) {

@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 1998, 2012 Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1998, 2013 Oracle and/or its affiliates. All rights reserved.
  * This program and the accompanying materials are made available under the 
  * terms of the Eclipse Public License v1.0 and Eclipse Distribution License v. 1.0 
  * which accompanies this distribution. 
@@ -19,6 +19,10 @@ import java.util.List;
  */
 public interface EmployeeService {
     List findAll();
+
+    void batchFind(long ids[]);
+    
+    int batchUpdate(long ids[], int retry);
     
     Employee findById(long id);
     

@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 1998, 2012 Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1998, 2013 Oracle and/or its affiliates. All rights reserved.
  * This program and the accompanying materials are made available under the 
  * terms of the Eclipse Public License v1.0 and Eclipse Distribution License v. 1.0 
  * which accompanies this distribution. 
@@ -19,9 +19,11 @@ import java.util.Map;
 
 import org.eclipse.persistence.internal.core.sessions.CoreAbstractSession;
 import org.eclipse.persistence.internal.oxm.XPathFragment;
+import org.eclipse.persistence.internal.oxm.mappings.Mapping;
 import org.eclipse.persistence.internal.oxm.record.MarshalContext;
 import org.eclipse.persistence.internal.oxm.record.MarshalRecord;
 import org.eclipse.persistence.internal.oxm.record.ObjectMarshalContext;
+import org.eclipse.persistence.core.queries.CoreAttributeGroup;
 
 /**
  * INTERNAL:
@@ -54,16 +56,16 @@ public class XPathNode {
     private List<XPathNode> selfChildren;
     private Map<XPathFragment, XPathNode> attributeChildrenMap;
     private Map<XPathFragment, XPathNode> nonAttributeChildrenMap;
-    private XMLAnyAttributeMappingNodeValue anyAttributeNodeValue;
+    private MappingNodeValue anyAttributeNodeValue;
     private XPathNode anyAttributeNode;
     private XPathNode textNode;
     private XPathNode anyNode;
     private boolean hasTypeChild;
     private boolean hasPredicateSiblings;
     private boolean hasPredicateChildren;
-
-
-	public XPathFragment getXPathFragment() {
+    private NullCapableValue nullCapableValue;
+	
+    public XPathFragment getXPathFragment() {
         return xPathFragment;
     }
 
@@ -107,6 +109,14 @@ public class XPathNode {
         isMarshalOnlyNodeValue =  marshalNodeValue.isMarshalOnlyNodeValue();
     }
     
+    public NullCapableValue getNullCapableValue() {
+        return nullCapableValue;
+    }
+
+    public void setNullCapableValue(NullCapableValue nullCapableValue) {
+        this.nullCapableValue = nullCapableValue;
+    }
+    
     public XPathNode getParent() {
         return parent;
     }
@@ -135,11 +145,11 @@ public class XPathNode {
         return this.attributeChildrenMap;
     }
 
-    public void setAnyAttributeNodeValue(XMLAnyAttributeMappingNodeValue nodeValue) {
+    public void setAnyAttributeNodeValue(MappingNodeValue nodeValue) {
         this.anyAttributeNodeValue = nodeValue;
     }
 
-    public XMLAnyAttributeMappingNodeValue getAnyAttributeNodeValue() {
+    public MappingNodeValue getAnyAttributeNodeValue() {
         return this.anyAttributeNodeValue;
     }
 
@@ -267,8 +277,8 @@ public class XPathNode {
                 xPathNode.setUnmarshalNodeValue(aNodeValue);
             }
             xPathNode.setParent(this);
-            if (aNodeValue instanceof XMLAnyAttributeMappingNodeValue) {
-                setAnyAttributeNodeValue((XMLAnyAttributeMappingNodeValue)aNodeValue);
+            if (aNodeValue instanceof XMLAnyAttributeMappingNodeValue || (aNodeValue instanceof XMLVariableXPathObjectMappingNodeValue && ((XMLVariableXPathObjectMappingNodeValue)aNodeValue).getMapping().isAttribute() ) || (aNodeValue instanceof XMLVariableXPathCollectionMappingNodeValue && ((XMLVariableXPathCollectionMappingNodeValue)aNodeValue).getMapping().isAttribute() )) {
+                setAnyAttributeNodeValue((MappingNodeValue)aNodeValue);
                 anyAttributeNode = xPathNode;
             } else {
                 if(!children.contains(xPathNode)) {
@@ -336,6 +346,19 @@ public class XPathNode {
 
     public boolean marshal(MarshalRecord marshalRecord, Object object, CoreAbstractSession session, NamespaceResolver namespaceResolver, Marshaller marshaller, MarshalContext marshalContext, XPathFragment rootFragment) {
         if ((null == marshalNodeValue) || isMarshalOnlyNodeValue) {
+            if(marshalRecord.isWrapperAsCollectionName() && null != nonAttributeChildren && nonAttributeChildren.size() == 1) {
+                XPathNode childXPathNode = nonAttributeChildren.get(0);
+                NodeValue childXPathNodeUnmarshalNodeValue = childXPathNode.getUnmarshalNodeValue();
+                if(childXPathNodeUnmarshalNodeValue != null && childXPathNodeUnmarshalNodeValue.isContainerValue()) {
+                    ContainerValue containerValue = (ContainerValue) childXPathNodeUnmarshalNodeValue;
+                    if(containerValue.isWrapperAllowedAsCollectionName()) {
+                        XPathNode wrapperXPathNode = new XPathNode();
+                        wrapperXPathNode.setXPathFragment(this.getXPathFragment());
+                        wrapperXPathNode.setMarshalNodeValue(childXPathNode.getMarshalNodeValue());
+                        return wrapperXPathNode.marshal(marshalRecord, object, session, namespaceResolver, marshaller, marshalContext, rootFragment);
+                    }
+                }
+            }
             marshalRecord.addGroupingElement(this);
 
             boolean hasValue = false;
@@ -368,6 +391,13 @@ public class XPathNode {
 
             return hasValue;
         } else {
+            if(marshalNodeValue.isMappingNodeValue()) {
+                Mapping mapping = ((MappingNodeValue)marshalNodeValue).getMapping();
+                CoreAttributeGroup currentGroup = marshalRecord.getCurrentAttributeGroup();
+                if(!(currentGroup.containsAttributeInternal(mapping.getAttributeName()))) {
+                    return false;
+                }
+            }
             return marshalContext.marshal(marshalNodeValue, xPathFragment, marshalRecord, object, session, namespaceResolver, rootFragment);
         }
     }

@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2012 Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, 2013 Oracle and/or its affiliates. All rights reserved.
  * This program and the accompanying materials are made available under the
  * terms of the Eclipse Public License v1.0 and Eclipse Distribution License v. 1.0
  * which accompanies this distribution.
@@ -24,8 +24,8 @@ import org.eclipse.persistence.internal.core.helper.CoreField;
 import org.eclipse.persistence.internal.core.sessions.CoreAbstractRecord;
 import org.eclipse.persistence.internal.core.sessions.CoreAbstractSession;
 import org.eclipse.persistence.internal.oxm.Constants;
+import org.eclipse.persistence.internal.oxm.ConversionManager;
 import org.eclipse.persistence.internal.oxm.Marshaller;
-import org.eclipse.persistence.internal.oxm.MediaType;
 import org.eclipse.persistence.internal.oxm.Namespace;
 import org.eclipse.persistence.internal.oxm.NamespaceResolver;
 import org.eclipse.persistence.internal.oxm.ObjectBuilder;
@@ -42,6 +42,7 @@ public class AbstractMarshalRecordImpl<
     MARSHALLER extends Marshaller,
     NAMESPACE_RESOLVER extends NamespaceResolver> extends CoreAbstractRecord implements AbstractMarshalRecord<ABSTRACT_SESSION, FIELD, MARSHALLER, NAMESPACE_RESOLVER> {
 
+    private ConversionManager conversionManager;
     protected boolean equalNamespaceResolvers;
     protected boolean hasCustomNamespaceMapper;
     private boolean isXOPPackage;
@@ -172,7 +173,7 @@ public class AbstractMarshalRecordImpl<
                     classIndicatorUri = descriptor.getNonNullNamespaceResolver().resolveNamespacePrefix(prefix);
                 }
                 if(leafType == null 
-                        || isRootElement && marshaller.getMediaType().isApplicationJSON() && !marshaller.isIncludeRoot() 
+                        || isRootElement && marshaller.isApplicationJSON() && !marshaller.isIncludeRoot() 
                         || !(leafType.getLocalPart().equals(classIndicatorLocal))
                         || (classIndicatorUri == null && (leafType.getNamespaceURI() != null && leafType.getNamespaceURI().length() >0))
                         || (classIndicatorUri != null && !classIndicatorUri.equals(leafType.getNamespaceURI()))
@@ -206,6 +207,11 @@ public class AbstractMarshalRecordImpl<
                 if (xmlRef == null) {
                     return false;
                 }
+            
+	    if (xr.getDeclaredType() != null && xr.getDeclaredType() == xr.getObject().getClass()) {
+                    return false;
+                }
+
                 String xmlRootLocalName = xr.getLocalName();
                 String xmlRootUri = xr.getNamespaceURI();
 
@@ -219,10 +225,6 @@ public class AbstractMarshalRecordImpl<
                     }
                     return false;
 
-                }
-
-                if (xr.getDeclaredType() != null && xr.getDeclaredType() == xr.getObject().getClass()) {
-                    return false;
                 }
 
                 boolean writeTypeAttribute = true;
@@ -287,6 +289,17 @@ public class AbstractMarshalRecordImpl<
             qualifiedName = prefix + getNamespaceSeparator() + qualifiedName;
         }
         attribute(namespaceURI, localName, qualifiedName, value);
+    }
+
+    /**
+     * @since EclipseLink 2.6.0
+     */
+    @Override
+    public ConversionManager getConversionManager() {
+        if(null == conversionManager) {
+            conversionManager = (ConversionManager) session.getDatasourcePlatform().getConversionManager();
+        }
+        return conversionManager;
     }
 
     @Override
@@ -410,11 +423,10 @@ public class AbstractMarshalRecordImpl<
     public void setMarshaller(MARSHALLER marshaller) {
         this.marshaller = marshaller;
         if(marshaller != null){
-            MediaType mediaType = marshaller.getMediaType();
             if(marshaller.getNamespacePrefixMapper() != null){
                 namespaceAware = true;              
             }else{
-                namespaceAware = mediaType.isApplicationXML();
+                namespaceAware = marshaller.isApplicationXML();
             }
         }
     }

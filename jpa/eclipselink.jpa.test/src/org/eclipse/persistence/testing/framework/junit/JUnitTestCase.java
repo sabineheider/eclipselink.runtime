@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 1998, 2009 Oracle. All rights reserved.
+ * Copyright (c) 1998, 2013 Oracle and/or its affiliates. All rights reserved.
  * This program and the accompanying materials are made available under the 
  * terms of the Eclipse Public License v1.0 and Eclipse Distribution License v. 1.0 
  * which accompanies this distribution. 
@@ -99,6 +99,12 @@ public abstract class JUnitTestCase extends TestCase {
     
     /** Allow OSGi specific behavior. */
     public static boolean isOSGi = false;
+    
+    /** Indicates whether SOP should be used */
+    public static Boolean usesSOP;
+
+    /** Indicates whether SOP should be recoverable. Ignored unless useSOP is true */
+    public static Boolean isSOPRecoverable;
     
     /**
      * This is a hack to enable weaving in Spring tests.
@@ -256,6 +262,26 @@ public abstract class JUnitTestCase extends TestCase {
     }
     
     /**
+     * Indicates whether SOP should be used.
+     */
+    public static boolean usesSOP() {
+    	if (usesSOP == null) {
+    		usesSOP = Boolean.valueOf(System.getProperty("sop"));
+    	}
+		return usesSOP;
+    }
+    
+    /**
+     * Indicates whether SOP should be recoverable. Ignored unless useSOP is true.
+     */
+    public static boolean isSOPRecoverable() {
+    	if (isSOPRecoverable == null) {
+    		isSOPRecoverable = Boolean.valueOf(System.getProperty("sop.recoverable"));
+    	}
+		return isSOPRecoverable;
+    }
+    
+    /**
      * Return the server platform if running in JEE.
      */
     public static ServerPlatform getServerPlatform() {
@@ -345,11 +371,15 @@ public abstract class JUnitTestCase extends TestCase {
     
     /**
      * Begin a transaction on the entity manager.
-     * This allows the same code to be used on the server where JTA is used.
+     * This allows the same code to be used on the server where JTA is used,
+     * and will join the EntityManager to the transaction.
      */
     public void beginTransaction(EntityManager entityManager) {
         if (isOnServer() && isJTA()) {
             getServerPlatform().beginTransaction();
+            //bug 404294 - the EM is required to join the transaction to be able to 
+            //    use transactions started after it was created.
+            getServerPlatform().joinTransaction(entityManager);
         } else {
             entityManager.getTransaction().begin();
         }
@@ -484,6 +514,7 @@ public abstract class JUnitTestCase extends TestCase {
     }
     
     public static EntityManagerFactory getEntityManagerFactory(String persistenceUnitName, Map properties, List<ClassDescriptor> descriptors) {
+        //properties.put("eclipselink.tuning", "ExaLogic");
         if (isOnServer()) {
             return getServerPlatform().getEntityManagerFactory(persistenceUnitName);
         } else {
@@ -729,11 +760,19 @@ public abstract class JUnitTestCase extends TestCase {
         AbstractSession dbs = getDatabaseSession(persistenceUnit); 
         Object readObject = dbs.readObject(writtenObject);
         if (!dbs.compareObjects(readObject, writtenObject)) {
+            int level = dbs.getLogLevel();
+            dbs.setLogLevel(SessionLog.FINEST);
+            dbs.compareObjects(readObject, writtenObject);
+            dbs.setLogLevel(level);
             fail("Object from cache: " + readObject + " does not match object that was written: " + writtenObject + ". See log (on finest) for what did not match.");
         }
         dbs.getIdentityMapAccessor().initializeAllIdentityMaps();
         readObject = dbs.readObject(writtenObject);
         if (!dbs.compareObjects(readObject, writtenObject)) {
+            int level = dbs.getLogLevel();
+            dbs.setLogLevel(SessionLog.FINEST);
+            dbs.compareObjects(readObject, writtenObject);
+            dbs.setLogLevel(level);
             fail("Object from database: " + readObject + " does not match object that was written: " + writtenObject + ". See log (on finest) for what did not match.");
         }
     }

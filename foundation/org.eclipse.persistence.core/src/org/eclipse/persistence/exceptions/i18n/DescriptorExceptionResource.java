@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 1998, 2012 Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1998, 2013 Oracle and/or its affiliates. All rights reserved.
  * This program and the accompanying materials are made available under the 
  * terms of the Eclipse Public License v1.0 and Eclipse Distribution License v. 1.0 
  * which accompanies this distribution. 
@@ -231,7 +231,8 @@ public class DescriptorExceptionResource extends ListResourceBundle {
                                            // 323148
                                            { "218", "A NullPointerException would have occurred accessing a non-existent weaved _vh_ method [{0}].  The class was not weaved properly - for EE deployments, check the module order in the application.xml deployment descriptor and verify that the module containing the persistence unit is ahead of any other module that uses it."},
                                            { "219", "The additional criteria from [{1}] is not allowed within an inheritance hierarchy using views."},
-                                           { "220", "Missing partitioning policy for name [{0}]."}
+                                           { "220", "Missing partitioning policy for name [{0}]."},
+                                           { "221", "SerializedObjectPolicy field is not set."}
 
     };
 

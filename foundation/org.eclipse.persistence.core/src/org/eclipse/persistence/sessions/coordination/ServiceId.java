@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 1998, 2012 Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1998, 2013 Oracle and/or its affiliates. All rights reserved.
  * This program and the accompanying materials are made available under the 
  * terms of the Eclipse Public License v1.0 and Eclipse Distribution License v. 1.0 
  * which accompanies this distribution. 
@@ -43,7 +43,7 @@ public class ServiceId implements Serializable {
     private String url;
 
     /* Cached display string to prevent rebuilding */
-    private String displayString;
+    private transient String displayString;
 
     /** This $HOST token indicate that the host ip of the URL should be replaced at runtime by user input */
     public final static String HOST_TOKEN = "$HOST";

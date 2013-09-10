@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2011, 2012 Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2011, 2013 Oracle and/or its affiliates. All rights reserved.
  * This program and the accompanying materials are made available under the 
  * terms of the Eclipse Public License v1.0 and Eclipse Distribution License v. 1.0 
  * which accompanies this distribution. 
@@ -30,7 +30,7 @@ import org.eclipse.persistence.logging.AbstractSessionLog;
 import org.eclipse.persistence.logging.SessionLog;
 import org.eclipse.persistence.mappings.AggregateMapping;
 import org.eclipse.persistence.mappings.DatabaseMapping;
-import org.eclipse.persistence.mappings.OneToOneMapping;
+import org.eclipse.persistence.mappings.ForeignReferenceMapping;
 import org.eclipse.persistence.mappings.VariableOneToOneMapping;
 import org.eclipse.persistence.mappings.foundation.AbstractDirectMapping;
 import org.eclipse.persistence.mappings.structures.ReferenceMapping;
@@ -90,8 +90,8 @@ public class SingularAttributeImpl<X, T> extends AttributeImpl<X, T> implements 
             
             // We support @OneToOne but not EIS, Reference or VariableOneToOne
             // Note: OneToMany, ManyToMany are handled by PluralAttributeImpl
-            if(mapping.isOneToOneMapping()) { // handles @ManyToOne
-                attributeClass = ((OneToOneMapping)mapping).getReferenceClass();
+            if(mapping instanceof ForeignReferenceMapping) {// handles @ManyToOne
+                attributeClass = ((ForeignReferenceMapping)mapping).getReferenceClass();
             } else if (mapping.isAbstractDirectMapping()) { // Also handles the keys of an EmbeddedId
                 attributeClass = mapping.getField().getType();
                 if(null == attributeClass) {

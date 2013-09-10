@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 1998, 2012 Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1998, 2013 Oracle and/or its affiliates. All rights reserved.
  * This program and the accompanying materials are made available under the 
  * terms of the Eclipse Public License v1.0 and Eclipse Distribution License v. 1.0 
  * which accompanies this distribution. 
@@ -33,6 +33,8 @@ import org.eclipse.persistence.internal.oxm.record.UnmarshalRecord;
 import org.eclipse.persistence.internal.oxm.record.XMLReader;
 import org.eclipse.persistence.internal.oxm.record.XMLRecord;
 import org.eclipse.persistence.internal.oxm.record.deferred.DescriptorNotFoundContentHandler;
+import org.eclipse.persistence.core.queries.CoreAttributeGroup;
+import org.eclipse.persistence.core.queries.CoreAttributeItem;
 import org.xml.sax.Attributes;
 import org.xml.sax.SAXException;
 
@@ -83,10 +85,28 @@ public abstract class XMLRelationshipMappingNodeValue extends MappingNodeValue {
             }
         }
         ObjectBuilder targetObjectBuilder = (ObjectBuilder)xmlDescriptor.getObjectBuilder();
+        
+        CoreAttributeGroup group = unmarshalRecord.getUnmarshalAttributeGroup();
+        CoreAttributeGroup nestedGroup = null;
+        if(group == XMLRecord.DEFAULT_ATTRIBUTE_GROUP) { 
+            nestedGroup = group;
+        }
+        if(nestedGroup == null) {
+            CoreAttributeItem item = group.getItem(getMapping().getAttributeName());
+            nestedGroup = item.getGroup(xmlDescriptor.getJavaClass());
+            if(nestedGroup == null) {
+                if(item.getGroup() == null) {
+                    nestedGroup = XMLRecord.DEFAULT_ATTRIBUTE_GROUP;
+                } else {
+                    nestedGroup = item.getGroup();
+                }
+            }
+        }
         UnmarshalRecord childRecord = unmarshalRecord.getChildUnmarshalRecord(targetObjectBuilder);
         childRecord.setAttributes(atts);
         childRecord.startDocument();
         childRecord.initializeRecord((Mapping) null);
+        childRecord.setUnmarshalAttributeGroup(nestedGroup);
         childRecord.startElement(xPathFragment.getNamespaceURI(), xPathFragment.getLocalName(), xPathFragment.getShortName(), atts);
 
         XMLReader xmlReader = unmarshalRecord.getXMLReader();
@@ -136,7 +156,7 @@ public abstract class XMLRelationshipMappingNodeValue extends MappingNodeValue {
                     returnDescriptor = xmlContext.getDescriptorByGlobalType(frag);
                     if(returnDescriptor == null){
                         if(policy == null || (!policy.isKeepUnknownAsElement() && !policy.isKeepAllAsElement())){
-                            Class theClass = (Class)((XMLConversionManager) unmarshalRecord.getSession().getDatasourcePlatform().getConversionManager()).getDefaultXMLTypes().get(qname);
+                            Class theClass = unmarshalRecord.getConversionManager().javaType(qname);
                             if(theClass == null){
                                 throw XMLMarshalException.unknownXsiTypeValue(schemaType, mapping);
                             }
@@ -235,12 +255,13 @@ public abstract class XMLRelationshipMappingNodeValue extends MappingNodeValue {
                     value = null;
                 }
             } else {
+                ConversionManager conversionManager = unmarshalRecord.getConversionManager();
                 if(qname.equals(Constants.QNAME_QNAME)) {
-                    value = ((XMLConversionManager) unmarshalRecord.getSession().getDatasourcePlatform().getConversionManager()).buildQNameFromString((String)value, unmarshalRecord);
+                    value = conversionManager.buildQNameFromString((String)value, unmarshalRecord);
                 } else {
-                	Class theClass = getClassForQName(qname);
+                	Class theClass = getClassForQName(qname, conversionManager);
                     if (theClass != null) {
-                        value = ((XMLConversionManager) unmarshalRecord.getSession().getDatasourcePlatform().getConversionManager()).convertObject(value, theClass, qname);
+                        value = conversionManager.convertObject(value, theClass, qname);
                     }
                 }
             }
@@ -249,12 +270,12 @@ public abstract class XMLRelationshipMappingNodeValue extends MappingNodeValue {
         }
     }
 
-    protected Class getClassForQName(QName qname){
+    protected Class getClassForQName(QName qname, ConversionManager conversionManager){
     	CoreField field = getMapping().getField();
     	if(field != null){
-    		return ((Field)field).getJavaClass(qname);
+    		return ((Field)field).getJavaClass(qname, conversionManager);
     	}
-    	return (Class) XMLConversionManager.getDefaultXMLTypes().get(qname);
+    	return conversionManager.javaType(qname);
     }
 
     

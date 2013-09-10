@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 1998, 2012 Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1998, 2013 Oracle and/or its affiliates. All rights reserved.
  * This program and the accompanying materials are made available under the 
  * terms of the Eclipse Public License v1.0 and Eclipse Distribution License v. 1.0 
  * which accompanies this distribution. 
@@ -34,6 +34,8 @@
  ******************************************************************************/  
 package org.eclipse.persistence.testing.tests.jpa.inherited;
 
+import java.lang.reflect.ParameterizedType;
+import java.lang.reflect.Type;
 import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.sql.Timestamp;
@@ -42,6 +44,8 @@ import java.util.Date;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Map;
+import java.util.Map.Entry;
 
 import javax.persistence.EntityManager;
 import javax.persistence.Query;
@@ -51,6 +55,8 @@ import junit.framework.*;
 import org.eclipse.persistence.exceptions.QueryException;
 import org.eclipse.persistence.internal.helper.Helper;
 import org.eclipse.persistence.internal.weaving.PersistenceWeaved;
+import org.eclipse.persistence.jpa.JpaHelper;
+import org.eclipse.persistence.sessions.CopyGroup;
 import org.eclipse.persistence.testing.framework.junit.JUnitTestCase;
 import org.eclipse.persistence.testing.models.jpa.inherited.Accredidation;
 import org.eclipse.persistence.testing.models.jpa.inherited.Becks;
@@ -60,6 +66,7 @@ import org.eclipse.persistence.testing.models.jpa.inherited.Birthday;
 import org.eclipse.persistence.testing.models.jpa.inherited.Blue;
 import org.eclipse.persistence.testing.models.jpa.inherited.Alpine;
 import org.eclipse.persistence.testing.models.jpa.inherited.BlueLight;
+import org.eclipse.persistence.testing.models.jpa.inherited.Bluish;
 import org.eclipse.persistence.testing.models.jpa.inherited.BuildingBylaw;
 import org.eclipse.persistence.testing.models.jpa.inherited.Committee;
 import org.eclipse.persistence.testing.models.jpa.inherited.CommitteeDates;
@@ -153,6 +160,10 @@ public class InheritedModelJunitTest extends JUnitTestCase {
         suite.addTest(new InheritedModelJunitTest("testEmbeddableAggregateCollectionAndAggregate"));
         suite.addTest(new InheritedModelJunitTest("testNodeImplWeaving"));
         suite.addTest(new InheritedModelJunitTest("testEmbeddaleCollectionMapEmbeddableRead"));
+        suite.addTest(new InheritedModelJunitTest("testCopyMapKeyMap"));
+        if (!isJPA10()) {
+            suite.addTest(new InheritedModelJunitTest("testInterfaces"));
+        }
         
         return suite;
     }
@@ -1873,4 +1884,65 @@ public class InheritedModelJunitTest extends JUnitTestCase {
         }
     }
     
+    public void testInterfaces(){
+        // ensure weaving has occured
+        EntityManager em = createEntityManager();
+        em.getCriteriaBuilder();
+        Class[] testClasses = new Class[]{BeerConsumer.class, Alpine.class, NoviceBeerConsumer.class, Bluish.class, Blue.class, Corona.class, ExpertBeerConsumer.class, Heineken.class};
+        
+        for (int index = 0;index<testClasses.length;index++){
+            Class[] interfaces = testClasses[index].getInterfaces();
+            Type[] genericInterfaces = testClasses[index].getGenericInterfaces();
+            
+            if (interfaces.length != genericInterfaces.length){
+                fail("Weaving failed to correctly update interfaces for " + testClasses[index]);
+            }
+            
+            for (int i=0;i<interfaces.length;i++){
+                String comparisonString = null;
+                if (genericInterfaces[i] instanceof Class<?>){
+                    comparisonString = ((Class<?>)genericInterfaces[i]).getCanonicalName();
+                } else if (genericInterfaces[i] instanceof ParameterizedType){
+                    comparisonString = ((Class<?>)((ParameterizedType)genericInterfaces[i]).getRawType()).getCanonicalName();
+                }
+                
+                assertEquals("Mismatched interface on " + testClasses[index] + ": " + interfaces[i].getCanonicalName() + " != " + comparisonString, interfaces[i].getCanonicalName(), comparisonString);
+            }
+        }
+    }
+
+    // Bug 406957 - Copy fails on AggregateCollectionMapping and on map with @MapKeyColumn
+    public void testCopyMapKeyMap() {
+        Calendar cal = Calendar.getInstance();
+        BeerConsumer consumer = new BeerConsumer();
+        consumer.setId(1);
+        consumer.setName("A");
+        Heineken heineken  = new Heineken();
+        heineken.setAlcoholContent(5.0);
+        heineken.setId(11);
+        Date date = cal.getTime();
+        consumer.addHeinekenBeerToConsume(heineken, date);
+        EntityManager em = createEntityManager();
+        CopyGroup copyAll = new CopyGroup();
+        copyAll.cascadeAllParts();
+        BeerConsumer consumerCopy = (BeerConsumer)JpaHelper.getEntityManager(em).copy(consumer, copyAll);
+        if (consumerCopy.getHeinekenBeersToConsume().size() != consumer.getHeinekenBeersToConsume().size()) {
+            fail("consumerCopy.getHeinekenBeersToConsume().size() = " + consumerCopy.getHeinekenBeersToConsume().size() + "; "+consumer.getHeinekenBeersToConsume().size()+" was expected");
+        }
+        if (consumerCopy.getHeinekenBeersToConsume() == consumer.getHeinekenBeersToConsume()) {
+            fail("consumerCopy.getHeinekenBeersToConsume() == consumer.getHeinekenBeersToConsume()");
+        }
+        Map.Entry<Date, Heineken> entry = (Map.Entry<Date, Heineken>)consumerCopy.getHeinekenBeersToConsume().entrySet().iterator().next();
+        Date dateCopy = entry.getKey();
+        Heineken heinekenCopy = entry.getValue();
+        if (!date.equals(dateCopy)) {
+            fail("!date.equals(dateCopy)");
+        }
+        if (heineken == heinekenCopy) {
+            fail("heineken == heinekenCopy");
+        }
+        if (heineken.getAlcoholContent() != heinekenCopy.getAlcoholContent()) {
+            fail("heineken.getAlcoholContent() != heinekenCopy.getAlcoholContent()");
+        }
+    }
 }

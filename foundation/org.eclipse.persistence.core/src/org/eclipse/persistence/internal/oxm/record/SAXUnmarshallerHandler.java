@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 1998, 2012 Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1998, 2013 Oracle and/or its affiliates. All rights reserved.
  * This program and the accompanying materials are made available under the 
  * terms of the Eclipse Public License v1.0 and Eclipse Distribution License v. 1.0 
  * which accompanies this distribution. 
@@ -15,19 +15,21 @@ package org.eclipse.persistence.internal.oxm.record;
 import java.lang.reflect.Modifier;
 
 import javax.xml.namespace.QName;
+
+import org.eclipse.persistence.core.queries.CoreAttributeGroup;
 import org.eclipse.persistence.exceptions.DescriptorException;
 import org.eclipse.persistence.exceptions.EclipseLinkException;
 import org.eclipse.persistence.exceptions.XMLMarshalException;
+import org.eclipse.persistence.internal.core.helper.CoreClassConstants;
 import org.eclipse.persistence.internal.core.sessions.CoreAbstractSession;
 import org.eclipse.persistence.internal.oxm.Constants;
 import org.eclipse.persistence.internal.oxm.Context;
+import org.eclipse.persistence.internal.oxm.ConversionManager;
 import org.eclipse.persistence.internal.oxm.Root;
 import org.eclipse.persistence.internal.oxm.Unmarshaller;
 import org.eclipse.persistence.internal.oxm.XPathQName;
-import org.eclipse.persistence.internal.oxm.XMLConversionManager;
 import org.eclipse.persistence.internal.oxm.XPathFragment;
 import org.eclipse.persistence.internal.security.PrivilegedNewInstanceFromClass;
-import org.eclipse.persistence.oxm.unmapped.UnmappedContentHandler;
 import org.eclipse.persistence.platform.xml.SAXDocumentBuilder;
 import org.w3c.dom.Node;
 import org.xml.sax.Attributes;
@@ -41,6 +43,7 @@ import org.eclipse.persistence.internal.oxm.mappings.UnmarshalKeepAsElementPolic
 import org.eclipse.persistence.internal.oxm.record.XMLReader;
 import org.eclipse.persistence.internal.oxm.record.namespaces.StackUnmarshalNamespaceResolver;
 import org.eclipse.persistence.internal.oxm.record.namespaces.UnmarshalNamespaceResolver;
+import org.eclipse.persistence.internal.oxm.unmapped.UnmappedContentHandler;
 
 /**
  * INTERNAL:
@@ -193,7 +196,11 @@ public class SAXUnmarshallerHandler implements ExtendedContentHandler {
                 		lookupQName= new QName(typeFragment.getNamespaceURI(), typeFragment.getLocalName());
                 	}
                     //check to see if type attribute represents simple type
-                    primitiveWrapperClass = (Class)XMLConversionManager.getDefaultXMLTypes().get(lookupQName);
+                	if(null == session) {
+                	    session = (CoreAbstractSession) xmlContext.getSession();
+                	}
+                	ConversionManager conversionManager = (ConversionManager) session.getDatasourcePlatform().getConversionManager();
+                    primitiveWrapperClass = conversionManager.javaType(lookupQName);
                 }
             }
             
@@ -306,11 +313,9 @@ public class SAXUnmarshallerHandler implements ExtendedContentHandler {
                         throw DescriptorException.missingClassIndicatorField((XMLRecord) unmarshalRecord, (org.eclipse.persistence.oxm.XMLDescriptor)xmlDescriptor.getInheritancePolicy().getDescriptor());
                     }
                 }
-                org.eclipse.persistence.oxm.record.UnmarshalRecord wrapper = (org.eclipse.persistence.oxm.record.UnmarshalRecord)xmlDescriptor.getObjectBuilder().createRecord((CoreAbstractSession) session);
-                unmarshalRecord = wrapper.getUnmarshalRecord();
+                unmarshalRecord = unmarshaller.createUnmarshalRecord(xmlDescriptor, session);
             } else {
-                org.eclipse.persistence.oxm.record.UnmarshalRecord wrapper = (org.eclipse.persistence.oxm.record.UnmarshalRecord) xmlDescriptor.getObjectBuilder().createRecord((CoreAbstractSession) session);
-                unmarshalRecord = wrapper.getUnmarshalRecord();
+                unmarshalRecord = unmarshaller.createUnmarshalRecord(xmlDescriptor, session);
                 unmarshalRecord.setXMLReader(this.getXMLReader());
             }
             this.descriptor = xmlDescriptor;
@@ -333,6 +338,23 @@ public class SAXUnmarshallerHandler implements ExtendedContentHandler {
             unmarshalRecord.initializeRecord((Mapping) null);
             xmlReader.setContentHandler(unmarshalRecord);
             xmlReader.setLexicalHandler(unmarshalRecord);
+            
+            Object attributeGroup = this.unmarshaller.getUnmarshalAttributeGroup();
+            if(attributeGroup != null) {
+                if(attributeGroup.getClass() == CoreClassConstants.STRING) {
+                    CoreAttributeGroup group = descriptor.getAttributeGroup((String)attributeGroup);
+                    if(group != null) {
+                        unmarshalRecord.setUnmarshalAttributeGroup(group);
+                    } else {
+                        //Error
+                    }
+                } else if(attributeGroup instanceof CoreAttributeGroup) {
+                    unmarshalRecord.setUnmarshalAttributeGroup((CoreAttributeGroup)attributeGroup);
+                } else {
+                    //Error case
+                }
+            }
+
             unmarshalRecord.startElement(namespaceURI, localName, qName, atts);
 
             // if we located the descriptor via xsi:type attribute, create and 

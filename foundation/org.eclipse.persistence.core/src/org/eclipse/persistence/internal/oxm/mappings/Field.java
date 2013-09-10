@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2012 Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, 2013 Oracle and/or its affiliates. All rights reserved.
  * This program and the accompanying materials are made available under the
  * terms of the Eclipse Public License v1.0 and Eclipse Distribution License v. 1.0
  * which accompanies this distribution.
@@ -16,25 +16,27 @@ import javax.xml.namespace.QName;
 
 import org.eclipse.persistence.internal.core.helper.CoreField;
 import org.eclipse.persistence.internal.core.sessions.CoreAbstractSession;
+import org.eclipse.persistence.internal.oxm.ConversionManager;
 import org.eclipse.persistence.internal.oxm.NamespaceResolver;
-import org.eclipse.persistence.internal.oxm.XMLConversionManager;
 import org.eclipse.persistence.internal.oxm.XPathFragment;
 import org.eclipse.persistence.internal.oxm.record.AbstractUnmarshalRecord;
 
-public interface Field<NAMESPACE_RESOLVER extends NamespaceResolver> extends CoreField{
+public interface Field<
+    CONVERSION_MANAGER extends ConversionManager,
+    NAMESPACE_RESOLVER extends NamespaceResolver> extends CoreField{
 	
     /**
      * INTERNAL:
      * Called from DOMRecord and XMLReader.  MappingNodeValues call XMLReader which calls this method so that other XMLReader subclasses can override.
      */
-     public Object convertValueBasedOnSchemaType(Object value, XMLConversionManager xmlConversionManager, AbstractUnmarshalRecord record);
+     public Object convertValueBasedOnSchemaType(Object value, CONVERSION_MANAGER xmlConversionManager, AbstractUnmarshalRecord record);
 	
     /**
     * Return the class for a given qualified XML Schema type
     * @param qname The qualified name of the XML Schema type to use as a key in the lookup
     * @return The class corresponding to the specified schema type, if no corresponding match found returns null
     */
-    public Class getJavaClass(QName qname);
+    public Class getJavaClass(QName qname, ConversionManager conversionManager);
     
 	/**
      * INTERNAL:
@@ -74,7 +76,7 @@ public interface Field<NAMESPACE_RESOLVER extends NamespaceResolver> extends Cor
       * @param javaClass The class to use as a key in the lookup
       * @return QName The qualified XML Schema type, if no corresponding match found returns null
       */
-     public QName getXMLType(Class javaClass);
+     public QName getXMLType(Class javaClass, ConversionManager conversionManager);
     	 
      /**
      * Returns the xpath statement associated with this XMLField

@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2012 Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, 2013 Oracle and/or its affiliates. All rights reserved.
  * This program and the accompanying materials are made available under the 
  * terms of the Eclipse Public License v1.0 and Eclipse Distribution License v. 1.0 
  * which accompanies this distribution. 
@@ -22,6 +22,8 @@
  *       - 350487: JPA 2.1 Specification defined support for Stored Procedure Calls
  *     02/06/2013-2.5 Guy Pelletier 
  *       - 382503: Use of @ConstructorResult with createNativeQuery(sqlString, resultSetMapping) results in NullPointerException
+ *     07/16/2013-2.5.1 Guy Pelletier 
+ *       - 412384: Applying Converter for parameterized basic-type for joda-time's DateTime does not work
  ******************************************************************************/  
 package org.eclipse.persistence.testing.models.jpa21.advanced;
 
@@ -1008,6 +1010,25 @@ public class AdvancedTableCreator extends TogglingFastTableCreator {
         field.setName("DTYPE");
         field.setTypeName("VARCHAR");
         field.setSize(15);
+        field.setShouldAllowNull(true);
+        field.setIsPrimaryKey(false);
+        field.setUnique(false);
+        field.setIsIdentity(false);
+        table.addField(field);
+        
+        field = new FieldDefinition();
+        field.setName("TAGS");
+        field.setTypeName("VARCHAR");
+        field.setSize(100);
+        field.setShouldAllowNull(true);
+        field.setIsPrimaryKey(false);
+        field.setUnique(false);
+        field.setIsIdentity(false);
+        table.addField(field);
+        
+        field = new FieldDefinition();
+        field.setName("SERIALS");
+        field.setTypeName("BLOB");
         field.setShouldAllowNull(true);
         field.setIsPrimaryKey(false);
         field.setUnique(false);

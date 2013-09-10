@@ -1,5 +1,5 @@
 /*******************************************************************************
-* Copyright (c) 1998, 2012 Oracle and/or its affiliates. All rights reserved.
+* Copyright (c) 1998, 2013 Oracle and/or its affiliates. All rights reserved.
 * This program and the accompanying materials are made available under the
 * terms of the Eclipse Public License v1.0 and Eclipse Distribution License v. 1.0
 * which accompanies this distribution.
@@ -21,6 +21,7 @@ import org.eclipse.persistence.internal.oxm.Root;
 import org.eclipse.persistence.mappings.DatabaseMapping;
 import org.eclipse.persistence.mappings.converters.Converter;
 import org.eclipse.persistence.oxm.XMLMarshaller;
+import org.eclipse.persistence.oxm.XMLRoot;
 import org.eclipse.persistence.oxm.XMLUnmarshaller;
 import org.eclipse.persistence.oxm.mappings.converters.XMLConverter;
 import org.eclipse.persistence.sessions.Session;
@@ -87,7 +88,7 @@ public class JAXBElementRootConverter implements XMLConverter {
         	ClassDescriptor desc = session.getDescriptor(objectValue);
         	if(desc == null || objectValue instanceof WrappedValue){
                 JAXBElement element = (JAXBElement) objectValue;
-                Root root = new Root();
+                Root root = new XMLRoot();
                 root.setLocalName(element.getName().getLocalPart());
                 root.setNamespaceURI(element.getName().getNamespaceURI());
                 root.setObject(element.getValue());

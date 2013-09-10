@@ -62,7 +62,7 @@ import static org.eclipse.persistence.jpa.jpql.JPQLQueryProblemMessages.*;
  *
  * @see EclipseLinkGrammarValidator
  *
- * @version 2.5
+ * @version 2.5.1
  * @since 2.4
  * @author Pascal Filion
  */
@@ -318,8 +318,20 @@ public class AbstractEclipseLinkSemanticValidator extends AbstractSemanticValida
 	 * {@inheritDoc}
 	 */
 	@Override
+	protected PathType validPathExpressionTypeForCountFunction() {
+		return PathType.ANY_FIELD_INCLUDING_COLLECTION;
+	}
+
+	/**
+	 * {@inheritDoc}
+	 */
+	@Override
 	protected PathType validPathExpressionTypeForInExpression() {
 		// Loosen up the JPA spec restriction because ANTLR parser used to allow it
+		return PathType.ANY_FIELD_INCLUDING_COLLECTION;
+	}
+
+	protected PathType validPathExpressionTypeForInItem() {
 		return PathType.ANY_FIELD_INCLUDING_COLLECTION;
 	}
 
@@ -623,7 +635,7 @@ public class AbstractEclipseLinkSemanticValidator extends AbstractSemanticValida
 
 			// Derived path is not allowed, this could although be a fully
 			// qualified class name, which was added to EclipseLink 2.4
-			EclipseLinkVersion version = EclipseLinkVersion.value(getGrammar().getProviderVersion());
+			EclipseLinkVersion version = EclipseLinkVersion.value(getProviderVersion());
 			valid = version.isNewerThanOrEqual(EclipseLinkVersion.VERSION_2_4);
 
 			if (valid) {

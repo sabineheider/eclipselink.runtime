@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2012 Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, 2013 Oracle and/or its affiliates. All rights reserved.
  * This program and the accompanying materials are made available under the 
  * terms of the Eclipse Public License v1.0 and Eclipse Distribution License v. 1.0 
  * which accompanies this distribution. 
@@ -36,6 +36,7 @@ import javax.persistence.StoredProcedureQuery;
 import junit.framework.TestSuite;
 import junit.framework.Test;
 
+import org.eclipse.persistence.internal.jpa.StoredProcedureQueryImpl;
 import org.eclipse.persistence.testing.framework.junit.JUnitTestCase;
 
 import org.eclipse.persistence.testing.models.jpa21.advanced.Address;
@@ -66,9 +67,32 @@ public class NamedStoredProcedureQueryTestSuite extends JUnitTestCase {
         suite.addTest(new NamedStoredProcedureQueryTestSuite("testQueryWithNamedFieldResult"));
         suite.addTest(new NamedStoredProcedureQueryTestSuite("testQueryWithNumberedFieldResult"));
         suite.addTest(new NamedStoredProcedureQueryTestSuite("testQueryWithResultClass"));
+        suite.addTest(new NamedStoredProcedureQueryTestSuite("testQueryExecuteOnStoredProcQueryBuiltFromJPAThatDoesNothing"));
 
         return suite;
     }  
+    
+    /**
+     * Tests an execute update on a named stored procedure that does a select.
+     * NamedStoredProcedure defines a result class.
+     */
+    public void testQueryExecuteOnStoredProcQueryBuiltFromJPAThatDoesNothing() {
+        if (supportsStoredProcedures() && getPlatform().isMySQL()) {
+            EntityManager em = createEntityManager();
+            
+            try {
+                getServerSession(getPersistenceUnitName()).executeQuery(((StoredProcedureQueryImpl) em.createNamedStoredProcedureQuery("ReadNoAddresses")).getDatabaseQuery());
+            } catch (Exception e) {
+                if (isTransactionActive(em)){
+                    rollbackTransaction(em);
+                }
+                
+                fail("Exception was caught: " + e);
+            } finally {
+                closeEntityManager(em);
+            }
+        }
+    }
     
     /**
      * Tests an execute update on a named stored procedure that does a select.
@@ -106,7 +130,7 @@ public class NamedStoredProcedureQueryTestSuite extends JUnitTestCase {
             
             try {
                 beginTransaction(em);
-                em.createNamedStoredProcedureQuery("ReadAddressWithResultClass").setParameter("ADDRESS_ID", 1).executeUpdate();
+                em.createNamedStoredProcedureQuery("ReadAddressWithResultClass").setParameter("address_id_v", 1).executeUpdate();
                 commitTransaction(em);
             } catch (IllegalStateException e) {
                 if (isTransactionActive(em)){
@@ -138,8 +162,6 @@ public class NamedStoredProcedureQueryTestSuite extends JUnitTestCase {
                 assertFalse("No employees were returned", employees.isEmpty());
                 List<Address> addresses = (List<Address>) query.getOutputParameterValue("CUR2");
                 assertFalse("No addresses were returned", addresses.isEmpty());
-                
-                assertFalse("The query had more results", query.hasMoreResults());
             } catch (RuntimeException e) {
                 if (isTransactionActive(em)){
                     rollbackTransaction(em);
@@ -166,8 +188,6 @@ public class NamedStoredProcedureQueryTestSuite extends JUnitTestCase {
                 
                 List<Employee> employees = (List<Employee>) query.getOutputParameterValue(1);
                 assertFalse("No employees were returned", employees.isEmpty());
-                
-                assertFalse("The query had more results", query.hasMoreResults());
             } catch (RuntimeException e) {
                 if (isTransactionActive(em)){
                     rollbackTransaction(em);
@@ -189,28 +209,12 @@ public class NamedStoredProcedureQueryTestSuite extends JUnitTestCase {
             
             try {
                 StoredProcedureQuery query = em.createNamedStoredProcedureQuery("ReadUsingNamedRefCursors");
-                
-                // Calling get result list here on an oracle platform will
-                // return an illegal state exception since the execute call
-                // will return false for no result set was returned. Users 
-                // should be calling execute and getting results from the out
-                // parameters.
-                try { 
-                    query.getResultList();
-                } catch (IllegalStateException ise) {
-                    // We expect the exception here, now check through the output parameters (as expected)
-                    List<Employee> employees = (List<Employee>) query.getOutputParameterValue("CUR1");
-                    assertFalse("No employees were returned", employees.isEmpty());
+
+                List<Employee> employees = (List<Employee>) query.getResultList();
+                assertFalse("No employees were returned", employees.isEmpty());
                     
-                    List<Address> addresses = (List<Address>) query.getOutputParameterValue("CUR2");
-                    assertFalse("No addresses were returned", addresses.isEmpty());
-                    
-                    assertFalse("The query had more results", query.hasMoreResults());
-                    
-                    return;
-                }
-                
-                fail("No IllegalStateException thrown on getResultList() to an Oracle stored procedure using ref cursors");
+                List<Address> addresses = (List<Address>) query.getResultList();
+                assertFalse("No addresses were returned", addresses.isEmpty());
             } catch (RuntimeException e) {
                 if (isTransactionActive(em)){
                     rollbackTransaction(em);
@@ -275,7 +279,6 @@ public class NamedStoredProcedureQueryTestSuite extends JUnitTestCase {
      * Tests a NamedStoredProcedureQuery annotation using a result-set mapping. 
      */
     public void testQueryWithNamedColumnResult() {
-        // TODO: investigate if this test should work on Oracle as written.
         if (supportsStoredProcedures() && getPlatform().isMySQL()) {
             EntityManager em = createEntityManager();
             
@@ -315,7 +318,6 @@ public class NamedStoredProcedureQueryTestSuite extends JUnitTestCase {
      * Tests a NamedStoredProcedureQuery using a result-set mapping. 
      */
     public void testQueryWithNamedFieldResult() {
-        // TODO: investigate if this test should work on Oracle as written.
         if (supportsStoredProcedures() && getPlatform().isMySQL()) {
             EntityManager em = createEntityManager();
             

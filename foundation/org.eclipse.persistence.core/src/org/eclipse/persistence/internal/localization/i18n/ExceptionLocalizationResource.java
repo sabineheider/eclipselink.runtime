@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 1998, 2012 Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1998, 2013 Oracle and/or its affiliates. All rights reserved.
  * This program and the accompanying materials are made available under the 
  * terms of the Eclipse Public License v1.0 and Eclipse Distribution License v. 1.0 
  * which accompanies this distribution. 
@@ -29,6 +29,8 @@
 package org.eclipse.persistence.internal.localization.i18n;
 
 import java.util.ListResourceBundle;
+
+import org.eclipse.persistence.config.PersistenceUnitProperties;
 
 /**
  * English ResourceBundle for ExceptionLocalization messages.
@@ -134,7 +136,7 @@ public class ExceptionLocalizationResource extends ListResourceBundle {
                                            { "entity_manager_properties_conflict_default_connector_vs_external_transaction_controller", "EntityManager properties' conflict: javax.persistence.driver and/or javax.persistence.url require DefaultConnector, but persistence unit uses external transaction controller, therefore JNDIConnector is required."},
                                            { "invalid_lock_query", "A lock type can only be used with a select query (which allows the database to be locked where necessary)."},
                                            { "cant_lock_not_managed_object", "Entity must be managed to call lock: {0}, try merging the detached and try the lock again."},
-                                           { "metamodel_managed_type_attribute_not_present", "The attribute [{0}] from the managed type [{1}] is not present." },
+                                           { "metamodel_managed_type_attribute_not_present", "The attribute [{0}] is not present in the managed type [{1}]." },
                                            { "metamodel_managed_type_attribute_type_incorrect", "Expected attribute type [{2}] on the existing attribute [{0}] on the managed type [{1}] but found attribute type [{3}]." },
                                            { "metamodel_identifiable_version_attribute_type_incorrect", "Expected version attribute type [{2}] on the existing version attribute [{0}] on the identifiable type [{1}] but found attribute type [{3}]." },
                                            { "metamodel_identifiable_id_attribute_type_incorrect", "Expected id attribute type [{2}] on the existing id attribute [{0}] on the identifiable type [{1}] but found attribute type [{3}]." },
@@ -210,13 +212,13 @@ public class ExceptionLocalizationResource extends ListResourceBundle {
                                            { "jpa21_invalid_call_on_un_executed_query", "The query must be executed before calling this method."},
                                            { "jpa21_invalid_call_with_no_output_parameters", "Invalid call on a query that does not return OUT parameters."},
                                            { "jpa21_invalid_call_with_no_result_sets_returned", "Invalid call on a query that does not return result sets."},
-                                           { "jpa21-ddl-source-script-not-found", "The source script: {0} for the generateSchema call was not found."},
+                                           { "jpa21-ddl-source-script-not-found", "The source script: {0} for the generateSchema call was not found. Ensure you have specified a valid string URL that uses the 'file:' protocol or that the string file name represents a valid resource available from the classpath."},
                                            { "jpa21-ddl-source-script-sql-exception", "An error occured executing {0} from the source ddl generation script: {1}."},
                                            { "jpa21-ddl-source-script-io-exception", "An IO error occured with the source ddl generation script: {0}."},
                                            { "jpa21-ddl-invalid-source-script-type", "The source script provided {0} is of an invalid type {0}. Valid source script types are: java.io.Reader or a string designating a file URL."},
                                            { "jpa21-ddl-invalid-target-script-type", "The target script provided {0} is of an invalid type {0}. Valid target script types are: java.io.Writer or a string designating a file URL."},
-                                           { "jpa21-ddl-drop-script-target-not-specified", "When the generating DDL to scripts, a drop script target must be specified using the [javax.persistence.ddl-drop-script-target] property."},
-                                           { "jpa21-ddl-create-script-target-not-specified", "When the generating DDL to scripts, a drop script target must be specified using the [javax.persistence.ddl-create-script-target] property."},
+                                           { "jpa21-ddl-drop-script-target-not-specified", "When generating DDL to scripts, a drop script target must be specified using the ["+ PersistenceUnitProperties.SCHEMA_GENERATION_SCRIPTS_DROP_TARGET+"] property."},
+                                           { "jpa21-ddl-create-script-target-not-specified", "When generating DDL to scripts, a create script target must be specified using the ["+ PersistenceUnitProperties.SCHEMA_GENERATION_SCRIPTS_CREATE_TARGET+"] property."},
                                            //criteria API IllegalArgumentExceptions
                                            { "jpa_criteriaapi_no_corresponding_element_in_result", "Element {0} does not correspond to an element in the query result."},
                                            { "jpa_criteriaapi_invalid_result_index", "index {0} invalid for result list of size {1}."},
@@ -225,6 +227,7 @@ public class ExceptionLocalizationResource extends ListResourceBundle {
                                            { "jpa_criteriaapi_illegal_tuple_or_array_value", "Illegal tuple or array-valued selection item found. Argument found: {0}"},
                                            { "jpa_criteriaapi_alias_reused", "More than one selection item uses the same alias name.  Duplicate names used were: {0}"},
                                            { "cannot_read_through_txn_for_unsynced_pc", "The property was set to join this persistence context to the currently active transaction but this is not a SYNCHRONIZED persistence context."},
+                                           { "cannot_use_transaction_on_unsynced_pc", "Cannot call methods requiring a transaction if the entity manager has not been joined to the current transaction."},
                                            { "unable_to_unwrap_jpa", "Provider does not support unwrapping {0} to {1}"},
                                            { "argument_keyed_named_query_with_JPA", "Multiple queries with name: {0} exist but names must be unique when using EntityManagerFactory.addNamedQuery()"},
                                            { "null_argument_get_attributegroup", "Search name for AttributeGroup must not be null."},
@@ -239,7 +242,8 @@ public class ExceptionLocalizationResource extends ListResourceBundle {
                                            { "pu_configured_for_resource_local", "Unable to create EntityManager with SynchronizationType because PersistenceUnit is configured with resource-local transactions."},
                                            { "getpersistenceunitutil_called_on_closed_emf", "getPersistenceUnitUtil() was called on a closed EntityManagerFactory."},
                                            { "named_entity_graph_exists", "NamedEntityGraph with name {0} found on {1} already exists in this persistence unit."},
-                                           { "cannot_get_from_non_correlated_query", "getCorrelationParent() called on a from-clause that was not obtained through correlation." }
+                                           { "cannot_get_from_non_correlated_query", "getCorrelationParent() called on a from-clause that was not obtained through correlation." },
+                                           { "wrap_convert_exception", "An exception occurred while calling {0} on converter class {1} with value {2}"}
                                            
 										};
     /**

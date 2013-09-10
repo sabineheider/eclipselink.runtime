@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 1998, 2012 Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1998, 2013 Oracle and/or its affiliates. All rights reserved.
  * This program and the accompanying materials are made available under the 
  * terms of the Eclipse Public License v1.0 and Eclipse Distribution License v. 1.0 
  * which accompanies this distribution. 
@@ -75,9 +75,6 @@ public class ReadObjectTest extends AutoVerifyTestCase {
 
     protected void setup() {
         this.logLevel = getSession().getLogLevel();
-        if (getName().indexOf("Joining") != -1) {
-            getSession().setLogLevel(SessionLog.FINEST);
-        }
         // Flush the cache to ensure that the query is actually executed
         getSession().getIdentityMapAccessor().initializeIdentityMaps();
 
@@ -86,12 +83,6 @@ public class ReadObjectTest extends AutoVerifyTestCase {
             ReadObjectQuery query = new ReadObjectQuery();
             query.setSelectionObject(getOriginalObject());
             setQuery(query);
-        }
-    }
-
-    public void reset() throws Throwable {
-        if (getName().indexOf("Joining") != -1) {
-            getSession().setLogLevel(this.logLevel);
         }
     }
     

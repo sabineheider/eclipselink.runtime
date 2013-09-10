@@ -26,7 +26,7 @@ import org.eclipse.persistence.jpa.jpql.WordParser;
  *
  * @version 2.4
  * @since 2.4
- * @author James
+ * @author James Sutherland
  */
 public final class OnClause extends AbstractConditionalClause {
 

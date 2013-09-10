@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2011, 2012 Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2011, 2013 Oracle and/or its affiliates. All rights reserved.
  * This program and the accompanying materials are made available under the 
  * terms of the Eclipse Public License v1.0 and Eclipse Distribution License v. 1.0 
  * which accompanies this distribution. 
@@ -948,7 +948,8 @@ public class NestedFetchGroupTests extends BaseFetchGroupTests {
              group.addAttribute("address");
              group.addAttribute("phoneNumbers");
              group.addAttribute("manager.projects");
-             ((AbstractSession)((EntityManagerImpl)em.getDelegate()).getActiveSession()).load(employees, group);
+             AbstractSession session = (AbstractSession)((EntityManagerImpl)em.getDelegate()).getActiveSession();
+             session.load(employees, group, session.getClassDescriptor(Employee.class), false);
 
              int numSelectBefore = getQuerySQLTracker(em).getTotalSQLSELECTCalls();
              

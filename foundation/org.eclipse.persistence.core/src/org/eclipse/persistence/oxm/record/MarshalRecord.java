@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 1998, 2012 Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1998, 2013 Oracle and/or its affiliates. All rights reserved.
  * This program and the accompanying materials are made available under the 
  * terms of the Eclipse Public License v1.0 and Eclipse Distribution License v. 1.0 
  * which accompanies this distribution. 
@@ -12,19 +12,20 @@
  ******************************************************************************/  
 package org.eclipse.persistence.oxm.record;
 
-import java.io.UnsupportedEncodingException;
-import java.util.AbstractList;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map.Entry;
+import java.util.Stack;
 
 import javax.xml.namespace.QName;
 
+import org.eclipse.persistence.exceptions.EclipseLinkException;
 import org.eclipse.persistence.exceptions.XMLMarshalException;
+import org.eclipse.persistence.internal.core.helper.CoreClassConstants;
 import org.eclipse.persistence.internal.core.helper.CoreField;
 import org.eclipse.persistence.internal.core.sessions.CoreAbstractSession;
-import org.eclipse.persistence.internal.helper.ClassConstants;
-import org.eclipse.persistence.internal.helper.DatabaseField;
+import org.eclipse.persistence.internal.oxm.ConversionManager;
 import org.eclipse.persistence.internal.oxm.Constants;
 import org.eclipse.persistence.internal.oxm.Marshaller;
 import org.eclipse.persistence.internal.oxm.Namespace;
@@ -33,16 +34,18 @@ import org.eclipse.persistence.internal.oxm.ObjectBuilder;
 import org.eclipse.persistence.internal.oxm.Root;
 import org.eclipse.persistence.internal.oxm.XMLBinaryDataHelper;
 import org.eclipse.persistence.internal.oxm.XPathPredicate;
-import org.eclipse.persistence.internal.oxm.XMLConversionManager;
 import org.eclipse.persistence.internal.oxm.XPathFragment;
 import org.eclipse.persistence.internal.oxm.XPathNode;
 import org.eclipse.persistence.internal.oxm.mappings.Descriptor;
 import org.eclipse.persistence.internal.oxm.mappings.Field;
+import org.eclipse.persistence.internal.oxm.mappings.Login;
 import org.eclipse.persistence.internal.oxm.record.AbstractMarshalRecordImpl;
-import org.eclipse.persistence.oxm.XMLLogin;
-import org.eclipse.persistence.oxm.XMLMarshalListener;
+import org.eclipse.persistence.oxm.record.ValidatingMarshalRecord.MarshalSAXParseException;
+import org.eclipse.persistence.core.queries.CoreAttributeGroup;
 import org.w3c.dom.Document;
 import org.w3c.dom.Node;
+import org.xml.sax.ErrorHandler;
+import org.xml.sax.SAXException;
 
 /**
  * <p>A MarshalRecord encapsulates the marshal target.</p>
@@ -57,7 +60,7 @@ import org.w3c.dom.Node;
  *
  * @see org.eclipse.persistence.oxm.XMLMarshaller
  */
-public abstract class MarshalRecord<MARSHALLER extends Marshaller> extends AbstractMarshalRecordImpl<CoreAbstractSession, DatabaseField, MARSHALLER, NamespaceResolver> implements org.eclipse.persistence.internal.oxm.record.MarshalRecord<CoreAbstractSession, DatabaseField, MARSHALLER, NamespaceResolver> {
+public abstract class MarshalRecord<MARSHALLER extends Marshaller> extends AbstractMarshalRecordImpl<CoreAbstractSession, CoreField, MARSHALLER, NamespaceResolver> implements org.eclipse.persistence.internal.oxm.record.MarshalRecord<CoreAbstractSession, CoreField, MARSHALLER, NamespaceResolver> {
     private ArrayList<XPathNode> groupingElements;
     private HashMap positionalNodes;
 
@@ -65,6 +68,8 @@ public abstract class MarshalRecord<MARSHALLER extends Marshaller> extends Abstr
 
     private CycleDetectionStack<Object> cycleDetectionStack = new CycleDetectionStack<Object>();
 
+    private Stack<CoreAttributeGroup> attributeGroupStack;
+    
     protected static final String COLON_W_SCHEMA_NIL_ATTRIBUTE = Constants.COLON + Constants.SCHEMA_NIL_ATTRIBUTE;
     protected static final String TRUE = "true";
     
@@ -73,6 +78,8 @@ public abstract class MarshalRecord<MARSHALLER extends Marshaller> extends Abstr
         super(null);
         namespaceResolver = new NamespaceResolver();
     }
+    
+    public void forceValueWrapper(){};
 
     public HashMap getPositionalNodes() {
         if (positionalNodes == null) {
@@ -132,8 +139,8 @@ public abstract class MarshalRecord<MARSHALLER extends Marshaller> extends Abstr
     
     public void setSession(CoreAbstractSession session) {
         super.setSession(session);
-        if (session != null && session.getDatasourceLogin() instanceof XMLLogin) {
-            this.equalNamespaceResolvers = ((XMLLogin) session.getDatasourceLogin()).hasEqualNamespaceResolvers();
+        if (session != null && session.getDatasourceLogin() instanceof Login) {
+            this.equalNamespaceResolvers = ((Login) session.getDatasourceLogin()).hasEqualNamespaceResolvers();
         }
     }
 
@@ -141,7 +148,8 @@ public abstract class MarshalRecord<MARSHALLER extends Marshaller> extends Abstr
      * INTERNAL:
      * Add the field-value pair to the document.
      */
-    public void add(DatabaseField key, Object value) {
+    @Override
+    public void add(CoreField key, Object value) {
         if (null == value) {
             return;
         }
@@ -161,7 +169,8 @@ public abstract class MarshalRecord<MARSHALLER extends Marshaller> extends Abstr
      * INTERNAL:
      * Add the field-value pair to the document.
      */
-    public Object put(DatabaseField key, Object value) {
+    @Override
+    public Object put(CoreField key, Object value) {
         add(key, value);
         return null;
     }
@@ -346,7 +355,7 @@ public abstract class MarshalRecord<MARSHALLER extends Marshaller> extends Abstr
     	     String convertedValue = getStringForQName((QName)value);
              attribute(xPathFragment, namespaceResolver, convertedValue);
     	 } else{
-             String convertedValue = ((String) ((XMLConversionManager) session.getDatasourcePlatform().getConversionManager()).convertObject(value, ClassConstants.STRING, schemaType));         	
+             String convertedValue = ((String) ((ConversionManager) session.getDatasourcePlatform().getConversionManager()).convertObject(value, CoreClassConstants.STRING, schemaType));         	
              attribute(xPathFragment, namespaceResolver, convertedValue);
          }               
     }     
@@ -357,14 +366,19 @@ public abstract class MarshalRecord<MARSHALLER extends Marshaller> extends Abstr
      */    
     public void characters(QName schemaType, Object value, String mimeType, boolean isCDATA){  
         if(mimeType != null) {
+        	if(value instanceof List){
+        		value = XMLBinaryDataHelper.getXMLBinaryDataHelper().getBytesListForBinaryValues(//
+                        (List)value, marshaller, mimeType);
+        	}else{
             value = XMLBinaryDataHelper.getXMLBinaryDataHelper().getBytesForBinaryValue(//
                     value, marshaller, mimeType).getData();
+        	}
         }
         if(schemaType != null && Constants.QNAME_QNAME.equals(schemaType)){
             String convertedValue = getStringForQName((QName)value);
             characters(convertedValue);
         }else{
-            String convertedValue = ((String) ((XMLConversionManager) session.getDatasourcePlatform().getConversionManager()).convertObject(value, ClassConstants.STRING, schemaType));
+            String convertedValue = ((String) ((ConversionManager) session.getDatasourcePlatform().getConversionManager()).convertObject(value, CoreClassConstants.STRING, schemaType));
             if(isCDATA){
                 cdata(convertedValue);        	    
             }else{
@@ -373,7 +387,8 @@ public abstract class MarshalRecord<MARSHALLER extends Marshaller> extends Abstr
         }
     }
     
-    public String getValueToWrite(QName schemaType, Object value, XMLConversionManager xmlConversionManager) {
+    @Override
+    public String getValueToWrite(QName schemaType, Object value, ConversionManager conversionManager) {
     	if(value == null){
     		return null;
     	}
@@ -382,7 +397,7 @@ public abstract class MarshalRecord<MARSHALLER extends Marshaller> extends Abstr
         }else if(value.getClass() == String.class){
         	return (String) value;
         }
-        return (String) xmlConversionManager.convertObject(value, ClassConstants.STRING, schemaType);
+        return (String) conversionManager.convertObject(value, CoreClassConstants.STRING, schemaType);
     }   
     
     protected String getStringForQName(QName qName){
@@ -406,7 +421,11 @@ public abstract class MarshalRecord<MARSHALLER extends Marshaller> extends Abstr
             }
             String prefix = namespaceResolver.resolveNamespaceURI(namespaceURI);
             if(null == prefix) {
-                prefix = namespaceResolver.generatePrefix();                
+            	if(namespaceURI.equals(javax.xml.XMLConstants.W3C_XML_SCHEMA_NS_URI)){
+            	   prefix = namespaceResolver.generatePrefix(Constants.SCHEMA_PREFIX);	
+            	}else{
+                   prefix = namespaceResolver.generatePrefix();
+            	}
                 namespaceDeclaration(prefix, namespaceURI);
             }
             if(Constants.EMPTY_STRING.equals(prefix)){
@@ -497,9 +516,23 @@ public abstract class MarshalRecord<MARSHALLER extends Marshaller> extends Abstr
 
     public void beforeContainmentMarshal(Object child) {
         if(null != marshaller) {
-            XMLMarshalListener marshalListener = marshaller.getMarshalListener();
+            Marshaller.Listener marshalListener = marshaller.getMarshalListener();
             if(null != marshalListener) {
-                marshalListener.beforeMarshal(child);
+                try {
+                    marshalListener.beforeMarshal(child);
+                } catch(EclipseLinkException e) {
+                    ErrorHandler errorHandler = marshaller.getErrorHandler();
+                    if(null == errorHandler) {
+                        throw e;
+                    } else {
+                        try {
+                            MarshalSAXParseException saxParseException = new MarshalSAXParseException(null, null, null, -1, -1, e, child);
+                            errorHandler.error(saxParseException);
+                        } catch(SAXException saxParseException) {
+                            throw e;
+                        }
+                    }
+                }
             }
         }
         setOwningObject(child);
@@ -507,9 +540,23 @@ public abstract class MarshalRecord<MARSHALLER extends Marshaller> extends Abstr
 
     public void afterContainmentMarshal(Object parent, Object child) {
         if(null != marshaller) {
-            XMLMarshalListener marshalListener = marshaller.getMarshalListener();
+            Marshaller.Listener marshalListener = marshaller.getMarshalListener();
             if(null != marshalListener) {
-                marshalListener.afterMarshal(child);
+                try {
+                    marshalListener.afterMarshal(child);
+                } catch(EclipseLinkException e) {
+                    ErrorHandler errorHandler = marshaller.getErrorHandler();
+                    if(null == errorHandler) {
+                        throw e;
+                    } else {
+                        try {
+                            MarshalSAXParseException saxParseException = new MarshalSAXParseException(null, null, null, -1, -1, e, child);
+                            errorHandler.error(saxParseException);
+                        } catch(SAXException saxParseException) {
+                            throw e;
+                        }
+                    }
+                }
             }
         }
         setOwningObject(parent);
@@ -679,25 +726,18 @@ public abstract class MarshalRecord<MARSHALLER extends Marshaller> extends Abstr
         }
         return xPathFragment.getLocalName();
     }
-    
-    protected byte[] getNameForFragmentBytes(XPathFragment xPathFragment) {
+
+    protected byte[] getPrefixBytes(XPathFragment xPathFragment) {
         if(!this.hasCustomNamespaceMapper()) {
-            return xPathFragment.getShortNameBytes();
+            return xPathFragment.getPrefixBytes();
         }
-        String name = xPathFragment.getLocalName();
-        if(xPathFragment.getNamespaceURI() != null && xPathFragment.getNamespaceURI().length() > 0) {
-            String prefix = this.getPrefixForFragment(xPathFragment);
-            if(prefix != null && prefix.length() > 0) {
-                name = prefix + Constants.COLON + xPathFragment.getLocalName();
-            }
+        String prefix = this.getPrefixForFragment(xPathFragment);
+        if(null == prefix || prefix.isEmpty()) {
+            return null;
         }
-        byte[] bytes = null;
-        try {
-            bytes = name.getBytes(Constants.DEFAULT_XML_ENCODING);
-        } catch(UnsupportedEncodingException ex) {}
-        return bytes;
-    }    
-    
+        return prefix.getBytes(Constants.DEFAULT_CHARSET);
+    } 
+
     protected String getPrefixForFragment(XPathFragment xPathFragment) {
         if(!hasCustomNamespaceMapper) { 
             return xPathFragment.getPrefix();
@@ -736,82 +776,36 @@ public abstract class MarshalRecord<MARSHALLER extends Marshaller> extends Abstr
         return (Field) field;
     }
 
-    // === Inner Classes ======================================================
-
-    private static final Object[] EMPTY_CYCLE_DATA = new Object[8];
-    
-    /**
-     * A Stack-like List, used to detect object cycles during marshal operations.
-     */
-    public static class CycleDetectionStack<E> extends AbstractList<Object> {
-
-        private Object[] data = EMPTY_CYCLE_DATA;
-        
-        int currentIndex = 0;
-
-        public void push(E item) {
-            if (currentIndex == data.length) {
-            	growArray();
-            }
-        	data[currentIndex] = item;
-        	currentIndex++;
-        }
-
-        private void growArray() {
-        	Object[] newArray = new Object[data.length * 2];
-        	System.arraycopy(data, 0, newArray, 0, data.length);
-        	data = newArray;
-        }
-        
-        public Object pop() {
-        	Object o = data[currentIndex - 1];
-        	data[currentIndex - 1] = null;
-        	currentIndex--;
-        	return o;
-        }
-
-        public boolean contains(Object item, boolean equalsUsingIdentity) {
-            if (equalsUsingIdentity) {
-            	for (int i = 0; i < currentIndex; i++) {
-            		if (data[i] == item) {
-                        return true;
-                    }
-                }
-            } else {
-            	for (int i = 0; i < currentIndex; i++) {
-            		if (data[i] != null && data[i].equals(item)) {
-                        return true;
-                    }
-                }
-            }
-            return false;
-        }
-
-        public String getCycleString() {
-            StringBuilder sb = new StringBuilder();
-            int i = size() - 1;
-            Object obj = get(i);
-            sb.append(obj);
-            Object x;
-            do {
-                sb.append(" -> ");
-                x = get(--i);
-                sb.append(x);
-            } while (obj != x);
-
-            return sb.toString();
-        }
-
-        @Override
-        public Object get(int index) {
-            return data[index];
-        }
-
-        @Override
-        public int size() {
-            return data.length;
-        }
-
+    @Override
+    public boolean isWrapperAsCollectionName() {
+        return false;
     }
     
+    public CoreAttributeGroup getCurrentAttributeGroup() {
+        if(this.attributeGroupStack == null || this.attributeGroupStack.isEmpty()) {
+            return DEFAULT_ATTRIBUTE_GROUP;
+        }
+        return attributeGroupStack.peek();
+    }
+    
+    public void pushAttributeGroup(CoreAttributeGroup group) {
+        if(group == DEFAULT_ATTRIBUTE_GROUP && this.attributeGroupStack == null) {
+            return;
+        }
+        if(this.attributeGroupStack == null) {
+            this.attributeGroupStack = new Stack<CoreAttributeGroup>();
+        }
+        this.attributeGroupStack.push(group);
+    }
+    
+    public void popAttributeGroup() {
+        if(attributeGroupStack != null) {
+            attributeGroupStack.pop();
+        }
+    }
+
+    @Override
+    public void flush() {
+    }
+ 
 }

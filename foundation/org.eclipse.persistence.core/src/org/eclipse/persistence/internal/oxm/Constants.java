@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2012 Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, 2013 Oracle and/or its affiliates. All rights reserved.
  * This program and the accompanying materials are made available under the
  * terms of the Eclipse Public License v1.0 and Eclipse Distribution License v. 1.0
  * which accompanies this distribution.
@@ -12,6 +12,8 @@
  ******************************************************************************/
 package org.eclipse.persistence.internal.oxm;
 
+import java.nio.charset.Charset;
+
 import javax.xml.namespace.QName;
 
 public class Constants {
@@ -22,7 +24,9 @@ public class Constants {
     public static final String BOOLEAN_STRING_TRUE = "true";
     public static final String CDATA = "CDATA";
     public static final char COLON = ':';
+    private static String CR;
     public static final String DEFAULT_XML_ENCODING = "UTF-8";
+    public static final Charset DEFAULT_CHARSET = Charset.forName(DEFAULT_XML_ENCODING);
     public static final char DOT = '.';
     public static final String EMPTY_STRING = "";
     public static final String EXPECTED_CONTENT_TYPES = "expectedContentTypes";
@@ -170,5 +174,17 @@ public class Constants {
         }
         
     };
+
+    /**
+     * Return a string containing the platform-appropriate
+     * characters for carriage return.
+     */
+    public static String cr() {
+        // bug 2756643
+        if (CR == null) {
+            CR = System.getProperty("line.separator");
+        }
+        return CR;
+    }
 
 }

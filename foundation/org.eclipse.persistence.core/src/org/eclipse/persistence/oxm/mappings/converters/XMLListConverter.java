@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 1998, 2012 Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1998, 2013 Oracle and/or its affiliates. All rights reserved.
  * This program and the accompanying materials are made available under the 
  * terms of the Eclipse Public License v1.0 and Eclipse Distribution License v. 1.0 
  * which accompanies this distribution. 
@@ -17,6 +17,7 @@ import java.security.PrivilegedActionException;
 
 import org.eclipse.persistence.exceptions.ValidationException;
 import org.eclipse.persistence.internal.oxm.XMLConversionManager;
+import org.eclipse.persistence.internal.oxm.mappings.Field;
 import org.eclipse.persistence.internal.security.PrivilegedClassForName;
 import org.eclipse.persistence.mappings.DatabaseMapping;
 import org.eclipse.persistence.mappings.converters.Converter;
@@ -40,11 +41,11 @@ public class XMLListConverter implements Converter {
     private String objectClassName = null;
 
     public Object convertDataValueToObjectValue(Object dataValue, Session session) {
-        return this.conversionManager.convertStringToList(dataValue, getObjectClass(), mapping.getContainerPolicy());
+        return this.conversionManager.convertStringToList(dataValue, getObjectClass(), mapping.getContainerPolicy(), ((Field)mapping.getField()).getSchemaType());
     }
 
     public Object convertObjectValueToDataValue(Object objectValue, Session session) {
-        return this.conversionManager.convertListToString(objectValue);
+        return this.conversionManager.convertListToString(objectValue, ((Field)mapping.getField()).getSchemaType());
     }
 
     public void initialize(DatabaseMapping mapping, Session session) {

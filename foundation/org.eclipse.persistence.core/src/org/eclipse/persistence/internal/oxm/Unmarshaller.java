@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2012 Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, 2013 Oracle and/or its affiliates. All rights reserved.
  * This program and the accompanying materials are made available under the
  * terms of the Eclipse Public License v1.0 and Eclipse Distribution License v. 1.0
  * which accompanies this distribution.
@@ -17,7 +17,6 @@ import javax.xml.validation.Schema;
 import org.eclipse.persistence.internal.core.sessions.CoreAbstractSession;
 import org.eclipse.persistence.internal.oxm.mappings.Descriptor;
 import org.eclipse.persistence.internal.oxm.record.UnmarshalRecord;
-import org.eclipse.persistence.oxm.XMLUnmarshalListener;
 import org.eclipse.persistence.oxm.attachment.XMLAttachmentUnmarshaller;
 import org.xml.sax.ErrorHandler;
 
@@ -28,12 +27,22 @@ public abstract class Unmarshaller<
     ID_RESOLVER extends IDResolver,
     MEDIA_TYPE extends MediaType,
     ROOT extends Root,
-    UNMARSHALLER_HANDLER extends UnmarshallerHandler> {
+    UNMARSHALLER_HANDLER extends UnmarshallerHandler,
+    UNMARSHALLER_LISTENER extends Unmarshaller.Listener> {
 
     protected CONTEXT context;
+    private UNMARSHALLER_LISTENER unmarshalListener;
 
     public Unmarshaller(CONTEXT context) {
         this.context = context;
+    }
+
+    /**
+     * Copy constructor
+     */
+    protected Unmarshaller(Unmarshaller unmarshaller) {
+        this.context = (CONTEXT) unmarshaller.getContext();
+        this.unmarshalListener = (UNMARSHALLER_LISTENER) unmarshaller.getUnmarshalListener();
     }
 
     /**
@@ -124,13 +133,38 @@ public abstract class Unmarshaller<
      */
     public abstract Class getUnmappedContentHandlerClass();
 
+    /**
+     * INTERNAL:
+     * Returns the AttributeGroup or the name of the AttributeGroup to be used to 
+     * unmarshal. 
+     */
+    public abstract Object getUnmarshalAttributeGroup();
+
     public abstract UNMARSHALLER_HANDLER getUnmarshallerHandler();
+
+    public UNMARSHALLER_LISTENER getUnmarshalListener() {
+        return unmarshalListener;
+    }
 
     /**
      * Name of the property to marshal/unmarshal as a wrapper on the text() mappings   
      * Ignored unmarshalling XML.  
      */ 
     public abstract String getValueWrapper();
+
+    /**
+     * INTERNAL
+     * @return true if the media type is application/json, else false.
+     * @since EclipseLink 2.6.0
+     */
+    public abstract boolean isApplicationJSON();
+
+    /**
+     * INTERNAL
+     * @return true if the media type is application/xml, else false.
+     * @since EclipseLink 2.6.0
+     */
+    public abstract boolean isApplicationXML();
 
     /**
      * Return if this Unmarshaller should try to automatically determine
@@ -147,9 +181,38 @@ public abstract class Unmarshaller<
     public abstract boolean isIncludeRoot();
 
     public abstract boolean isResultAlwaysXMLRoot();
-    
-    public abstract void setIDResolver(ID_RESOLVER idResolver);
 
-    public abstract XMLUnmarshalListener getUnmarshalListener();
+    public abstract boolean isWrapperAsCollectionName();
+
+    public abstract void setIDResolver(ID_RESOLVER idResolver); 
+
+    public void setUnmarshalListener(UNMARSHALLER_LISTENER unmarshalListener) {
+        this.unmarshalListener = unmarshalListener;
+    }
+
+    /**
+     * <p>An implementation of UnmarshalListener can be set on an Unmarshaller to 
+     * provide additional behaviour during unmarshal operations.</p>
+     */
+    public interface Listener {
+        
+        /**
+         * Event that will be called after objects are unmarshalled.
+         *
+         * @param target the object that was unmarshalled.
+         * @param parent the owning object of the object that was unmarshalled. This may be null.
+         */
+        public void afterUnmarshal(Object target, Object parent);
+        
+        
+        /**
+         * Event that will be called before objects are unmarshalled.
+         *
+         * @param target A newly created instance of the object to be unmarshalled.  
+         * @param parent the owning object of the object that will be unmarshalled. This may be null.
+         */
+        public void beforeUnmarshal(Object target, Object parent);
+
+    }
 
 }

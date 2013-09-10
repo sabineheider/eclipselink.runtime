@@ -401,10 +401,10 @@ public class DefaultSemanticValidator extends AbstractSemanticValidator {
 		try {
 			JPQLQueryBNF childQueryBNF = expression.getParent().findQueryBNF(expression);
 			validator.validate(childQueryBNF);
-			return validator.valid;
+			return validator.isValid();
 		}
 		finally {
-			validator.valid = false;
+			validator.dispose();
 		}
 	}
 
@@ -986,7 +986,7 @@ public class DefaultSemanticValidator extends AbstractSemanticValidator {
 
 			boolean valid = validateIntegralType(
 				expression.getSecondExpression(),
-				expression.parameterExpressionBNF(1),
+				expression.getParameterQueryBNFId(1),
 				SubstringExpression_SecondExpression_WrongType
 			);
 
@@ -998,7 +998,7 @@ public class DefaultSemanticValidator extends AbstractSemanticValidator {
 
 			boolean valid = validateIntegralType(
 				expression.getThirdExpression(),
-				expression.parameterExpressionBNF(2),
+				expression.getParameterQueryBNFId(2),
 				SubstringExpression_ThirdExpression_WrongType
 			);
 

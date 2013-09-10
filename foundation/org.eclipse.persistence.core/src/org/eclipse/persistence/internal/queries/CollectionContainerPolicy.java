@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 1998, 2012 Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1998, 2013 Oracle and/or its affiliates. All rights reserved.
  * This program and the accompanying materials are made available under the 
  * terms of the Eclipse Public License v1.0 and Eclipse Distribution License v. 1.0 
  * which accompanies this distribution. 
@@ -13,6 +13,7 @@
 package org.eclipse.persistence.internal.queries;
 
 import java.util.*;
+
 import org.eclipse.persistence.exceptions.*;
 import org.eclipse.persistence.internal.helper.*;
 import org.eclipse.persistence.internal.sessions.AbstractSession;
@@ -99,6 +100,26 @@ public class CollectionContainerPolicy extends InterfaceContainerPolicy {
         } catch (UnsupportedOperationException ex) {
             throw QueryException.methodNotValid(container, "clear()");
         }
+    }
+
+    /**
+     * INTERNAL:
+     * Return a clone of the specified container.
+     */
+    @Override
+    public Object cloneFor(Object container) {
+        if (container == null) {
+            return null;
+        }
+
+        if (container instanceof java.lang.Cloneable) {
+            return super.cloneFor(container);
+        }
+
+        Collection original = (Collection)container;
+        Collection clone = (Collection)containerInstance(original.size());
+        clone.addAll(original);
+        return clone;
     }
 
     /**

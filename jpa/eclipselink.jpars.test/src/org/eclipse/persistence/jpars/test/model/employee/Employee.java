@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2012 Oracle. All rights reserved.
+ * Copyright (c) 2011, 2013 Oracle. All rights reserved.
  * This program and the accompanying materials are made available under the
  * terms of the Eclipse Public License v1.0 and Eclipse Distribution License v. 1.0
  * which accompanies this distribution.
@@ -15,7 +15,9 @@ import static javax.persistence.CascadeType.PERSIST;
 import static javax.persistence.FetchType.LAZY;
 
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 import javax.persistence.AttributeOverride;
 import javax.persistence.AttributeOverrides;
@@ -62,8 +64,11 @@ import org.eclipse.persistence.annotations.PrivateOwned;
                 name = "Employee.getPhoneNumbers",
                 query = "SELECT e.firstName, e.lastName, pn FROM Employee e JOIN e.phoneNumbers pn"),
         @NamedQuery(
-                name = "Employee.findAll", 
-                query = "SELECT e FROM Employee e ORDER BY e.id")
+                name = "Employee.findAll",
+                query = "SELECT e FROM Employee e ORDER BY e.id"),
+        @NamedQuery(
+                name = "Employee.deleteAll",
+                query = "DELETE FROM Employee e")
 })
 @Entity
 @Table(name = "JPARS_EMPLOYEE")
@@ -99,7 +104,7 @@ public class Employee {
 
     @Version
     private Long version;
-    
+
     @ManyToMany
     @JoinTable(joinColumns = @JoinColumn(name = "EMP_ID"), inverseJoinColumns = @JoinColumn(name = "PROJ_ID"), name = "JPARS_PROJ_EMP")
     private List<Project> projects = new ArrayList<Project>();
@@ -130,13 +135,17 @@ public class Employee {
     @CollectionTable(name = "JPARS_RESPONS")
     private List<String> responsibilities = new ArrayList<String>();
 
-    @OneToMany(mappedBy="employee", cascade=CascadeType.ALL)
-    private List<Expertise> expertiseAreas = new ArrayList<Expertise>();
-    
+    @OneToMany(mappedBy = "employee", cascade = CascadeType.ALL)
+    private Set<Expertise> expertiseAreas = new HashSet<Expertise>();
+
     @ManyToOne(cascade = PERSIST, fetch = LAZY)
     @JoinColumn(name = "OFFICE_ID")
     private Office office;
-    
+
+    @ElementCollection
+    @CollectionTable(name = "JPARS_CERTIFICATION", joinColumns = { @JoinColumn(name = "EMP_ID") })
+    private List<Certification> certifications = new ArrayList<Certification>();
+
     public Employee() {
     }
 
@@ -292,11 +301,11 @@ public class Employee {
         getResponsibilities().remove(responsibility);
     }
 
-    public List<Expertise> getExpertiseAreas() {
+    public Set<Expertise> getExpertiseAreas() {
         return expertiseAreas;
     }
 
-    public void setExpertiseAreas(List<Expertise> expertiseAreas) {
+    public void setExpertiseAreas(Set<Expertise> expertiseAreas) {
         this.expertiseAreas = expertiseAreas;
     }
 
@@ -306,6 +315,14 @@ public class Employee {
 
     public void setOffice(Office office) {
         this.office = office;
+    }
+
+    public List<Certification> getCertifications() {
+        return certifications;
+    }
+
+    public void setCertifications(List<Certification> certifications) {
+        this.certifications = certifications;
     }
 
     public String toString() {

@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 1998, 2012 Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1998, 2013 Oracle and/or its affiliates. All rights reserved.
  * This program and the accompanying materials are made available under the 
  * terms of the Eclipse Public License v1.0 and Eclipse Distribution License v. 1.0 
  * which accompanies this distribution. 
@@ -12,13 +12,13 @@
  ******************************************************************************/
 package org.eclipse.persistence.oxm.record;
 
-import org.eclipse.persistence.oxm.XMLConstants;
-import org.eclipse.persistence.oxm.XMLRoot;
+import org.eclipse.persistence.internal.core.sessions.CoreAbstractSession;
+import org.eclipse.persistence.internal.oxm.Constants;
+import org.eclipse.persistence.internal.oxm.Root;
 import org.eclipse.persistence.internal.oxm.StrBuffer;
-import org.eclipse.persistence.internal.oxm.XMLConversionManager;
+import org.eclipse.persistence.internal.oxm.XMLUnmarshaller;
 import org.eclipse.persistence.internal.oxm.mappings.Mapping;
 import org.eclipse.persistence.internal.oxm.record.UnmarshalRecordImpl;
-
 import org.xml.sax.Attributes;
 import org.xml.sax.SAXException;
 
@@ -27,19 +27,21 @@ import org.xml.sax.SAXException;
  * and are being unmarshalled to a primitive wrapper object.  The characters
  * method will be used to gather the text to be converted.
  */
-public class XMLRootRecord extends UnmarshalRecord {
+public class XMLRootRecord extends UnmarshalRecordImpl {
 
     private Class targetClass;
     private StrBuffer characters;
     private boolean shouldReadChars;
     private int elementCount;
+    private XMLUnmarshaller unmarshaller;
 
     /**
      * Default constructor.
      */
-    public XMLRootRecord(Class cls) {
-        super(new UnmarshalRecordImpl(null));
-        targetClass = cls;
+    public XMLRootRecord(Class cls, XMLUnmarshaller unmarshaller) {
+        this.targetClass = cls;
+        this.unmarshaller = unmarshaller;
+        setSession((CoreAbstractSession) unmarshaller.getContext().getSession());
     }
 
     @Override
@@ -77,7 +79,7 @@ public class XMLRootRecord extends UnmarshalRecord {
      */
     @Override
     public Object getCurrentObject() {
-        XMLRoot xmlRoot = new XMLRoot();
+        Root xmlRoot = unmarshaller.createRoot();
         xmlRoot.setLocalName(getLocalName());
         xmlRoot.setNamespaceURI(getRootElementNamespaceUri());
         if(currentObject == null) {
@@ -88,7 +90,7 @@ public class XMLRootRecord extends UnmarshalRecord {
             if (characters != null) {
                 val = characters.toString();
             }
-            xmlRoot.setObject(((XMLConversionManager) session.getDatasourcePlatform().getConversionManager()).convertObject(val, targetClass));
+            xmlRoot.setObject(session.getDatasourcePlatform().getConversionManager().convertObject(val, targetClass));
         } else {
             xmlRoot.setObject(currentObject);
         }
@@ -114,7 +116,7 @@ public class XMLRootRecord extends UnmarshalRecord {
             setLocalName(localName);
             setRootElementNamespaceUri(namespaceURI);
         }
-        if(XMLConstants.EMPTY_STRING.equals(localName)) {
+        if(Constants.EMPTY_STRING.equals(localName)) {
             return;
         }
         elementCount++;

@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 1998, 2012 Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1998, 2013 Oracle and/or its affiliates. All rights reserved.
  * This program and the accompanying materials are made available under the 
  * terms of the Eclipse Public License v1.0 and Eclipse Distribution License v. 1.0 
  * which accompanies this distribution. 
@@ -109,6 +109,7 @@ public class JUnitJPQLComplexAggregateTestSuite extends JUnitTestCase
         suite.addTest(new JUnitJPQLComplexAggregateTestSuite("complexCountOnJoinedVariableOverManyToManySelfRefRelationship"));
         suite.addTest(new JUnitJPQLComplexAggregateTestSuite("complexCountOnJoinedVariableOverManyToManySelfRefRelationshipPortable"));
         suite.addTest(new JUnitJPQLComplexAggregateTestSuite("complexCountOnJoinedCompositePK"));
+        suite.addTest(new JUnitJPQLComplexAggregateTestSuite("testMultipleCoalesce"));
         
         return suite;
     }
@@ -702,5 +703,15 @@ public class JUnitJPQLComplexAggregateTestSuite extends JUnitTestCase
         Assert.assertEquals("complexSelectAggregateTest failed - end dates don't match", 
                 expectedResult.getEndDate(), result.getEndDate());
     }
-
+    
+    public void testMultipleCoalesce() {
+        EntityManager em = createEntityManager();
+        Query query = em.createQuery("SELECT SUM(COALESCE(e.roomNumber, 20)), SUM(COALESCE(e.salary, 10000)) FROM Employee e");
+        List result = (List) query.getResultList();
+        Assert.assertNotNull("testMultipleCoalesce Test Failed - Unable to fetch employee data", result);
+        Assert.assertFalse("testMultipleCoalesce Test Failed - Unable to fetch employee data", result.isEmpty());
+        Object[] aggregateResult = (Object[])result.get(0);
+        Assert.assertFalse("testMultipleCoalesce Test Failed ", aggregateResult[0].equals(aggregateResult[1]));
+        closeEntityManager(em);
+    }
 }

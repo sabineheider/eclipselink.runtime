@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 1998, 2012 Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1998, 2013 Oracle and/or its affiliates. All rights reserved.
  * This program and the accompanying materials are made available under the 
  * terms of the Eclipse Public License v1.0 and Eclipse Distribution License v. 1.0 
  * which accompanies this distribution. 
@@ -34,8 +34,10 @@ import javax.persistence.EntityManager;
 import junit.framework.*;
 
 import org.eclipse.persistence.descriptors.ClassDescriptor;
+import org.eclipse.persistence.jpa.JpaHelper;
 import org.eclipse.persistence.mappings.DatabaseMapping;
 import org.eclipse.persistence.mappings.OneToManyMapping;
+import org.eclipse.persistence.sessions.CopyGroup;
 import org.eclipse.persistence.sessions.server.ServerSession;
 import org.eclipse.persistence.testing.framework.junit.JUnitTestCase;
 import org.eclipse.persistence.testing.models.jpa.advanced.compositepk.Competency;
@@ -128,6 +130,8 @@ public class AdvancedCompositePKJunitTest extends JUnitTestCase {
         
         suite.addTest(new AdvancedCompositePKJunitTest("testSharedDerivedIdEmbeddableClass"));
         suite.addTest(new AdvancedCompositePKJunitTest("testNestedMapsId"));
+        
+        suite.addTest(new AdvancedCompositePKJunitTest("testCopyAggregateCollection"));
         
         if (!isJPA10()) {
             // This test runs only on a JEE6 / JPA 2.0 capable server
@@ -959,6 +963,33 @@ public class AdvancedCompositePKJunitTest extends JUnitTestCase {
             }
             closeEntityManager(em);
             throw e;
+        }
+    }
+    
+    // Bug 406957 - Copy fails on AggregateCollectionMapping and on map with @MapKeyColumn
+    public void testCopyAggregateCollection() {
+        Department department = new Department();
+        department.setName("DEPT AggregateCollection");
+        department.setRole("ROLE AggregateCollection");
+        department.setLocation("LOCATION AggregateCollection");
+        
+        Competency competency = new Competency();
+        competency.description = "Manage groups";
+        competency.rating = 9;
+        department.addCompetency(competency);
+
+        EntityManager em = createEntityManager();
+        CopyGroup privatelyOwned = new CopyGroup();
+        Department departmentCopy = (Department)JpaHelper.getEntityManager(em).copy(department, privatelyOwned);
+        if (departmentCopy.getCompetencies().size() != department.getCompetencies().size()) {
+            fail("departmentCopy.getCompetencies().size() = " + departmentCopy.getCompetencies().size() + "; "+department.getCompetencies().size()+" was expected");
+        }
+        if (departmentCopy.getCompetencies() == department.getCompetencies()) {
+            fail("departmentCopy.getCompetencies() == department.getCompetencies()");
+        }
+        Competency copmetencyCopy = departmentCopy.getCompetencies().iterator().next();
+        if (!competency.description.equals(copmetencyCopy.description)) {
+            fail("competency.descripton = " + competency.description +"; but copmetencyCopy.description = " + copmetencyCopy.description);
         }
     }
 }

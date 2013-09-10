@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 1998, 2012 Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1998, 2013 Oracle and/or its affiliates. All rights reserved.
  * This program and the accompanying materials are made available under the 
  * terms of the Eclipse Public License v1.0 and Eclipse Distribution License v. 1.0 
  * which accompanies this distribution. 
@@ -35,7 +35,7 @@ import org.eclipse.persistence.internal.helper.DatabaseField;
 public abstract class AbstractRecord extends CoreAbstractRecord implements Record, Cloneable, Serializable, Map {
 
     /** Use vector to store the fields/values for optimal performance.*/
-    protected Vector fields;
+    protected Vector<DatabaseField> fields;
 
     /** Use vector to store the fields/values for optimal performance.*/
     protected Vector values;
@@ -51,6 +51,9 @@ public abstract class AbstractRecord extends CoreAbstractRecord implements Recor
     
     /** INTERNAL: flag for any database field containing a null value */
     protected boolean nullValueInFields;
+
+    /** INTERNAL: SerializedObjectPolicy support */
+    protected transient Object sopObject;
 
     /**
      * INTERNAL:
@@ -195,7 +198,7 @@ public abstract class AbstractRecord extends CoreAbstractRecord implements Recor
         // Optimize check.
         int index = key.index;
         if ((index >= 0) && (index < this.size)) {
-            DatabaseField field = (DatabaseField)this.fields.get(index);
+            DatabaseField field = this.fields.get(index);
             if ((field == key) || field.equals(key)) {
                 return true;
             }
@@ -284,11 +287,11 @@ public abstract class AbstractRecord extends CoreAbstractRecord implements Recor
      */
     public Object get(DatabaseField key) {
         // PERF: Direct variable access.
-        // ** Code duplicated in getIndicatingNoEntry, ensure kept in synch **
+        // ** Code duplicated in getIndicatingNoEntry, replaceAt ensure kept in synch **
         // Optimize check.
         int index = key.index;
         if ((index >= 0) && (index < this.size)) {
-            DatabaseField field = (DatabaseField)this.fields.get(index);
+            DatabaseField field = this.fields.get(index);
             if ((field == key) || field.equals(key)) {
                 return this.values.get(index);
             }
@@ -326,7 +329,7 @@ public abstract class AbstractRecord extends CoreAbstractRecord implements Recor
         // Optimize check.
         int index = key.index;
         if ((index >= 0) && (index < this.size)) {
-            DatabaseField field = (DatabaseField)this.fields.get(index);
+            DatabaseField field = this.fields.get(index);
             if ((field == key) || field.equals(key)) {
                 return this.values.get(index);
             }
@@ -351,13 +354,13 @@ public abstract class AbstractRecord extends CoreAbstractRecord implements Recor
         // Optimize check.
         int index = key.index;
         if ((index >= 0) && (index < getFields().size())) {
-            DatabaseField field = (DatabaseField)getFields().elementAt(index);
+            DatabaseField field = getFields().elementAt(index);
             if ((field == key) || field.equals(key)) {
                 return field;
             }
         }
         for (index = 0; index < getFields().size(); index++) {
-            DatabaseField field = (DatabaseField)getFields().elementAt(index);
+            DatabaseField field = getFields().elementAt(index);
             if ((field == key) || field.equals(key)) {
                 return field;
             }
@@ -368,7 +371,7 @@ public abstract class AbstractRecord extends CoreAbstractRecord implements Recor
     /**
      * INTERNAL:
      */
-    public Vector getFields() {
+    public Vector<DatabaseField> getFields() {
         return fields;
     }
 
@@ -685,6 +688,28 @@ public abstract class AbstractRecord extends CoreAbstractRecord implements Recor
         this.values.set(index, value);
     }
 
+    /**
+     * INTERNAL:
+     * replaces the value at field with value
+     */
+    public void replaceAt(Object value, DatabaseField key) {
+        int index = key.index;
+        if ((index >= 0) && (index < this.size)) {
+            DatabaseField field = this.fields.get(index);
+            if ((field == key) || field.equals(key)) {
+                this.values.set(index, value);
+            }
+        }
+        int fieldsIndex = this.fields.indexOf(key);
+        if (fieldsIndex >= 0) {
+            // PERF: If the fields index was not set, then set it.
+            if (index == -1) {
+                key.setIndex(fieldsIndex);
+            }
+            this.values.set(fieldsIndex, value);
+        }
+    }
+
     protected void setFields(Vector fields) {
         this.fields = fields;
         resetSize();
@@ -726,6 +751,11 @@ public abstract class AbstractRecord extends CoreAbstractRecord implements Recor
             writer.write(" => ");
             writer.write(String.valueOf((getValues().elementAt(index))));
         }
+        if (this.sopObject != null) {
+            writer.write(Helper.cr());
+            writer.write(" sopObject = ");
+            writer.write(this.sopObject.toString());
+        }
         writer.write(")");
 
         return writer.toString();
@@ -737,5 +767,26 @@ public abstract class AbstractRecord extends CoreAbstractRecord implements Recor
      */
     public Collection values() {
         return new ValuesSet();
+    }
+    
+    /**
+     * INTERNAL:
+     */
+    public boolean hasSopObject() {
+        return this.sopObject != null;
+    }
+
+    /**
+     * INTERNAL:
+     */
+    public Object getSopObject() {
+        return this.sopObject;
+    }
+
+    /**
+     * INTERNAL:
+     */
+    public void setSopObject(Object sopObject) {
+        this.sopObject = sopObject;
     }
 }

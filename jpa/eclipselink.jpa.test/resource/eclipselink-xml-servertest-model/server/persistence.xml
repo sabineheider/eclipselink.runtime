@@ -25,6 +25,7 @@
         <provider>org.eclipse.persistence.jpa.PersistenceProvider</provider>
         <%%datasource-type%%>%%data-source-name%%</%%datasource-type%%>
         <mapping-file>META-INF/advanced-multitenant-entity-mappings.xml</mapping-file>
+        <class>org.eclipse.persistence.testing.models.jpa.xml.inheritance.FueledVehicle</class>
         <exclude-unlisted-classes>true</exclude-unlisted-classes>
         <properties>
             <property name="eclipselink.exclude-eclipselink-orm" value="true"/>
@@ -32,7 +33,6 @@
             <property name="eclipselink.target-database" value="%%database-platform%%"/>
             <property name="eclipselink.weaving" value="%%server-weaving%%"/>
             <property name="eclipselink.validate-existence" value="true"/>
-            <property name="eclipselink.logging.level" value="FINEST"/>
             <property name="eclipselink.multitenant.tenants-share-cache" value="false"/>
             <property name="eclipselink.jdbc.allow-native-sql-queries" value="true"/>
             <property name="eclipselink.ddl-generation" value="drop-and-create-tables"/>
@@ -44,6 +44,7 @@
         <provider>org.eclipse.persistence.jpa.PersistenceProvider</provider>
         <%%datasource-type%%>%%data-source-name%%</%%datasource-type%%>
         <mapping-file>META-INF/advanced-multitenant-entity-mappings.xml</mapping-file>
+        <class>org.eclipse.persistence.testing.models.jpa.xml.inheritance.FueledVehicle</class>
         <exclude-unlisted-classes>true</exclude-unlisted-classes>
         <properties>
             <property name="eclipselink.exclude-eclipselink-orm" value="true"/>
@@ -51,7 +52,6 @@
             <property name="eclipselink.target-database" value="%%database-platform%%"/>
             <property name="eclipselink.weaving" value="%%server-weaving%%"/>
             <property name="eclipselink.validate-existence" value="true"/>
-            <property name="eclipselink.logging.level" value="FINEST"/>
             <property name="tenant.id" value="123"/>
             <property name="eclipselink.tenant-id" value="123"/>
             <property name="eclipselink.multitenant.tenants-share-emf" value="false"/>
@@ -62,16 +62,19 @@
     <persistence-unit name="MulitPU-3" transaction-type="%%transaction-type%%">
         <provider>org.eclipse.persistence.jpa.PersistenceProvider</provider>
         <%%datasource-type%%>%%data-source-name%%</%%datasource-type%%>
+        <class>org.eclipse.persistence.testing.models.jpa.xml.inheritance.FueledVehicle</class>
         <exclude-unlisted-classes>true</exclude-unlisted-classes>
     </persistence-unit>
     <persistence-unit name="MulitPU-4" transaction-type="%%transaction-type%%">
         <provider>org.eclipse.persistence.jpa.PersistenceProvider</provider>
         <%%datasource-type%%>%%data-source-name%%</%%datasource-type%%>
+        <class>org.eclipse.persistence.testing.models.jpa.xml.inheritance.FueledVehicle</class>
         <exclude-unlisted-classes>true</exclude-unlisted-classes>
     </persistence-unit>
     <persistence-unit name="MulitPU-5" transaction-type="%%transaction-type%%">
         <provider>org.eclipse.persistence.jpa.PersistenceProvider</provider>
         <%%datasource-type%%>%%data-source-name%%</%%datasource-type%%>
+        <class>org.eclipse.persistence.testing.models.jpa.xml.inheritance.FueledVehicle</class>
         <exclude-unlisted-classes>true</exclude-unlisted-classes>
     </persistence-unit>
 </persistence>

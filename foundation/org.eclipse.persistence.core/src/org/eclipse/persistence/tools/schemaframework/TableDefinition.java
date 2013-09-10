@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 1998, 2012 Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1998, 2013 Oracle and/or its affiliates. All rights reserved.
  * This program and the accompanying materials are made available under the 
  * terms of the Eclipse Public License v1.0 and Eclipse Distribution License v. 1.0 
  * which accompanies this distribution. 
@@ -320,7 +320,7 @@ public class TableDefinition extends DatabaseObjectDefinition {
     public Writer buildUniqueConstraintDeletionWriter(AbstractSession session, UniqueKeyConstraint uniqueKey, Writer writer) throws ValidationException {
         try {
             writer.write("ALTER TABLE " + getFullName());
-            writer.write(session.getPlatform().getConstraintDeletionString() + uniqueKey.getName());
+            writer.write(session.getPlatform().getUniqueConstraintDeletionString() + uniqueKey.getName());
         } catch (IOException ioException) {
             throw ValidationException.fileError(ioException);
         }
@@ -950,12 +950,40 @@ public class TableDefinition extends DatabaseObjectDefinition {
         if (session.getPlatform().shouldCreateIndicesOnForeignKeys()) {
             // indices for columns in foreign key constraint declarations
             for (ForeignKeyConstraint foreignKey : getForeignKeys()) {
-                IndexDefinition index = buildIndex(session, foreignKey.getName(), foreignKey.getSourceFields(), false);
-                if (writer == null) {
-                    index.createOnDatabase(session);
-                } else {
-                    index.buildCreationWriter(session, writer);
-                    writeLineSeperator(session, writer);
+                if (!foreignKey.isDisableForeignKey()) {
+                    // Do not re-index pk.
+                    boolean alreadyIndexed = false;
+                    List<String> primaryKeys = getPrimaryKeyFieldNames();
+                    if ((primaryKeys.size() == foreignKey.getSourceFields().size())
+                            && primaryKeys.containsAll(foreignKey.getSourceFields())) {
+                        alreadyIndexed = true;
+                    }
+                    // Also check unique fields.
+                    if (foreignKey.getSourceFields().size() == 1) {
+                        FieldDefinition field = getField(foreignKey.getSourceFields().get(0));
+                        if ((field != null) && field.isUnique()) {
+                            alreadyIndexed = true;
+                        }
+                    }
+                    for (UniqueKeyConstraint uniqueConstraint : getUniqueKeys()) {
+                        if ((uniqueConstraint.getSourceFields().size() == foreignKey.getSourceFields().size())
+                                && uniqueConstraint.getSourceFields().containsAll(foreignKey.getSourceFields())) {
+                            alreadyIndexed = true;
+                        }
+                    }
+                    if (!alreadyIndexed) {
+                        IndexDefinition index = buildIndex(session, foreignKey.getName(), foreignKey.getSourceFields(), false);
+                        if (writer == null) {
+                            try {
+                                index.createOnDatabase(session);
+                            } catch (Exception failed) {
+                                //ignore
+                            }
+                        } else {
+                            index.buildCreationWriter(session, writer);
+                            writeLineSeperator(session, writer);
+                        }
+                    }
                 }
             }
         }
@@ -1136,16 +1164,42 @@ public class TableDefinition extends DatabaseObjectDefinition {
         if (session.getPlatform().shouldCreateIndicesOnForeignKeys()) {
             // indices for columns in foreign key constraint declarations
             for (ForeignKeyConstraint foreignKey : getForeignKeys()) {
-                IndexDefinition index = buildIndex(session, foreignKey.getName(), foreignKey.getSourceFields(), false);
-                if (writer == null) {
-                    try {
-                        index.dropFromDatabase(session);
-                    } catch (Exception notThere) {
-                        //ignore
+                if (!foreignKey.isDisableForeignKey()) {
+                    if (!foreignKey.isDisableForeignKey()) {
+                        // Do not re-index pk.
+                        boolean alreadyIndexed = false;
+                        List<String> primaryKeys = getPrimaryKeyFieldNames();
+                        if ((primaryKeys.size() == foreignKey.getSourceFields().size())
+                                && primaryKeys.containsAll(foreignKey.getSourceFields())) {
+                            alreadyIndexed = true;
+                        }
+                        // Also check unique fields.
+                        if (foreignKey.getSourceFields().size() == 1) {
+                            FieldDefinition field = getField(foreignKey.getSourceFields().get(0));
+                            if ((field != null) && field.isUnique()) {
+                                alreadyIndexed = true;
+                            }
+                        }
+                        for (UniqueKeyConstraint uniqueConstraint : getUniqueKeys()) {
+                            if ((uniqueConstraint.getSourceFields().size() == foreignKey.getSourceFields().size())
+                                    && uniqueConstraint.getSourceFields().containsAll(foreignKey.getSourceFields())) {
+                                alreadyIndexed = true;
+                            }
+                        }
+                        if (!alreadyIndexed) {
+                            IndexDefinition index = buildIndex(session, foreignKey.getName(), foreignKey.getSourceFields(), false);
+                            if (writer == null) {
+                                try {
+                                    index.dropFromDatabase(session);
+                                } catch (Exception notThere) {
+                                    //ignore
+                                }
+                            } else {
+                                index.buildDeletionWriter(session, writer);
+                                writeLineSeperator(session, writer);
+                            }
+                        }
                     }
-                } else {
-                    index.buildDeletionWriter(session, writer);
-                    writeLineSeperator(session, writer);
                 }
             }
         }
@@ -1176,6 +1230,19 @@ public class TableDefinition extends DatabaseObjectDefinition {
      */
     public void setForeignKeyMap(Map<String, ForeignKeyConstraint> foreignKeyMap) {
         this.foreignKeyMap = foreignKeyMap;
+    }
+
+    /**
+     * PUBLIC:
+     * Return the field the corresponds to the name.
+     */
+    public FieldDefinition getField(String fieldName) {
+        for (FieldDefinition field : getFields()) {
+            if (field.getName().equals(fieldName)) {
+                return field;
+            }
+        }
+        return null;
     }
 
     /**

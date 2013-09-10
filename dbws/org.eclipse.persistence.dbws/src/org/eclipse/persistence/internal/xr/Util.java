@@ -77,9 +77,38 @@ import static org.eclipse.persistence.oxm.XMLConstants.UNSIGNED_SHORT_QNAME;
  */
 @SuppressWarnings("serial")
 public class Util {
-    public static final String XMLTYPE_STR = "XMLTYPE";
+    public static XMLPlatform XML_PLATFORM = XMLPlatformFactory.getInstance().getXMLPlatform();
+    public static Document TEMP_DOC = XML_PLATFORM.createDocument();
     public static final int OPAQUE = 2007;
-
+    public static final String DEFAULT_ATTACHMENT_MIMETYPE = "application/octet-stream";
+    public static final String WEB_INF_DIR = "WEB-INF/";
+    public static final String WSDL_DIR = "wsdl/";
+    public static final String[] META_INF_PATHS = { "META-INF/", "/META-INF/" };
+    public static final String DBWS_SERVICE_XML = "eclipselink-dbws.xml";
+    public static final String DBWS_OR_LABEL = "dbws-or";
+    public static final String DBWS_OX_LABEL = "dbws-ox";
+    public static final String DBWS_OR_XML = "eclipselink-" + DBWS_OR_LABEL + ".xml";
+    public static final String DBWS_OX_XML = "eclipselink-" + DBWS_OX_LABEL + ".xml";
+    public static final String DBWS_SCHEMA_XML = "eclipselink-dbws-schema.xsd";
+    public static final String DBWS_WSDL = "eclipselink-dbws.wsdl";
+    public static final String DBWS_SESSIONS_XML = "eclipselink-dbws-sessions.xml";
+    public static final String DBWS_OR_SESSION_NAME_SUFFIX = DBWS_OR_LABEL + "-session";
+    public static final String DBWS_OX_SESSION_NAME_SUFFIX = DBWS_OX_LABEL + "-session";
+    public static final String TARGET_NAMESPACE_PREFIX = "ns1";
+    public static final String SERVICE_NAMESPACE_PREFIX = "srvc";
+    public static final String SERVICE_SUFFIX = "Service";
+    public static final String ALL_QUERYNAME = "findAll";
+    public static final String PK_QUERYNAME = "findByPrimaryKey";
+    public static final String XMLTYPE_STR = "XMLTYPE";
+    public static final String DOT_STR = ".";
+    public static final String UNDERSCORE_STR = "_";
+    public static final String TYPE_STR = "Type";
+    public static final String COLLECTION_WRAPPER_STR = "CollectionWrapper";
+    public static final String DASH_STR = "-";
+    public static final String EMPTY_STR = "";
+    public static final char COLON_CHAR = ':';
+    public static final char SLASH_CHAR = '/';
+    
     /**
      * Convert a SQL name to a valid XML name. Because not all characters that
      * are valid in a SQL name is valid in an XML name, they need to be escaped
@@ -398,19 +427,7 @@ public class Util {
     }
 
 	public static final QName SXF_QNAME = new QName("", DEFAULT_SIMPLE_XML_FORMAT_TAG);
-    /*
-     *
-                            if (xmlField.getSchemaType().equals(DATE_QNAME)) {
-                                xmlField.setType(SQLDATE);
-                            }
-                            else if (xmlField.getSchemaType().equals(TIME_QNAME)) {
-                                xmlField.setType(TIME);
-                            }
-                            else if (xmlField.getSchemaType().equals(DATE_TIME_QNAME)) {
-                                xmlField.setType(TIMESTAMP);
-                            }
 
-     */
     public static final Map<QName, Class<?>> SCHEMA_2_CLASS;
     static {
       SCHEMA_2_CLASS = new HashMap<QName, Class<?>>() {{
@@ -476,41 +493,4 @@ public class Util {
         }
         return typeCode;                
     }
-
-    public static XMLPlatform XML_PLATFORM =
-        XMLPlatformFactory.getInstance().getXMLPlatform();
-    public static Document TEMP_DOC = XML_PLATFORM.createDocument();
-    public static final String DEFAULT_ATTACHMENT_MIMETYPE =
-        "application/octet-stream";
-    public static final String WEB_INF_DIR =
-        "WEB-INF/";
-    public static final String WSDL_DIR =
-        "wsdl/";
-    public static final String[] META_INF_PATHS =
-        {"META-INF/", "/META-INF/"};
-    public static final String DBWS_SERVICE_XML =
-        "eclipselink-dbws.xml";
-    public static final String DBWS_OR_LABEL =
-        "dbws-or";
-    public static final String DBWS_OX_LABEL =
-        "dbws-ox";
-    public static final String DBWS_OR_XML =
-        "eclipselink-" + DBWS_OR_LABEL + ".xml";
-    public static final String DBWS_OX_XML =
-        "eclipselink-" + DBWS_OX_LABEL + ".xml";
-    public static final String DBWS_SCHEMA_XML =
-        "eclipselink-dbws-schema.xsd";
-    public static final String DBWS_WSDL =
-        "eclipselink-dbws.wsdl";
-    public static final String DBWS_SESSIONS_XML =
-        "eclipselink-dbws-sessions.xml";
-    public static final String DBWS_OR_SESSION_NAME_SUFFIX =
-        DBWS_OR_LABEL + "-session";
-    public static final String DBWS_OX_SESSION_NAME_SUFFIX =
-        DBWS_OX_LABEL + "-session";
-    public static final String TARGET_NAMESPACE_PREFIX = "ns1";
-    public static final String SERVICE_NAMESPACE_PREFIX = "srvc";
-    public static final String SERVICE_SUFFIX = "Service";
-    public static final String PK_QUERYNAME =
-    "findByPrimaryKey";
 }

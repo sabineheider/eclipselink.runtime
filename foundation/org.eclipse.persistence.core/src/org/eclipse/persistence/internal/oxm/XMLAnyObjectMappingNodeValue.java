@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 1998, 2012 Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1998, 2013 Oracle and/or its affiliates. All rights reserved.
  * This program and the accompanying materials are made available under the 
  * terms of the Eclipse Public License v1.0 and Eclipse Distribution License v. 1.0 
  * which accompanies this distribution. 
@@ -13,12 +13,12 @@
 package org.eclipse.persistence.internal.oxm;
 
 import java.util.List;
+
 import javax.xml.namespace.QName;
 
 import org.eclipse.persistence.core.sessions.CoreSession;
 import org.eclipse.persistence.exceptions.XMLMarshalException;
 import org.eclipse.persistence.internal.core.sessions.CoreAbstractSession;
-import org.eclipse.persistence.internal.helper.Helper;
 import org.eclipse.persistence.internal.oxm.mappings.AnyObjectMapping;
 import org.eclipse.persistence.internal.oxm.mappings.Descriptor;
 import org.eclipse.persistence.internal.oxm.mappings.Field;
@@ -30,8 +30,6 @@ import org.eclipse.persistence.internal.oxm.record.ObjectMarshalContext;
 import org.eclipse.persistence.internal.oxm.record.UnmarshalRecord;
 import org.eclipse.persistence.internal.oxm.record.XMLReader;
 import org.eclipse.persistence.internal.oxm.record.deferred.AnyMappingContentHandler;
-import org.eclipse.persistence.logging.AbstractSessionLog;
-import org.eclipse.persistence.logging.SessionLog;
 import org.xml.sax.Attributes;
 import org.xml.sax.SAXException;
 
@@ -40,7 +38,7 @@ import org.xml.sax.SAXException;
  * <p><b>Purpose</b>: This is how the XML Any Object Mapping is handled when
  * used with the TreeObjectBuilder.</p>
  */
-public class XMLAnyObjectMappingNodeValue extends XMLRelationshipMappingNodeValue implements NullCapableValue {
+public class XMLAnyObjectMappingNodeValue extends XMLRelationshipMappingNodeValue {
     private AnyObjectMapping xmlAnyObjectMapping;
 
     public XMLAnyObjectMappingNodeValue(AnyObjectMapping xmlAnyObjectMapping) {
@@ -79,17 +77,20 @@ public class XMLAnyObjectMappingNodeValue extends XMLRelationshipMappingNodeValu
         boolean wasXMLRoot = false;
         XPathFragment xmlRootFragment = null;
         Object originalValue = objectValue;
-
         if (xmlAnyObjectMapping.usesXMLRoot() && (objectValue instanceof Root)) {
             xmlRootFragment = new XPathFragment();
             xmlRootFragment.setNamespaceAware(marshalRecord.isNamespaceAware());            
             wasXMLRoot = true;
-            objectValue = ((Root) objectValue).getObject();
+            objectValue = ((Root) objectValue).getObject();            
+            if(objectValue == null){            	       
+            	setupFragment(((Root) originalValue), xmlRootFragment, marshalRecord);
+                marshalRecord.nilComplex(xmlRootFragment, namespaceResolver);               
+                return true;
+            }
         }
 
         if (objectValue instanceof String) {
             marshalSimpleValue(xmlRootFragment, marshalRecord, originalValue, object, objectValue, session, namespaceResolver);
-
         } else {
             CoreSession childSession = null;
             try {
@@ -102,13 +103,9 @@ public class XMLAnyObjectMappingNodeValue extends XMLRelationshipMappingNodeValu
             ObjectBuilder objectBuilder = (ObjectBuilder) descriptor.getObjectBuilder();
 
             List extraNamespaces = objectBuilder.addExtraNamespacesToNamespaceResolver(descriptor, marshalRecord, session, true, true);
-            if (wasXMLRoot) {
-                Namespace generatedNamespace = setupFragment(((Root) originalValue), xmlRootFragment, marshalRecord);
-                if (generatedNamespace != null) {
-                    extraNamespaces.add(generatedNamespace);
-                }
+            if(wasXMLRoot){
+                setupFragment(((Root) originalValue), xmlRootFragment, marshalRecord);
             }
-
             /*
              * B5112171: 25 Apr 2006
              * During marshalling - XML AnyObject and AnyCollection
@@ -118,7 +115,7 @@ public class XMLAnyObjectMappingNodeValue extends XMLRelationshipMappingNodeValu
              */
             String defaultRootElementString = descriptor.getDefaultRootElement();
             if (!wasXMLRoot && (defaultRootElementString == null)) {
-                AbstractSessionLog.getLog().log(SessionLog.WARNING, "marshal_warning_null_document_root_element", new Object[] { Helper.getShortClassName(this.getClass()), descriptor });
+                throw XMLMarshalException.defaultRootElementNotSpecified(descriptor);
             } else {
                 marshalRecord.beforeContainmentMarshal(objectValue);
 
@@ -144,7 +141,7 @@ public class XMLAnyObjectMappingNodeValue extends XMLRelationshipMappingNodeValu
               
                 writeExtraNamespaces(extraNamespaces, marshalRecord, session);
                 marshalRecord.addXsiTypeAndClassIndicatorIfRequired(descriptor, descriptor, (Field)xmlAnyObjectMapping.getField(), originalValue, objectValue, wasXMLRoot, false);
-                objectBuilder.buildRow(marshalRecord, objectValue, (org.eclipse.persistence.internal.sessions.AbstractSession) childSession, marshaller, null);
+                objectBuilder.buildRow(marshalRecord, objectValue, (CoreAbstractSession) childSession, marshaller, null);
                 marshalRecord.afterContainmentMarshal(object, objectValue);
                 marshalRecord.endElement(rootFragment, namespaceResolver);
                 marshalRecord.removeExtraNamespacesFromNamespaceResolver(extraNamespaces, session);
@@ -183,7 +180,6 @@ public class XMLAnyObjectMappingNodeValue extends XMLRelationshipMappingNodeValu
     }
 
     public void endElement(XPathFragment xPathFragment, UnmarshalRecord unmarshalRecord) {
-        unmarshalRecord.removeNullCapableValue(this);
         UnmarshalRecord childRecord = unmarshalRecord.getChildRecord();
         if (null != childRecord) {
             Object childObject = childRecord.getCurrentObject();
@@ -233,26 +229,20 @@ public class XMLAnyObjectMappingNodeValue extends XMLRelationshipMappingNodeValu
         }
     }
     
-
-    public void setNullValue(Object object, CoreSession session) {
-        xmlAnyObjectMapping.setAttributeValueInObject(object, null);
-    }
-
-    public boolean isNullCapableValue() {
-        return true;
-    }
-
+    
     private Namespace setupFragment(Root originalValue, XPathFragment xmlRootFragment, MarshalRecord marshalRecord) {
         Namespace generatedNamespace = null;
         String xpath = originalValue.getLocalName();
         if (originalValue.getNamespaceURI() != null) {
-            xmlRootFragment.setNamespaceURI((originalValue).getNamespaceURI());
+            xmlRootFragment.setNamespaceURI((originalValue).getNamespaceURI());            
             String prefix = marshalRecord.getNamespaceResolver().resolveNamespaceURI((originalValue).getNamespaceURI());
             if (prefix == null || prefix.length() == 0) {
                 prefix = marshalRecord.getNamespaceResolver().generatePrefix("ns0");
                 generatedNamespace = new Namespace(prefix, xmlRootFragment.getNamespaceURI());
+                xmlRootFragment.setGeneratedPrefix(true);
             }
             xpath = prefix + Constants.COLON + xpath;
+           
         }
         xmlRootFragment.setXPath(xpath);
         return generatedNamespace;
@@ -261,12 +251,9 @@ public class XMLAnyObjectMappingNodeValue extends XMLRelationshipMappingNodeValu
     private void marshalSimpleValue(XPathFragment xmlRootFragment, MarshalRecord marshalRecord, Object originalValue, Object object, Object value, CoreAbstractSession session, NamespaceResolver namespaceResolver) {
     	QName qname = null;
         if (xmlRootFragment != null) {
-            qname = ((Root) originalValue).getSchemaType();
-            Namespace generatedNamespace = setupFragment(((Root) originalValue), xmlRootFragment, marshalRecord);
-            getXPathNode().startElement(marshalRecord, xmlRootFragment, object, session, namespaceResolver, null, null);
-            if (generatedNamespace != null) {                
-                marshalRecord.namespaceDeclaration(generatedNamespace.getPrefix(),  generatedNamespace.getNamespaceURI());
-            }
+            qname = ((Root) originalValue).getSchemaType();    
+            setupFragment(((Root) originalValue), xmlRootFragment, marshalRecord);
+            getXPathNode().startElement(marshalRecord, xmlRootFragment, object, session, namespaceResolver, null, null);            
             updateNamespaces(qname, marshalRecord, null);
         }
         

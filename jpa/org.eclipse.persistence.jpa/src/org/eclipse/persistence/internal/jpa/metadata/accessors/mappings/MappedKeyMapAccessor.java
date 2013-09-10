@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 1998, 2012 Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1998, 2013 Oracle and/or its affiliates. All rights reserved.
  * This program and the accompanying materials are made available under the 
  * terms of the Eclipse Public License v1.0 and Eclipse Distribution License v. 1.0 
  * which accompanies this distribution. 
@@ -18,6 +18,8 @@
  *       - 389090: JPA 2.1 DDL Generation Support (foreign key metadata support)
  *     11/28/2012-2.5 Guy Pelletier 
  *       - 374688: JPA 2.1 Converter support
+ *     07/16/2013-2.5.1 Guy Pelletier 
+ *       - 412384: Applying Converter for parameterized basic-type for joda-time's DateTime does not work
  ******************************************************************************/  
 package org.eclipse.persistence.internal.jpa.metadata.accessors.mappings;
 
@@ -61,6 +63,11 @@ public interface MappedKeyMapAccessor {
      * INTERNAL:
      */
     public MetadataClass getMapKeyClass();
+    
+    /**
+     * INTERNAL:
+     */
+    public MetadataClass getMapKeyClassWithGenerics();
     
     /**
      * INTERNAL:

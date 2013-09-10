@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 1998, 2012 Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1998, 2013 Oracle and/or its affiliates. All rights reserved.
  * This program and the accompanying materials are made available under the 
  * terms of the Eclipse Public License v1.0 and Eclipse Distribution License v. 1.0 
  * which accompanies this distribution. 
@@ -113,7 +113,7 @@ public class ProxyIndirectionPolicy extends BasicIndirectionPolicy {
             //CR#3838
             descriptor = session.getDescriptor(query.getReferenceClass());
             if (descriptor.isDescriptorForInterface()) {
-                descriptor = (ClassDescriptor)descriptor.getInterfacePolicy().getChildDescriptors().firstElement();
+                descriptor = descriptor.getInterfacePolicy().getChildDescriptors().get(0);
             }
         } catch (Exception e) {
             return null;
@@ -148,7 +148,7 @@ public class ProxyIndirectionPolicy extends BasicIndirectionPolicy {
             // Need an instance of the implementing class
             ClassDescriptor d = originalQuery.getDescriptor();
             if (d.isDescriptorForInterface()) {
-                d = (ClassDescriptor)originalQuery.getDescriptor().getInterfacePolicy().getChildDescriptors().firstElement();
+                d = originalQuery.getDescriptor().getInterfacePolicy().getChildDescriptors().get(0);
             }
             if (PrivilegedAccessHelper.shouldUsePrivilegedAccess()){
                 object = AccessController.doPrivileged(new PrivilegedNewInstanceFromClass(d.getJavaClass()));

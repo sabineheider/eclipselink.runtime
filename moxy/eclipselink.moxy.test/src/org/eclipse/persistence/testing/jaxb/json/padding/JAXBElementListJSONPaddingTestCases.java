@@ -57,4 +57,10 @@ public class JAXBElementListJSONPaddingTestCases extends JSONTestCases{
 	public boolean isUnmarshalTest (){
 		return false;
 	}
+	
+	public void testJSONMarshalToBuilderResult() throws Exception{     
+    }
+	
+	public void testJSONMarshalToGeneratorResult() throws Exception{     
+    }
 }

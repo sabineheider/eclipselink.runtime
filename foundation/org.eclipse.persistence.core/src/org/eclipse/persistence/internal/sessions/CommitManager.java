@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 1998, 2012 Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1998, 2013 Oracle and/or its affiliates. All rights reserved.
  * This program and the accompanying materials are made available under the 
  * terms of the Eclipse Public License v1.0 and Eclipse Distribution License v. 1.0 
  * which accompanies this distribution. 
@@ -17,6 +17,7 @@ import org.eclipse.persistence.mappings.*;
 import org.eclipse.persistence.internal.databaseaccess.DatasourceCall;
 import org.eclipse.persistence.internal.helper.*;
 import org.eclipse.persistence.queries.*;
+import org.eclipse.persistence.sessions.UnitOfWork.CommitOrderType;
 import org.eclipse.persistence.exceptions.*;
 import org.eclipse.persistence.internal.localization.*;
 import org.eclipse.persistence.internal.queries.DatabaseQueryMechanism;
@@ -240,9 +241,14 @@ public class CommitManager {
             ClassDescriptor descriptor = null;
             AbstractSession session = getSession();
             Collection<ObjectChangeSet> changes = objectChangesList.values();
-            if (((UnitOfWorkImpl)session).shouldOrderUpdates()) {
+            CommitOrderType order = ((UnitOfWorkImpl)session).getCommitOrder();
+            if (order != CommitOrderType.NONE) {
                 changes = new ArrayList(objectChangesList.values());
-                Collections.sort((List)changes);
+                if (order == CommitOrderType.CHANGES) {
+                    Collections.sort((List)changes, new ObjectChangeSet.ObjectChangeSetComparator());
+                } else {
+                    Collections.sort((List)changes);
+                }
             }
             for (ObjectChangeSet changeSetToWrite : changes) {
                 Object objectToWrite = changeSetToWrite.getUnitOfWorkClone();

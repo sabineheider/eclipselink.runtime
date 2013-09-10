@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 1998, 2012 Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1998, 2013 Oracle and/or its affiliates. All rights reserved.
  * This program and the accompanying materials are made available under the 
  * terms of the Eclipse Public License v1.0 and Eclipse Distribution License v. 1.0 
  * which accompanies this distribution. 
@@ -47,7 +47,25 @@ public class RMIRemoteConnection extends RemoteConnection {
      */
     public Object executeCommand(Command command) throws CommunicationException {
         try {
-            return connection.executeCommand(command);
+            return this.connection.executeCommand(command);
+        } catch (RemoteException exception) {
+            throw CommunicationException.errorInInvocation(exception);
+        }
+    }
+
+    /**
+     * INTERNAL:
+     * This method invokes the remote object with the Command argument, and causes
+     * it to execute the command in the remote VM. The result is currently assumed
+     * to be either null if successful, or an exception string if an exception was
+     * thrown during execution.
+     *
+     * If a RemoteException occurred then a communication problem occurred. In this
+     * case the exception will be wrapped in a CommunicationException and re-thrown.
+     */
+    public Object executeCommand(byte[] command) throws CommunicationException {
+        try {
+            return this.connection.executeCommand(command);
         } catch (RemoteException exception) {
             throw CommunicationException.errorInInvocation(exception);
         }

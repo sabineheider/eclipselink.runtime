@@ -1,5 +1,5 @@
 /*******************************************************************************
-* Copyright (c) 1998, 2012 Oracle and/or its affiliates. All rights reserved.
+* Copyright (c) 1998, 2013 Oracle and/or its affiliates. All rights reserved.
 * This program and the accompanying materials are made available under the
 * terms of the Eclipse Public License v1.0 and Eclipse Distribution License v. 1.0
 * which accompanies this distribution.
@@ -18,7 +18,6 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 
-import javax.xml.namespace.NamespaceContext;
 import javax.xml.stream.XMLEventFactory;
 import javax.xml.stream.XMLEventWriter;
 import javax.xml.stream.XMLStreamException;
@@ -107,7 +106,6 @@ public class XMLEventWriterRecord extends MarshalRecord {
                  throw XMLMarshalException.marshalException(e);
              }
          } else {
-             NamespaceContext ctx = xmlEventWriter.getNamespaceContext();
              if(namespaceURI == null || namespaceURI.length() == 0) {
                  event = xmlEventFactory.createAttribute(localName, value);
              } else {
@@ -207,6 +205,11 @@ public class XMLEventWriterRecord extends MarshalRecord {
         this.xPathFragment = xPathFragment;
         this.attributes = null;
         this.namespaceDeclarations = null;
+
+        if(xPathFragment.isGeneratedPrefix()){
+        	namespaceDeclaration(xPathFragment.getPrefix(), xPathFragment.getNamespaceURI());
+        }
+        
         writePrefixMappings();
     }
 
@@ -236,6 +239,7 @@ public class XMLEventWriterRecord extends MarshalRecord {
                 isStartElementOpen = false;
             }
             xmlEventWriter.add(xmlEventFactory.createEndDocument());
+            xmlEventWriter.flush();
         } catch(Exception e) {
             throw XMLMarshalException.marshalException(e);
         }

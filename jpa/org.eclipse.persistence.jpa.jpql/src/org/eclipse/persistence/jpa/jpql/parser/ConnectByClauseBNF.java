@@ -14,9 +14,10 @@
 package org.eclipse.persistence.jpa.jpql.parser;
 
 /**
- * The query BNF for a conditional term expression.
+ * The query BNF for a <code><b>CONNECT BY</b></code> clause. This was added to the grammar with
+ * EclipseLink 2.5.
  *
- * <div nowrap><b>BNF:</b> <code>connectby_clause ::= CONNECT BY { PRIOR parent_expr = child_expr | child_expr = PRIOR parent_expr }</code><p>
+ * <div nowrap><b>BNF:</b> <code>CONNECT BY { single_valued_object_path_expression | collection_valued_path_expression }</code><p>
  *
  * @version 2.5
  * @since 2.5
@@ -43,7 +44,6 @@ public final class ConnectByClauseBNF extends JPQLQueryBNF {
 	@Override
 	protected void initialize() {
 		super.initialize();
-		setHandleCollection(true);
 		registerExpressionFactory(ConnectByClauseFactory.ID);
 	}
 }

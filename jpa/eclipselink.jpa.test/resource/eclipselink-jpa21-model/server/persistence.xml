@@ -43,6 +43,7 @@
         <class>org.eclipse.persistence.testing.models.jpa21.advanced.converters.LevelConverter</class>
         <class>org.eclipse.persistence.testing.models.jpa21.advanced.converters.LongToStringConverter</class>
         <class>org.eclipse.persistence.testing.models.jpa21.advanced.converters.RunningStatusConverter</class>
+        <class>org.eclipse.persistence.testing.models.jpa21.advanced.converters.TagConverter</class>
         <class>org.eclipse.persistence.testing.models.jpa21.advanced.converters.TimeConverter</class>
         <class>org.eclipse.persistence.testing.models.jpa21.advanced.converters.ResponsibilityConverter</class>
         <exclude-unlisted-classes>true</exclude-unlisted-classes>
@@ -51,7 +52,6 @@
             <property name="eclipselink.target-database" value="%%database-platform%%"/>
             <property name="eclipselink.validate-existence" value="true"/>
             <property name="eclipselink.weaving" value="%%server-weaving%%"/>
-            <!--property name="eclipselink.logging.level" value="FINEST"/-->
             <property name="eclipselink.session-name" value="default-session"/>
             <property name="eclipselink.orm.validate.schema" value="true"/>
             <property name="eclipselink.jdbc.uppercase-columns" value="true"/>
@@ -78,6 +78,7 @@
         <class>org.eclipse.persistence.testing.models.jpa21.advanced.ddl.Endorser</class>
         <class>org.eclipse.persistence.testing.models.jpa21.advanced.ddl.Athlete</class>
         <class>org.eclipse.persistence.testing.models.jpa21.advanced.ddl.Race</class>
+        <class>org.eclipse.persistence.testing.models.jpa21.advanced.ddl.Coach</class>
         <class>org.eclipse.persistence.testing.models.jpa21.advanced.converters.AccomplishmentConverter</class>
         <class>org.eclipse.persistence.testing.models.jpa21.advanced.converters.AgeConverter</class>
         <class>org.eclipse.persistence.testing.models.jpa21.advanced.converters.DateConverter</class>
@@ -95,7 +96,6 @@
             <property name="eclipselink.target-database" value="%%database-platform%%"/>
             <property name="eclipselink.validate-existence" value="true"/>
             <property name="eclipselink.weaving" value="%%server-weaving%%"/>
-            <!--property name="eclipselink.logging.level" value="FINEST"/-->
             <property name="eclipselink.session-name" value="default-ddl-session"/>
             <property name="eclipselink.orm.validate.schema" value="true"/>
             <property name="eclipselink.jdbc.uppercase-columns" value="true"/>
@@ -118,7 +118,6 @@
             <property name="eclipselink.target-database" value="%%database-platform%%"/>
             <property name="eclipselink.validate-existence" value="true"/>
             <property name="eclipselink.weaving" value="%%server-weaving%%"/>
-            <!--property name="eclipselink.logging.level" value="FINEST"/-->
             <property name="eclipselink.session-name" value="default-xml-ddl-session"/>
             <property name="eclipselink.orm.validate.schema" value="true"/>
             <property name="eclipselink.jdbc.uppercase-columns" value="true"/>
@@ -140,7 +139,6 @@
             <property name="eclipselink.target-database" value="%%database-platform%%"/>
             <property name="eclipselink.validate-existence" value="true"/>
             <property name="eclipselink.weaving" value="%%server-weaving%%"/>
-            <!--property name="eclipselink.logging.level" value="FINEST"/-->
             <property name="eclipselink.session-name" value="default-xml-session"/>
             <property name="eclipselink.orm.validate.schema" value="true"/>
             <property name="eclipselink.jdbc.uppercase-columns" value="true"/>
@@ -161,7 +159,6 @@
             <property name="eclipselink.target-database" value="%%database-platform%%"/>
             <property name="eclipselink.validate-existence" value="true"/>
             <property name="eclipselink.weaving" value="%%server-weaving%%"/>
-            <!--property name="eclipselink.logging.level" value="FINEST"/-->
         </properties>
     </persistence-unit>
 </persistence>

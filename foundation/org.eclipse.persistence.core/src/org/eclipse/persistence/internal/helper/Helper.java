@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 1998, 2012 Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1998, 2013 Oracle and/or its affiliates. All rights reserved.
  * This program and the accompanying materials are made available under the
  * terms of the Eclipse Public License v1.0 and Eclipse Distribution License v. 1.0
  * which accompanies this distribution.
@@ -56,6 +56,7 @@ import org.eclipse.persistence.exceptions.ConversionException;
 import org.eclipse.persistence.exceptions.EclipseLinkException;
 import org.eclipse.persistence.exceptions.ValidationException;
 import org.eclipse.persistence.internal.core.helper.CoreHelper;
+import org.eclipse.persistence.internal.databaseaccess.DatabaseAccessor;
 import org.eclipse.persistence.internal.security.PrivilegedAccessHelper;
 import org.eclipse.persistence.internal.security.PrivilegedClassForName;
 import org.eclipse.persistence.internal.security.PrivilegedGetField;
@@ -2393,4 +2394,26 @@ public class Helper extends CoreHelper implements Serializable {
         return pattern;
     }
     
+    public static boolean isLob(DatabaseField field) {
+        int sqlType = field.sqlType;
+        if (sqlType == DatabaseField.NULL_SQL_TYPE) {
+            Class type = field.getType();
+            if (type != null) {
+                return ClassConstants.BLOB.equals(type) || ClassConstants.CLOB.equals(type);
+            } else {
+                return false;
+            }
+        } else {
+            return DatabaseAccessor.isBlob(sqlType) || DatabaseAccessor.isClob(sqlType);
+        }
+    }
+
+    public static boolean hasLob(Collection<DatabaseField> fields) {
+        for (DatabaseField field : fields) {
+            if (isLob(field)) {
+                return true;
+            }
+        }
+        return false;
+    }    
 }
