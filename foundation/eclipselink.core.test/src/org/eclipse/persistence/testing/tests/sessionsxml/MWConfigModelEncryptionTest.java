@@ -37,12 +37,6 @@ public class MWConfigModelEncryptionTest extends AutoVerifyTestCase {
     }
 
     public void test() throws Exception {
-        if (getSession().getPlatform().isHANA()) {
-            // TODO: test fails for an unknown reason -> investigate
-            // disabled for the time being
-            return;
-        }
-        
         // Read a session with an unencrypted password
         SessionConfigs m_sessions = SessionManager.getManager().getInternalMWConfigObjects("org/eclipse/persistence/testing/models/sessionsxml/XMLSchemaSession.xml", getClass().getClassLoader());
 
