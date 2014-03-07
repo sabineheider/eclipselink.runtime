@@ -16,13 +16,16 @@ import static org.eclipse.persistence.jaxb.javamodel.Helper.getQualifiedJavaType
 
 import java.awt.Image;
 import java.io.BufferedReader;
-import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
+import java.lang.reflect.GenericArrayType;
 import java.lang.reflect.Method;
+import java.lang.reflect.ParameterizedType;
 import java.lang.reflect.Type;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collection;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
@@ -74,8 +77,10 @@ import org.eclipse.persistence.jaxb.compiler.MarshalCallback;
 import org.eclipse.persistence.jaxb.compiler.UnmarshalCallback;
 import org.eclipse.persistence.jaxb.javamodel.JavaClass;
 import org.eclipse.persistence.jaxb.javamodel.reflection.AnnotationHelper;
+import org.eclipse.persistence.jaxb.javamodel.reflection.JavaClassImpl;
 import org.eclipse.persistence.jaxb.javamodel.reflection.JavaModelImpl;
 import org.eclipse.persistence.jaxb.javamodel.reflection.JavaModelInputImpl;
+import org.eclipse.persistence.jaxb.json.JsonSchemaOutputResolver;
 import org.eclipse.persistence.jaxb.xmlmodel.JavaType;
 import org.eclipse.persistence.jaxb.xmlmodel.XmlBindings;
 import org.eclipse.persistence.jaxb.xmlmodel.XmlBindings.JavaTypes;
@@ -85,6 +90,8 @@ import org.eclipse.persistence.oxm.NamespaceResolver;
 import org.eclipse.persistence.oxm.XMLContext;
 import org.eclipse.persistence.oxm.XMLField;
 import org.eclipse.persistence.oxm.XMLLogin;
+import org.eclipse.persistence.oxm.XMLMarshaller;
+import org.eclipse.persistence.oxm.XMLUnmarshaller;
 import org.eclipse.persistence.oxm.platform.SAXPlatform;
 import org.eclipse.persistence.oxm.platform.XMLPlatform;
 import org.eclipse.persistence.sessions.Project;
@@ -302,16 +309,23 @@ public class JAXBContext extends javax.xml.bind.JAXBContext {
      *
      * @param outputResolver Class that decides where the schema file (of the given namespace URI) will be written
      */
-    public void generateSchema(SchemaOutputResolver outputResolver) {
-        generateSchema(outputResolver, null);
+    public void generateSchema(SchemaOutputResolver outputResolver)  {
+        if(outputResolver instanceof JsonSchemaOutputResolver) {
+            generateJsonSchema(outputResolver, ((JsonSchemaOutputResolver)outputResolver).getRootClass());
+        } else {
+            generateSchema(outputResolver, null);
+        }
     }
 
-    public void generateJsonSchema(SchemaOutputResolver outputResolver, Class rootClass) throws JAXBException, javax.xml.bind.JAXBException, IOException {
-        JsonSchemaGenerator generator = new JsonSchemaGenerator(this.contextState.getXMLContext().getSession(rootClass).getProject(), this.contextState.properties);
+    public void generateJsonSchema(SchemaOutputResolver outputResolver, Class rootClass) {
+        JsonSchemaGenerator generator = new JsonSchemaGenerator(this, this.contextState.properties);
         JsonSchema schema = generator.generateSchema(rootClass);
-
-        Marshaller m = getJsonSchemaMarshaller();
-        m.marshal(schema, outputResolver.createOutput(null, rootClass.getName() + ".json"));
+        try {
+            Marshaller m = getJsonSchemaMarshaller();
+            m.marshal(schema, outputResolver.createOutput(null, rootClass.getName() + ".json"));
+        } catch (Exception ex) {
+            throw org.eclipse.persistence.exceptions.JAXBException.exceptionDuringSchemaGeneration(ex);
+        }
     }
 
     private Marshaller getJsonSchemaMarshaller() throws javax.xml.bind.JAXBException {
@@ -391,7 +405,7 @@ public class JAXBContext extends javax.xml.bind.JAXBContext {
      * Create a JAXBBinder.  The JAXBBinder is used to preserve unmapped XML Data.
      */
     public JAXBBinder createBinder() {
-        return new JAXBBinder(getXMLContext());
+        return contextState.createBinder(this);
     }
 
     /**
@@ -401,7 +415,7 @@ public class JAXBContext extends javax.xml.bind.JAXBContext {
      */
     public <T> JAXBBinder createBinder(Class<T> nodeClass) {
         if (nodeClass.getName().equals("org.w3c.dom.Node")) {
-            return new JAXBBinder(getXMLContext());
+            return contextState.createBinder(this);
         } else {
             throw new UnsupportedOperationException(JAXBException.unsupportedNodeClass(nodeClass.getName()));
         }
@@ -908,6 +922,7 @@ public class JAXBContext extends javax.xml.bind.JAXBContext {
                 jModel.setMetadataCompletePackageMap(metadataComplete);
             }
 
+            jModel.setHasXmlBindings(xmlBindings != null || !xmlBindings.isEmpty());
             JavaModelInputImpl inputImpl = new JavaModelInputImpl(classesToBeBound, jModel);
             try {
                 Generator generator = new Generator(inputImpl, xmlBindings, loader, defaultTargetNamespace, enableXmlAccessorFactory);
@@ -1000,7 +1015,33 @@ public class JAXBContext extends javax.xml.bind.JAXBContext {
 
         TypeMappingInfoInput(TypeMappingInfo[] typeMappingInfo, Map properties, ClassLoader classLoader) {
             super(properties, classLoader);
-            this.typeMappingInfo = typeMappingInfo;
+            this.typeMappingInfo = Arrays.copyOf(typeMappingInfo, typeMappingInfo.length);
+           
+            Arrays.sort(this.typeMappingInfo, new Comparator<TypeMappingInfo>() {
+                @Override
+                public int compare(TypeMappingInfo javaClass1, TypeMappingInfo javaClass2) {
+                    String sourceName = getNameForType(javaClass1.getType());
+                    String targetName = getNameForType(javaClass2.getType());
+                    if(sourceName == null ||  targetName == null){
+                        return -1;
+                    }
+
+                    return sourceName.compareTo(targetName);
+                }
+
+                private String getNameForType(Type type) {
+                    if (type instanceof Class) {
+                        return ((Class)type).getCanonicalName();
+                    } else if (type instanceof GenericArrayType) {
+                        Class genericTypeClass = (Class) ((GenericArrayType) type).getGenericComponentType();
+                        return genericTypeClass.getCanonicalName();
+                    } else {
+                        // assume parameterized type
+                        ParameterizedType pType = (ParameterizedType) type;
+                        return ((Class)pType.getRawType()).getCanonicalName();
+                    }
+                }
+            });
         }
 
         protected JAXBContextState createContextState() throws javax.xml.bind.JAXBException {
@@ -1025,6 +1066,7 @@ public class JAXBContext extends javax.xml.bind.JAXBContext {
                 }
             }
             TypeMappingInfo[] typesToBeBound = typeMappingInfo;
+
             for (Entry<String, XmlBindings> entry : xmlBindings.entrySet()) {
                 typesToBeBound = getXmlBindingsClasses(entry.getValue(), classLoader, typesToBeBound);
             }
@@ -1038,6 +1080,7 @@ public class JAXBContext extends javax.xml.bind.JAXBContext {
                 jModel = new JavaModelImpl(loader);
             }
 
+            jModel.setHasXmlBindings(xmlBindings != null || !xmlBindings.isEmpty());
             // create Map of package names to metadata complete indicators
             Map<String, Boolean> metadataComplete = new HashMap<String, Boolean>();
             for (String packageName : xmlBindings.keySet()) {
@@ -1525,6 +1568,21 @@ public class JAXBContext extends javax.xml.bind.JAXBContext {
                 setPropertyOnUnmarshaller(JAXBContextProperties.JSON_WRAPPER_AS_ARRAY_NAME, unmarshaller);
             }
             return unmarshaller;
+        }
+        
+        public JAXBBinder createBinder(JAXBContext context) {
+        	XMLMarshaller marshaller = null;
+        	XMLUnmarshaller unmarshaller = null;
+        	try {
+        		marshaller = createMarshaller(context).getXMLMarshaller();
+        		unmarshaller = createUnmarshaller(context).getXMLUnmarshaller();
+        	} catch (javax.xml.bind.JAXBException e) {
+        		// log something
+        		marshaller = context.getXMLContext().createMarshaller();
+        		unmarshaller = context.getXMLContext().createUnmarshaller();
+        	}
+        	
+        	return new JAXBBinder(context, marshaller, unmarshaller);
         }
 
         private void setPropertyOnMarshaller(String propertyName, JAXBMarshaller marshaller) throws PropertyException {

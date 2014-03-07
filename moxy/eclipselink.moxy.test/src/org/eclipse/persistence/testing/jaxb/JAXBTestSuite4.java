@@ -31,11 +31,15 @@ import org.eclipse.persistence.testing.jaxb.objectgraph.ObjectGraphDynamicTestCa
 import org.eclipse.persistence.testing.jaxb.objectgraph.ObjectGraphInheritanceTestCases;
 import org.eclipse.persistence.testing.jaxb.objectgraph.ObjectGraphRefSubTestCases;
 import org.eclipse.persistence.testing.jaxb.refresh.RefreshTestSuite;
+import org.eclipse.persistence.testing.jaxb.typevariable.TypeVariableTestSuite;
 import org.eclipse.persistence.testing.jaxb.xmlelementrefs.adapter.XmlElementRefsAdapterTestCases;
 import org.eclipse.persistence.testing.jaxb.xmlgregoriancalendar.XMLGregorianCalendarObjectTestCases;
 import org.eclipse.persistence.testing.jaxb.xmlinverseref.XmlInverseRefBidirectionalTestSuite;
 import org.eclipse.persistence.testing.jaxb.xmlschematype.XSDSchemaTypesTestCases;
 import org.eclipse.persistence.testing.jaxb.xmlvariablenode.AllVariableElementTestCases;
+import org.eclipse.persistence.testing.jaxb.xsitype.OtherRootTestCases;
+import org.eclipse.persistence.testing.jaxb.xsitype.TypeAttributeInheritanceTestCases;
+import org.eclipse.persistence.testing.jaxb.xsitype.TypeAttributeTestCases;
 
 import junit.framework.Test;
 import junit.framework.TestSuite;
@@ -73,6 +77,10 @@ public class JAXBTestSuite4 {
         suite.addTest(AllVariableElementTestCases.suite());
         suite.addTestSuite(InheritanceOverrideTestCases.class);
         suite.addTestSuite(InheritanceTypeElementTestCases.class);
+        suite.addTestSuite(TypeAttributeTestCases.class);
+        suite.addTestSuite(TypeAttributeInheritanceTestCases.class);
+        suite.addTestSuite(OtherRootTestCases.class);
+        suite.addTest(TypeVariableTestSuite.suite());
 	    
 	    return suite;
 	}

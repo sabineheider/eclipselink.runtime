@@ -19,12 +19,14 @@ import java.lang.reflect.Type;
 import java.lang.reflect.TypeVariable;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 
 import javax.xml.namespace.QName;
 
+import org.eclipse.persistence.jaxb.javamodel.reflection.JavaClassImpl;
 import org.eclipse.persistence.internal.oxm.mappings.Field;
 import org.eclipse.persistence.internal.oxm.XPathFragment;
 import org.eclipse.persistence.jaxb.javamodel.Helper;
@@ -39,7 +41,6 @@ import org.eclipse.persistence.jaxb.xmlmodel.XmlJavaTypeAdapter;
 import org.eclipse.persistence.jaxb.xmlmodel.XmlJoinNodes;
 import org.eclipse.persistence.jaxb.xmlmodel.XmlMarshalNullRepresentation;
 import org.eclipse.persistence.jaxb.xmlmodel.XmlTransformation;
-
 import org.eclipse.persistence.oxm.XMLField;
 
 /**
@@ -318,13 +319,8 @@ public class Property implements Cloneable {
         }
     	String clsName= cls.getRawName();
         if(helper.isCollectionType(cls)){
-            Collection typeArgs =  cls.getActualTypeArguments();
-        	if(typeArgs.size() > 0){
-      		    genericType = (JavaClass) typeArgs.iterator().next();
-        	} else {
-       		    genericType = helper.getJavaClass(Object.class);
-        	}        	
-            type = cls;                  
+           	genericType = getGenericType(cls, 0, helper);           
+            type = cls;
         }else if(cls.isArray()  && !clsName.equals("byte[]") ){
         	type = cls;
         	genericType = cls.getComponentType();
@@ -337,19 +333,137 @@ public class Property implements Cloneable {
         setIsMap(isNewTypeMap);
         
         if(isMap()){
-        	Object[] types = type.getActualTypeArguments().toArray();
-        	
-     	    if(types.length >=2){        	        	
-     	        keyType = (JavaClass)types[0];     	        
-     	        valueType = (JavaClass)types[1];
-     	    }else{
-     	    	keyType = helper.getJavaClass(Object.class);     	        
-     	        valueType = helper.getJavaClass(Object.class);	    
-             }
+            if(type.getPackageName().startsWith("java.")) {
+            	Object[] types = type.getActualTypeArguments().toArray();
+            	
+         	    if(types.length >=2){        	        	
+         	        keyType = (JavaClass)types[0];     	        
+         	        valueType = (JavaClass)types[1];
+         	    }else{
+         	    	keyType = helper.getJavaClass(Object.class);     	        
+         	        valueType = helper.getJavaClass(Object.class);	    
+                 }
+            } else {
+                keyType = getGenericType(type, 0, helper);
+                valueType = getGenericType(type, 1, helper);
+            }
         }
        
     }
-    
+  
+    private JavaClass getGenericType(JavaClass cls, int argument, Helper helper){
+    	Collection typeArgs = cls.getActualTypeArguments();
+        Object[] typeArgsArray = typeArgs.toArray();
+        JavaClass genericType = null;
+        if(cls.getPackageName().startsWith("java.")) {
+            if(typeArgs.size() > argument){
+                Iterator iterator = typeArgs.iterator();
+                for(int x=0; x<argument; x++) {
+                    iterator.next();
+                }
+                return (JavaClass) iterator.next();
+            } else {
+                return helper.getJavaClass(Object.class);
+            }
+        }else{
+        	Map<String, JavaClass> variableToType = null;
+
+            if(cls instanceof JavaClassImpl){
+            	variableToType = new HashMap<String, JavaClass>();
+            	TypeVariable[] tvs = ((JavaClassImpl)cls).getJavaClass().getTypeParameters();
+            	if(tvs.length == typeArgsArray.length){
+	            	for (int x = 0; x < tvs.length; x++) {
+	                    variableToType.put(tvs[x].getName(), (JavaClass)typeArgsArray[x]);
+	                }
+            	}
+            }
+          
+        	Type genericTypeType = getGenericType(cls.getGenericSuperclass(), argument, variableToType);
+            
+        	if(null == genericTypeType) {
+                for(Type genericInterface : cls.getGenericInterfaces()) {
+                    genericTypeType = getGenericType(genericInterface, argument, variableToType);
+                    if(null != genericTypeType) {
+                        break;
+                    }
+                }
+            }
+            if(genericTypeType instanceof TypeVariable) {
+                TypeVariable typeVariable = (TypeVariable) genericTypeType;
+                JavaClass existing = variableToType.get(typeVariable.getName());
+                if( existing != null){
+                	return existing;
+                }else{
+                    Type[] typeVariableBounds = typeVariable.getBounds();
+                    if(typeVariableBounds.length > 0) {
+                    	genericTypeType = typeVariableBounds[0];
+                    }  
+                }
+        	}
+        	 
+            if(genericTypeType instanceof Class) {
+                genericType = helper.getJavaClass((Class) genericTypeType);
+            }
+            if(null == genericType || genericTypeType == Object.class) {
+                if(typeArgs.size() > argument){
+                    Iterator iterator = typeArgs.iterator();
+                    for(int x=0; x<argument; x++) {
+                        iterator.next();
+                    }
+                    genericType = (JavaClass) iterator.next();
+                } else {
+                    genericType = helper.getJavaClass(Object.class);
+                }
+            }
+            return genericType;
+        }
+        
+    }
+
+    private Type getGenericType(Type type, int argument, Map<String, JavaClass> variableToType) {
+        if(type instanceof ParameterizedType) {
+            ParameterizedType parameterizedType = (ParameterizedType) type;
+            Type rawType = parameterizedType.getRawType();
+            if(rawType instanceof Class) {
+                Class rawTypeClass = (Class) rawType;
+                Type[] typeArgs = parameterizedType.getActualTypeArguments();
+                TypeVariable[] tvs = rawTypeClass.getTypeParameters();
+            	if(tvs.length == typeArgs.length){
+	            	for (int x = 0; x < tvs.length; x++) {
+	            		String name = tvs[x].getName();	            	
+	            		Type theType = typeArgs[x];
+	            		if(!variableToType.containsKey(name) && theType instanceof Class){
+	            			variableToType.put(name, helper.getJavaClass((Class)theType));	
+	            		}	                    
+	                }
+            	}
+                
+                if(rawTypeClass.getPackage().getName().startsWith("java.")) {
+                    Type actualType = parameterizedType.getActualTypeArguments()[argument];                 
+                    return actualType;
+                }
+                Type genericType = getGenericType(rawType, argument, variableToType);
+                if(genericType != null) {
+                    return genericType;
+                } else {
+                    return parameterizedType.getActualTypeArguments()[argument];
+                }
+            } else {
+                return getGenericType(parameterizedType.getRawType(), argument,variableToType);
+            }
+        } else if(type instanceof Class) {
+            Class clazz = (Class) type;
+            for(Type genericInterface : clazz.getGenericInterfaces()) {
+                Type genericType = getGenericType(genericInterface, argument, variableToType);
+                if(null != genericType) {
+                    return genericType;
+                }
+            }
+            return getGenericType(clazz.getGenericSuperclass(), argument, variableToType);
+        }
+        return null;
+    }
+
     public JavaClass getType() {
         return type;
     }

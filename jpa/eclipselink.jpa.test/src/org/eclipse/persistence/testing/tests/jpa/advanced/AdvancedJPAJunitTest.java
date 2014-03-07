@@ -40,6 +40,7 @@ import java.util.Vector;
 import javax.persistence.CacheStoreMode;
 import javax.persistence.EntityManager;
 import javax.persistence.EntityManagerFactory;
+import javax.persistence.FlushModeType;
 import javax.persistence.Query;
 import javax.persistence.metamodel.Attribute;
 import javax.persistence.metamodel.EntityType;
@@ -49,12 +50,16 @@ import javax.persistence.metamodel.SingularAttribute;
 import javax.persistence.metamodel.Attribute.PersistentAttributeType;
 import javax.persistence.metamodel.Bindable.BindableType;
 import javax.persistence.metamodel.Type.PersistenceType;
+import javax.persistence.spi.LoadState;
+import javax.persistence.spi.ProviderUtil;
 
 import junit.framework.Test;
 import junit.framework.TestSuite;
 
 import org.eclipse.persistence.annotations.BatchFetchType;
 import org.eclipse.persistence.annotations.JoinFetch;
+import org.eclipse.persistence.config.CascadePolicy;
+import org.eclipse.persistence.config.HintValues;
 import org.eclipse.persistence.config.QueryHints;
 import org.eclipse.persistence.descriptors.ClassDescriptor;
 import org.eclipse.persistence.descriptors.DescriptorEvent;
@@ -71,22 +76,28 @@ import org.eclipse.persistence.internal.jpa.EntityManagerImpl;
 import org.eclipse.persistence.internal.jpa.metamodel.MapAttributeImpl;
 import org.eclipse.persistence.internal.jpa.metamodel.SingularAttributeImpl;
 import org.eclipse.persistence.internal.sessions.AbstractSession;
+import org.eclipse.persistence.jpa.JpaEntityManager;
 import org.eclipse.persistence.jpa.JpaHelper;
+import org.eclipse.persistence.jpa.PersistenceProvider;
 import org.eclipse.persistence.mappings.DatabaseMapping;
 import org.eclipse.persistence.mappings.DirectCollectionMapping;
 import org.eclipse.persistence.mappings.ForeignReferenceMapping;
 import org.eclipse.persistence.mappings.ManyToManyMapping;
+import org.eclipse.persistence.mappings.OneToManyMapping;
 import org.eclipse.persistence.mappings.OneToOneMapping;
 import org.eclipse.persistence.mappings.UnidirectionalOneToManyMapping;
 import org.eclipse.persistence.queries.DoesExistQuery;
+import org.eclipse.persistence.sessions.DatabaseRecord;
 import org.eclipse.persistence.sessions.Session;
 import org.eclipse.persistence.sessions.server.ServerSession;
 import org.eclipse.persistence.testing.framework.JoinedAttributeTestHelper;
+import org.eclipse.persistence.testing.framework.QuerySQLTracker;
 import org.eclipse.persistence.testing.framework.junit.JUnitTestCase;
 import org.eclipse.persistence.testing.framework.junit.JUnitTestCaseHelper;
 import org.eclipse.persistence.testing.models.jpa.advanced.Address;
 import org.eclipse.persistence.testing.models.jpa.advanced.AdvancedTableCreator;
 import org.eclipse.persistence.testing.models.jpa.advanced.Bag;
+import org.eclipse.persistence.testing.models.jpa.advanced.BarCode;
 import org.eclipse.persistence.testing.models.jpa.advanced.Buyer;
 import org.eclipse.persistence.testing.models.jpa.advanced.Cost;
 import org.eclipse.persistence.testing.models.jpa.advanced.Customer;
@@ -99,11 +110,13 @@ import org.eclipse.persistence.testing.models.jpa.advanced.EmploymentPeriod;
 import org.eclipse.persistence.testing.models.jpa.advanced.Equipment;
 import org.eclipse.persistence.testing.models.jpa.advanced.EquipmentCode;
 import org.eclipse.persistence.testing.models.jpa.advanced.GoldBuyer;
+import org.eclipse.persistence.testing.models.jpa.advanced.HugeProject;
 import org.eclipse.persistence.testing.models.jpa.advanced.Jigsaw;
 import org.eclipse.persistence.testing.models.jpa.advanced.JigsawPiece;
 import org.eclipse.persistence.testing.models.jpa.advanced.LargeProject;
 import org.eclipse.persistence.testing.models.jpa.advanced.Loot;
 import org.eclipse.persistence.testing.models.jpa.advanced.PhoneNumber;
+import org.eclipse.persistence.testing.models.jpa.advanced.Product;
 import org.eclipse.persistence.testing.models.jpa.advanced.Project;
 import org.eclipse.persistence.testing.models.jpa.advanced.Quantity;
 import org.eclipse.persistence.testing.models.jpa.advanced.SmallProject;
@@ -121,6 +134,7 @@ import org.eclipse.persistence.testing.models.jpa.advanced.additionalcriteria.Sc
 import org.eclipse.persistence.testing.models.jpa.advanced.additionalcriteria.Student;
 import org.eclipse.persistence.tools.schemaframework.SchemaManager;
 import org.eclipse.persistence.tools.schemaframework.StoredFunctionDefinition;
+import org.hamcrest.core.IsEqual;
 
 /**
  * This test suite tests EclipseLink JPA annotations extensions.
@@ -162,6 +176,7 @@ public class AdvancedJPAJunitTest extends JUnitTestCase {
 
         suite.addTest(new AdvancedJPAJunitTest("testExistenceCheckingSetting"));
         suite.addTest(new AdvancedJPAJunitTest("testJoinColumnForeignKeyFieldLength"));
+        suite.addTest(new AdvancedJPAJunitTest("testEmployeeFetchWithAlias"));
         
         suite.addTest(new AdvancedJPAJunitTest("testJoinFetchAnnotation"));
         suite.addTest(new AdvancedJPAJunitTest("testVerifyEmployeeCacheSettings"));
@@ -194,6 +209,7 @@ public class AdvancedJPAJunitTest extends JUnitTestCase {
         suite.addTest(new AdvancedJPAJunitTest("testNamedStoredProcedureQueryWithResultSetMapping"));
         suite.addTest(new AdvancedJPAJunitTest("testNamedStoredProcedureQueryWithResultSetFieldMapping"));        
         suite.addTest(new AdvancedJPAJunitTest("testNamedFunction"));
+        suite.addTest(new AdvancedJPAJunitTest("testNonTriggerLazyForSProc"));
 
         suite.addTest(new AdvancedJPAJunitTest("testMethodBasedTransformationMapping"));
         suite.addTest(new AdvancedJPAJunitTest("testClassBasedTransformationMapping"));
@@ -211,9 +227,12 @@ public class AdvancedJPAJunitTest extends JUnitTestCase {
         
         suite.addTest(new AdvancedJPAJunitTest("testMapBuildReferencesPKList"));
         suite.addTest(new AdvancedJPAJunitTest("testListBuildReferencesPKList"));
+        suite.addTest(new AdvancedJPAJunitTest("testValuePKListMissingElement"));
         suite.addTest(new AdvancedJPAJunitTest("testEnumeratedPrimaryKeys"));
         
         suite.addTest(new AdvancedJPAJunitTest("testAttributeOverrideToMultipleSameDefaultColumnName"));
+        suite.addTest(new AdvancedJPAJunitTest("testJoinFetchWithRefreshOnRelatedEntity"));
+        suite.addTest(new AdvancedJPAJunitTest("testSharedEmbeddedAttributeOverrides"));
         
         if (!isJPA10()) {
             // These tests use JPA 2.0 entity manager API
@@ -542,6 +561,7 @@ public class AdvancedJPAJunitTest extends JUnitTestCase {
             jigsaw.addPiece(new JigsawPiece(i));
         }
         em.persist(jigsaw);
+
        
         em.flush();
         
@@ -563,7 +583,75 @@ public class AdvancedJPAJunitTest extends JUnitTestCase {
         for (JigsawPiece element : elements){
             assertTrue("Entity id " + element.getId() + " not found in ValueFromPKList list", foundJigsaw.getPieces().contains(element));
         }
+        
+        elements = (List<JigsawPiece>) mapping.valueFromPKList(pks, null, session);
+        assertEquals("ValueFromPKList returned list of different size from actual entity.", expectedNumber, elements.size());
+        
+        for (JigsawPiece element : elements){
+            assertTrue("Entity id " + element.getId() + " not found in ValueFromPKList list", foundJigsaw.getPieces().contains(element));
+        }
         rollbackTransaction(em);
+    }
+
+    public void testValuePKListMissingElement(){
+        if (this.isOnServer()) {
+            return;
+        }
+        EntityManager em = createEntityManager();
+        beginTransaction(em);
+
+        Jigsaw jigsaw = new Jigsaw();
+        for (int i = 1; i < 11; i++) {
+            jigsaw.addPiece(new JigsawPiece(i));
+        }
+        em.persist(jigsaw);
+        commitTransaction(em);
+        try {
+
+            AbstractSession session = (AbstractSession) JpaHelper.getEntityManager(em).getActiveSession();
+            ClassDescriptor descriptor = session.getDescriptorForAlias("Jigsaw");
+
+            Jigsaw foundJigsaw = (Jigsaw) em.find(Jigsaw.class, jigsaw.getId());
+            int expectedNumber = foundJigsaw.getPieces().size();
+
+            OneToManyMapping mapping = (OneToManyMapping) descriptor.getMappingForAttributeName("pieces");
+            Object[] pks = mapping.buildReferencesPKList(foundJigsaw, mapping.getAttributeValueFromObject(foundJigsaw), session);
+            assertEquals("PK list is of incorrect size", expectedNumber, pks.length);
+
+            session.getIdentityMapAccessor().invalidateObject(foundJigsaw.getPieces().get(2));
+            DatabaseRecord fks = new DatabaseRecord();
+            for (DatabaseField field : mapping.getSourceKeyFields()){
+                fks.add(field, descriptor.getObjectBuilder().extractValueFromObjectForField(foundJigsaw, field, session));
+            }
+
+            mapping.writeFromObjectIntoRow(foundJigsaw, fks, session, DatabaseMapping.WriteType.UNDEFINED);
+
+            List<JigsawPiece> elements = (List<JigsawPiece>) mapping.valueFromPKList(pks, fks, session);
+            assertEquals("ValueFromPKList returned list of different size from actual entity.", expectedNumber, elements.size());
+            assertFalse("Collection contains unexpected null", elements.contains(null));
+            for (JigsawPiece element : elements) {
+                assertTrue("Entity id " + element.getId() + " not found in ValueFromPKList list", foundJigsaw.getPieces().contains(element));
+            }
+            em.refresh(foundJigsaw.getPieces().get(2));
+            session.getIdentityMapAccessor().invalidateObject(foundJigsaw.getPieces().get(5));
+
+            elements = (List<JigsawPiece>) mapping.valueFromPKList(pks, fks, session);
+            assertEquals("ValueFromPKList returned list of different size from actual entity.", expectedNumber, elements.size());
+            assertFalse("Collection contains unexpected null", elements.contains(null));
+            for (JigsawPiece element : elements) {
+                assertTrue("Entity id " + element.getId() + " not found in ValueFromPKList list", foundJigsaw.getPieces().contains(element));
+            }
+
+        } finally {
+            try {
+                beginTransaction(em);
+                em.remove(jigsaw);
+                commitTransaction(em);
+            } catch (Exception e) {
+            } finally {
+                closeEntityManager(em);
+            }
+        }
     }
 
     /**
@@ -1318,6 +1406,43 @@ public class AdvancedJPAJunitTest extends JUnitTestCase {
     }
     
     /**
+     * Test that an embedded attribute can correctly share a field override with
+     * its parent class and write a non-null value when it is inserted and then modified.   
+     * EL Bug 393520
+     */
+    public void testSharedEmbeddedAttributeOverrides() {
+        EntityManager em = createEntityManager();
+        try {
+            Product product = new Product();
+            product.setName("Scottish Shortbread" );
+            product.setCountryCode("GBR");
+            product.setBarCode1(new BarCode("123-456-789", "GBR"));
+            product.setBarCode2(null);
+            
+            beginTransaction(em);
+            em.persist(product);
+            commitTransaction(em);
+            
+            Product productReRead = em.find(Product.class, product.getId());
+            productReRead.setName("Beef Jerky");
+            productReRead.setCountryCode("USA");
+            productReRead.setBarCode1(new BarCode("722-666-489", "USA"));
+            productReRead.setBarCode2(null);
+            
+            beginTransaction(em);
+            em.persist(product);
+            commitTransaction(em);
+        } catch (RuntimeException e) {
+            if (isTransactionActive(em)){
+                rollbackTransaction(em);
+            }
+            throw e;
+        } finally {
+            closeEntityManager(em);
+        }
+    }
+    
+    /**
      * Remove an object from the shared cache as if garbage collected
      * NPE will occur when it is read in using the CacheStoreMode.BYPASS setting outside a transaction.
      */
@@ -1787,6 +1912,53 @@ public class AdvancedJPAJunitTest extends JUnitTestCase {
         closeEntityManager(em);
     }
 
+    // Test for lazy OneToOne relation not getting triggered
+    public void testNonTriggerLazyForSProc() {
+        if (!supportsStoredProcedures()) {
+            return;
+        }
+        Employee employee2;
+        EntityManager em = createEntityManager();
+        beginTransaction(em);
+        
+        try {
+            Employee employee1 = new Employee();
+            
+            employee1.setFirstName("Me");
+            employee1.setId(11);
+            HugeProject hp = new HugeProject("big proj");
+            
+            employee1.setHugeProject(hp);
+            em.persist(hp);
+            em.persist(employee1);
+
+            commitTransaction(em);
+            em.clear();
+            
+            beginTransaction(em);
+            
+            Query q = em.createNamedQuery("SProcEmployee");
+            q.setParameter("EMP_ID", employee1.getId());
+            q.setFlushMode(FlushModeType.COMMIT);
+            q.setHint(QueryHints.REFRESH, HintValues.TRUE);
+            q.setHint(QueryHints.REFRESH_CASCADE, CascadePolicy.CascadeByMapping);
+            employee2 = (Employee) q.getSingleResult();
+            
+            ProviderUtil util = (new PersistenceProvider()).getProviderUtil();
+            //status can be LoadState.NOT_LOADED or LoadState.UNKNOWN
+            assertFalse("ProviderUtil returned LOADED for isLoaded for hugeProject when it should not.", util.isLoadedWithReference(employee2, "hugeProject").equals(LoadState.LOADED));
+             
+        } catch (RuntimeException e) {
+            // Re-throw exception to ensure stacktrace appears in test result.
+            throw e;
+        } finally {
+            if (isTransactionActive(em)){
+                rollbackTransaction(em);
+            }
+            closeEntityManager(em);
+        }
+    }
+    
     /** 
      * Tests an OptimisticLockingException is thrown when calling merge a detached and removed object.
      * bug 272704
@@ -2606,7 +2778,11 @@ public class AdvancedJPAJunitTest extends JUnitTestCase {
      * Test batch fetch with join fetch with batching on a M:M
      */
     public void testProjectToEmployeeWithBatchFetchJoinFetch() {
-        EntityManager em = createEntityManager();        
+        clearCache();
+        EntityManager em = createEntityManager();
+        beginTransaction(em);
+        // Count SQL.
+        QuerySQLTracker counter = new QuerySQLTracker(getServerSession());
         try {
             Query query = em.createQuery("SELECT p FROM Project p", Project.class);
             query.setHint(QueryHints.BATCH, "p.teamMembers");
@@ -2615,17 +2791,30 @@ public class AdvancedJPAJunitTest extends JUnitTestCase {
             query.setHint(QueryHints.BATCH_TYPE, BatchFetchType.IN);
             query.setHint(QueryHints.FETCH, "p.teamMembers.address");
             query.setHint(QueryHints.FETCH, "p.teamMembers.phoneNumbers");
-
+            
             List<Project> results = query.getResultList();
+
+            if (isWeavingEnabled() && counter.getSqlStatements().size() > 9) {
+                fail("Should have been 9 queries but was: " + counter.getSqlStatements().size());
+            }
+            
             for (Project project : results) {
                 assertNotNull("Project cannot be null", project);
-                Collection<Employee> employees = project.getTeamMembers();
-                for (Employee employee : employees) {
-                    assertNotNull("Employee cannot be null", employee);
+                Employee employee = project.getTeamLeader();
+                if (employee != null) {
+                    employee.getProjects().size();
                 }
             }
+
+            if (isWeavingEnabled() && counter.getSqlStatements().size() > 17) {
+                fail("Should have been 17 queries but was: " + counter.getSqlStatements().size());
+            }
         } finally {
+            rollbackTransaction(em);
             closeEntityManager(em);
+            if (counter != null) {
+                counter.remove();
+            }
         }
     }
     
@@ -2716,6 +2905,94 @@ public class AdvancedJPAJunitTest extends JUnitTestCase {
             }
         } finally {
             rollbackTransaction(em);
+            closeEntityManager(em);
+        }
+    }
+    
+    /**
+     * Bug 416003
+     * Test batch fetch with join fetch on a 1:m
+     */
+    public void testEmployeeFetchWithAlias() {
+        EntityManager em = createEntityManager();
+
+        try {
+            Query query = em.createQuery("SELECT d FROM Employee d join fetch d.phoneNumbers p", Employee.class);
+
+            List<Employee> results = query.getResultList();
+            assertTrue ("Test failed because extra join resulted in too many results", results.size() < 30);
+        }finally{
+            closeEntityManager(em);
+        }
+    }
+    
+    
+    /**
+     * Bug 415082 - JoinFetch does not refresh cache even though REFRESH hint is set to true
+     * Test that a refresh is performed on a queried and related object, with fetchjoins
+     */
+    public void testJoinFetchWithRefreshOnRelatedEntity() {
+        // create test entities
+        Employee emp = null;
+        Department dept = null;
+        EntityManager em = createEntityManager();
+        try {
+            beginTransaction(em);
+            
+            emp = new Employee("Bob", "Robertson");
+            dept = new Department("Pomology");
+            emp.setDepartment(dept);
+            
+            em.persist(emp);
+            em.persist(dept);
+            commitTransaction(em);
+        } finally {
+            closeEntityManager(em);
+        }
+        
+        // update tables directly
+        em = createEntityManager();
+        try {
+            beginTransaction(em);
+            
+            Session session = ((JpaEntityManager)em.getDelegate()).getActiveSession();
+            session.executeNonSelectingSQL("UPDATE CMP3_EMPLOYEE t0 SET t0.F_NAME='Joe', t0.L_NAME='Josephson' WHERE t0.EMP_ID=" + emp.getId());
+            session.executeNonSelectingSQL("UPDATE CMP3_DEPT t1 SET t1.NAME='Xenobiology' WHERE t1.ID=" + dept.getId());
+            
+            commitTransaction(em);
+        } finally {
+            closeEntityManager(em);
+        }
+        
+        // perform refreshing query
+        em = createEntityManager();
+        try {
+            Query query = em.createQuery("select e from Employee e where e.id = :pk");
+            query.setParameter("pk", emp.getId());
+            query.setHint(QueryHints.REFRESH, HintValues.TRUE);
+            Employee empReturned = (Employee)query.getSingleResult();
+        
+            // validate refresh      
+            assertNotNull("Employee should not be null", empReturned);
+            Department deptReturned = empReturned.getDepartment();
+            assertNotNull("Department should not be null", deptReturned);
+            assertEquals("Employee should have the same id", emp.getId(), empReturned.getId());
+            assertEquals("Department should have the same id", dept.getId(), deptReturned.getId());
+            assertEquals("Employee's firstName should be refreshed", "Joe", empReturned.getFirstName());
+            assertEquals("Employee's lastName should be refreshed", "Josephson", empReturned.getLastName());
+            assertEquals("Department's name should be refreshed", "Xenobiology", deptReturned.getName());
+        } finally {
+            closeEntityManager(em);
+        }
+        
+        // clean up
+        em = createEntityManager();
+        try {
+            beginTransaction(em);
+            em.remove(em.find(Employee.class, emp.getId()));
+            em.remove(em.find(Department.class, dept.getId()));
+            commitTransaction(em);
+        } finally {
             closeEntityManager(em);
         }
     }

@@ -23,6 +23,7 @@ import javax.xml.namespace.QName;
 
 import org.eclipse.persistence.core.descriptors.CoreDescriptor;
 import org.eclipse.persistence.core.mappings.CoreMapping;
+import org.eclipse.persistence.core.mappings.transformers.CoreFieldTransformer;
 import org.eclipse.persistence.exceptions.XMLMarshalException;
 import org.eclipse.persistence.internal.core.descriptors.CoreObjectBuilder;
 import org.eclipse.persistence.internal.core.helper.CoreField;
@@ -59,8 +60,6 @@ import org.eclipse.persistence.internal.oxm.record.UnmarshalRecord;
 import org.eclipse.persistence.internal.oxm.record.UnmarshalRecordImpl;
 import org.eclipse.persistence.internal.oxm.record.XMLRecord;
 import org.eclipse.persistence.internal.security.PrivilegedAccessHelper;
-import org.eclipse.persistence.mappings.transformers.FieldTransformer;
-import org.eclipse.persistence.oxm.XMLField;
 import org.eclipse.persistence.oxm.mappings.XMLCompositeObjectMapping;
 import org.eclipse.persistence.oxm.sequenced.SequencedObject;
 
@@ -347,11 +346,11 @@ public class XPathObjectBuilder extends CoreObjectBuilder<CoreAbstractRecord, Co
                     addTransformationMapping(transformationMapping);
                     fieldTransformerIterator = transformationMapping.getFieldToTransformers().iterator();
                     while (fieldTransformerIterator.hasNext()) {
-                        fieldTransformerNodeValue = new FieldTransformerNodeValue();
+                        fieldTransformerNodeValue = new FieldTransformerNodeValue(transformationMapping);
                         nextFieldToTransformer = (Object[])fieldTransformerIterator.next();
                         xmlField = (Field)nextFieldToTransformer[0];
                         fieldTransformerNodeValue.setXMLField(xmlField);
-                        fieldTransformerNodeValue.setFieldTransformer((FieldTransformer)nextFieldToTransformer[1]);
+                        fieldTransformerNodeValue.setFieldTransformer((CoreFieldTransformer)nextFieldToTransformer[1]);
                         addChild(xmlField.getXPathFragment(), fieldTransformerNodeValue, xmlDescriptor.getNamespaceResolver());
                     }
                 } else {
@@ -501,6 +500,17 @@ public class XPathObjectBuilder extends CoreObjectBuilder<CoreAbstractRecord, Co
                                 nodeValue.setIsMixedNodeValue(true);
                             }
                         }
+                        if(xmlChoiceMapping.isAny()) {
+                            XMLChoiceCollectionMappingUnmarshalNodeValue nodeValue = new XMLChoiceCollectionMappingUnmarshalNodeValue(xmlChoiceMapping, null, xmlChoiceMapping.getAnyMapping());
+                             nodeValue.setContainerNodeValue(unmarshalValue);
+                             nodeValue.setIndex(unmarshalValue.getIndex());
+                             ((ContainerValue)nodeValue.getChoiceElementNodeValue()).setIndex(unmarshalValue.getIndex());
+                             addChild(null, nodeValue, xmlDescriptor.getNamespaceResolver());
+                             fieldToNodeValues.put(null, nodeValue);
+                             if(xmlChoiceMapping.isMixedContent()) {
+                                 nodeValue.setIsMixedNodeValue(true);
+                             }
+                        }
                         marshalValue.setFieldToNodeValues(fieldToNodeValues);
                         continue;
                     }
@@ -514,22 +524,6 @@ public class XPathObjectBuilder extends CoreObjectBuilder<CoreAbstractRecord, Co
                         addChild(xmlField.getXPathFragment(), mappingNodeValue, xmlDescriptor.getNamespaceResolver());
                     } else {
                         addChild(null, mappingNodeValue, xmlDescriptor.getNamespaceResolver());
-                    }
-                    if (xmlMapping.isAbstractDirectMapping() && xmlField.isTypedTextField()) {
-                        XPathFragment nextFragment = xmlField.getXPathFragment();
-                        StringBuilder typeXPathStringBuilder = new StringBuilder();
-                        while (nextFragment.getNextFragment() != null) {
-                            typeXPathStringBuilder.append(nextFragment.getXPath());
-                            nextFragment = nextFragment.getNextFragment();
-                        }
-                        Field typeField = new XMLField();
-                        if(typeXPathStringBuilder.length() > 0) {
-                            typeXPathStringBuilder.append('/');
-                        }
-                        typeField.setXPath(typeXPathStringBuilder.toString() + Constants.ATTRIBUTE + xmlDescriptor.getNonNullNamespaceResolver().resolveNamespaceURI(javax.xml.XMLConstants.W3C_XML_SCHEMA_INSTANCE_NS_URI) + Constants.COLON + Constants.SCHEMA_TYPE_ATTRIBUTE);
-                        typeNodeValue = new TypeNodeValue();
-                        typeNodeValue.setDirectMapping((DirectMapping)xmlMapping);
-                        addChild(typeField.getXPathFragment(), typeNodeValue, xmlDescriptor.getNamespaceResolver());
                     }
                 }
             }

@@ -17,6 +17,7 @@ import org.eclipse.persistence.testing.jaxb.annotations.xmlclassextractor.XmlCla
 import org.eclipse.persistence.testing.jaxb.annotations.xmlidref.XmlIdRefMissingIdEventHandlerTestCases;
 import org.eclipse.persistence.testing.jaxb.annotations.xmlidref.XmlIdRefMissingIdTestCases;
 import org.eclipse.persistence.testing.jaxb.annotations.xmlidref.self.XmlIdRefSelfTestCases;
+import org.eclipse.persistence.testing.jaxb.annotations.xmlinlinebinarydata.InlineHexBinaryTestCases;
 import org.eclipse.persistence.testing.jaxb.annotations.xmlinversereference.InverseRefChoiceAdapterTestCases;
 import org.eclipse.persistence.testing.jaxb.annotations.xmlinversereference.InverseReferenceAdapterTestCases;
 import org.eclipse.persistence.testing.jaxb.annotations.xmlinversereference.InverseReferenceWithRefTestCases;
@@ -90,6 +91,7 @@ public class AnnotationsTestSuite extends TestSuite {
         suite.addTestSuite(org.eclipse.persistence.testing.jaxb.annotations.xmlelementsjoinnodes.collection.XmlElementsJoinNodeTestCases.class);
         suite.addTest(PredicateTestSuite.suite());
         suite.addTestSuite(org.eclipse.persistence.testing.jaxb.annotations.xmlinlinebinarydata.XmlInlineBinaryDataTestCases.class);
+        suite.addTestSuite(InlineHexBinaryTestCases.class);
         suite.addTestSuite(XmlIdRefMissingIdTestCases.class);
         suite.addTestSuite(XmlIdRefMissingIdEventHandlerTestCases.class);
         suite.addTestSuite(XmlIdRefSelfTestCases.class);
@@ -100,6 +102,8 @@ public class AnnotationsTestSuite extends TestSuite {
         suite.addTestSuite(org.eclipse.persistence.testing.jaxb.annotations.xmlelementdecl.qname.XmlElementDeclQNameNSTestCases.class);
         suite.addTestSuite(org.eclipse.persistence.testing.jaxb.annotations.xmlelementdecl.emptystringns.EmptyStringNSTestCases.class);
         suite.addTestSuite(org.eclipse.persistence.testing.jaxb.annotations.xmlelementdecl.unqualified.UnqualfiedTestCases.class);
+        suite.addTestSuite(org.eclipse.persistence.testing.jaxb.annotations.xmlelementdecl.xsitype.XsiTypeTestCases.class);        
+        suite.addTestSuite(org.eclipse.persistence.testing.jaxb.annotations.xmlelementdecl.xsitype2.FooBarXsiTypeTestCases.class);
         suite.addTest(XmlLocationTestSuite.suite());
         suite.addTest(org.eclipse.persistence.testing.jaxb.annotations.xmlvalue.XmlValueTestSuite.suite());
         suite.addTestSuite(CustomerTestCases.class);

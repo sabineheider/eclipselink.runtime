@@ -13,7 +13,6 @@
  ******************************************************************************/
 package org.eclipse.persistence.jpa.tests.jpql;
 
-import org.eclipse.persistence.jpa.tests.jpql.tools.AbstractSemanticValidatorTest;
 import java.util.List;
 import org.eclipse.persistence.jpa.jpql.AbstractSemanticValidator;
 import org.eclipse.persistence.jpa.jpql.EclipseLinkSemanticValidatorExtension;
@@ -22,13 +21,14 @@ import org.eclipse.persistence.jpa.jpql.JPQLQueryProblemMessages;
 import org.eclipse.persistence.jpa.jpql.tools.EclipseLinkJPQLQueryContext;
 import org.eclipse.persistence.jpa.jpql.tools.EclipseLinkSemanticValidator;
 import org.eclipse.persistence.jpa.jpql.tools.JPQLQueryContext;
+import org.eclipse.persistence.jpa.tests.jpql.tools.AbstractSemanticValidatorTest;
 import org.junit.Test;
 
 /**
  * The unit-test class used for testing a JPQL query semantically when the JPA version is 1.0 and 2.0
  * and EclipseLink is the persistence provider. The EclipseLink version supported is 2.5 only.
  *
- * @version 2.5
+ * @version 2.5.1
  * @since 2.5
  * @author Pascal Filion
  */
@@ -56,6 +56,14 @@ public class EclipseLinkSemanticValidatorTest2_5 extends AbstractSemanticValidat
 			buildSemanticValidatorHelper(),
 			buildSemanticExtension()
 		);
+	}
+
+	/**
+	 * {@inheritDoc}
+	 */
+	@Override
+	protected boolean isComparisonTypeChecked() {
+		return false;
 	}
 
 	/**

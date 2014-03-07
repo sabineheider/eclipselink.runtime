@@ -12,18 +12,23 @@
  ******************************************************************************/
 package org.eclipse.persistence.testing.jaxb.inheritance;
 
+import java.io.IOException;
 import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.List;
 
 import javax.xml.bind.JAXBElement;
 import javax.xml.namespace.QName;
+import javax.xml.transform.Result;
+import javax.xml.transform.stream.StreamResult;
 import javax.xml.transform.stream.StreamSource;
 
+import org.eclipse.persistence.jaxb.json.JsonSchemaOutputResolver;
 import org.eclipse.persistence.testing.jaxb.JAXBWithJSONTestCases;
 
 public class JAXBInheritanceTestCases extends JAXBWithJSONTestCases {
-	public JAXBInheritanceTestCases(String name) throws Exception {
+    private static final String JSON_SCHEMA_RESOURCE = "org/eclipse/persistence/testing/jaxb/inheritance/inheritanceschema.json";
+    public JAXBInheritanceTestCases(String name) throws Exception {
 		super(name);
 		setClasses(new Class[] { A.class, B.class, C.class, D.class, E.class });
 		setControlDocument("org/eclipse/persistence/testing/jaxb/inheritance/inheritance.xml");
@@ -44,6 +49,20 @@ public class JAXBInheritanceTestCases extends JAXBWithJSONTestCases {
 
 		return jaxbElement;
 	}
+	
+	public Object getReadControlObject() {
+		// reads a document that also contains a value for "ddd" and makes sure
+		// we ignore it
+		E object = new E();
+		object.setAaa(1);
+		object.setBbb(2);
+		object.setCcc(3);
+		object.setDdd(4);
+		object.setEee(5);
+		
+		return object;
+	}
+
 
 	public void testSchemaGen() throws Exception {
 		testSchemaGen(getControlSchemaFiles());
@@ -79,5 +98,11 @@ public class JAXBInheritanceTestCases extends JAXBWithJSONTestCases {
             compareJAXBElementObjects(controlObj, testObj);           
         }
     }
+    
+    public void testJSONSchemaGen() throws Exception{
+        InputStream controlSchema = classLoader.getResourceAsStream(JSON_SCHEMA_RESOURCE);
+        super.generateJSONSchema(controlSchema);
+    }
+
 	
 }

@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2006, 2013 Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2006, 2014 Oracle and/or its affiliates. All rights reserved.
  * This program and the accompanying materials are made available under the
  * terms of the Eclipse Public License v1.0 and Eclipse Distribution License v. 1.0
  * which accompanies this distribution.
@@ -21,7 +21,7 @@ package org.eclipse.persistence.jpa.jpql;
  * to solicit feedback from pioneering adopters on the understanding that any code that uses this
  * API will almost certainly be broken (repeatedly) as the API evolves.
  *
- * @version 2.5
+ * @version 2.5.2
  * @since 2.3
  * @author Pascal Filion
  */
@@ -210,6 +210,7 @@ public interface JPQLQueryProblemMessages {
 	String InputParameter_NotInteger = "INPUT_PARAMETER_NOT_INTEGER";
 	String InputParameter_SmallerThanOne = "INPUT_PARAMETER_SMALLER_THAN_ONE";
 	String InputParameter_WrongClauseDeclaration = "INPUT_PARAMETER_WRONG_CLAUSE_DECLARATION";
+	String Join_InvalidIdentifier = "JOIN_INVALID_IDENTIFIER";
 	String Join_InvalidJoinAssociationPath = "JOIN_INVALID_JOIN_ASSOCIATION_PATH";
 	String Join_MissingIdentificationVariable = "JOIN_MISSING_IDENTIFICATION_VARIABLE";
 	String Join_MissingJoinAssociationPath = "JOIN_MISSING_JOIN_ASSOCIATION_PATH";
@@ -296,7 +297,8 @@ public interface JPQLQueryProblemMessages {
 	String OrderByClause_OrderByItemEndsWithComma = "ORDER_BY_CLAUSE_ORDER_BY_ITEM_ENDS_WITH_COMMA";
 	String OrderByClause_OrderByItemIsMissingComma = "ORDER_BY_CLAUSE_ORDER_BY_ITEM_IS_MISSING_COMMA";
 	String OrderByClause_OrderByItemMissing = "ORDER_BY_CLAUSE_ORDER_BY_ITEM_MISSING";
-	String OrderByItem_MissingStateFieldPathExpression = "ORDER_BY_ITEM_MISSING_STATE_FIELD_PATH_EXPRESSION";
+	String OrderByItem_InvalidExpression = "ORDER_BY_ITEM_INVALID_EXPRESSION";
+	String OrderByItem_MissingExpression = "ORDER_BY_ITEM_MISSING_EXPRESSION";
 	String PathExpression_NotRelationshipMapping = "PATH_EXPRESSION_NOT_RELATIONSHIP_MAPPING";
 	String RangeVariableDeclaration_InvalidRootObject = "RANGE_VARIABLE_DECLARATION_INVALID_ROOT_OBJECT";
 	String RangeVariableDeclaration_MissingIdentificationVariable = "RANGE_VARIABLE_DECLARATION_MISSING_IDENTIFICATION_VARIABLE";

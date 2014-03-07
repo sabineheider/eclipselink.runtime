@@ -24,10 +24,10 @@ import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
+import java.util.Map.Entry;
 import java.util.NavigableSet;
 import java.util.Queue;
 import java.util.Set;
-import java.util.Map.Entry;
 import java.util.SortedSet;
 import java.util.StringTokenizer;
 import java.util.TreeSet;
@@ -47,8 +47,8 @@ import org.eclipse.persistence.core.descriptors.CoreDescriptor;
 import org.eclipse.persistence.core.mappings.CoreAttributeAccessor;
 import org.eclipse.persistence.core.mappings.CoreMapping;
 import org.eclipse.persistence.core.mappings.converters.CoreConverter;
-import org.eclipse.persistence.core.sessions.CoreProject;
 import org.eclipse.persistence.core.queries.CoreAttributeGroup;
+import org.eclipse.persistence.core.sessions.CoreProject;
 import org.eclipse.persistence.dynamic.DynamicClassLoader;
 import org.eclipse.persistence.exceptions.DescriptorException;
 import org.eclipse.persistence.exceptions.JAXBException;
@@ -77,14 +77,13 @@ import org.eclipse.persistence.internal.libraries.asm.MethodVisitor;
 import org.eclipse.persistence.internal.libraries.asm.Opcodes;
 import org.eclipse.persistence.internal.libraries.asm.Type;
 import org.eclipse.persistence.internal.oxm.Constants;
-
 import org.eclipse.persistence.internal.oxm.NamespaceResolver;
 import org.eclipse.persistence.internal.oxm.XMLConversionManager;
 import org.eclipse.persistence.internal.oxm.mappings.AnyAttributeMapping;
-import org.eclipse.persistence.internal.oxm.mappings.AnyObjectMapping;
 import org.eclipse.persistence.internal.oxm.mappings.AnyCollectionMapping;
-import org.eclipse.persistence.internal.oxm.mappings.BinaryDataMapping;
+import org.eclipse.persistence.internal.oxm.mappings.AnyObjectMapping;
 import org.eclipse.persistence.internal.oxm.mappings.BinaryDataCollectionMapping;
+import org.eclipse.persistence.internal.oxm.mappings.BinaryDataMapping;
 import org.eclipse.persistence.internal.oxm.mappings.ChoiceCollectionMapping;
 import org.eclipse.persistence.internal.oxm.mappings.ChoiceObjectMapping;
 import org.eclipse.persistence.internal.oxm.mappings.CollectionReferenceMapping;
@@ -109,16 +108,16 @@ import org.eclipse.persistence.jaxb.javamodel.Helper;
 import org.eclipse.persistence.jaxb.javamodel.JavaClass;
 import org.eclipse.persistence.jaxb.javamodel.JavaField;
 import org.eclipse.persistence.jaxb.javamodel.JavaMethod;
-import org.eclipse.persistence.jaxb.xmlmodel.XmlNamedAttributeNode;
-import org.eclipse.persistence.jaxb.xmlmodel.XmlNamedObjectGraph;
-import org.eclipse.persistence.jaxb.xmlmodel.XmlNamedSubgraph;
 import org.eclipse.persistence.jaxb.xmlmodel.XmlAbstractNullPolicy;
 import org.eclipse.persistence.jaxb.xmlmodel.XmlElementWrapper;
 import org.eclipse.persistence.jaxb.xmlmodel.XmlIsSetNullPolicy;
 import org.eclipse.persistence.jaxb.xmlmodel.XmlJavaTypeAdapter;
+import org.eclipse.persistence.jaxb.xmlmodel.XmlJoinNodes.XmlJoinNode;
+import org.eclipse.persistence.jaxb.xmlmodel.XmlNamedAttributeNode;
+import org.eclipse.persistence.jaxb.xmlmodel.XmlNamedObjectGraph;
+import org.eclipse.persistence.jaxb.xmlmodel.XmlNamedSubgraph;
 import org.eclipse.persistence.jaxb.xmlmodel.XmlNullPolicy;
 import org.eclipse.persistence.jaxb.xmlmodel.XmlTransformation;
-import org.eclipse.persistence.jaxb.xmlmodel.XmlJoinNodes.XmlJoinNode;
 import org.eclipse.persistence.jaxb.xmlmodel.XmlTransformation.XmlReadTransformer;
 import org.eclipse.persistence.jaxb.xmlmodel.XmlTransformation.XmlWriteTransformer;
 import org.eclipse.persistence.mappings.DatabaseMapping;
@@ -422,7 +421,6 @@ public class MappingsGenerator {
              }  
             
             namespace = packageNamespace;
-            descriptor.setResultAlwaysXMLRoot(true);
         } else {
             elementName = rootElem.getName();
             if (elementName.equals(XMLProcessor.DEFAULT)) {
@@ -433,7 +431,6 @@ public class MappingsGenerator {
                 }  
             }
             namespace = rootElem.getNamespace();
-            descriptor.setResultAlwaysXMLRoot(false);
         }
 
         descriptor.setJavaClassName(jClassName);
@@ -550,7 +547,7 @@ public class MappingsGenerator {
                 mapping.setSetMethodName("setValue");
                 mapping.setGetMethodName("getValue");
 
-                Class attributeClassification = org.eclipse.persistence.internal.helper.Helper.getClassFromClasseName(factoryMethodParamTypes[0], getClass().getClassLoader());
+                Class attributeClassification = org.eclipse.persistence.internal.helper.Helper.getClassFromClasseName(factoryMethodParamTypes[0], helper.getClassLoader());
                 mapping.setAttributeClassification(attributeClassification);
                 mapping.getNullPolicy().setNullRepresentedByEmptyNode(false);
 
@@ -570,7 +567,7 @@ public class MappingsGenerator {
                 mapping.setGetMethodName("getValue");
                 mapping.setSetMethodName("setValue");
                 mapping.setXPath("text()");
-                Class attributeClassification = org.eclipse.persistence.internal.helper.Helper.getClassFromClasseName(factoryMethodParamTypes[0], getClass().getClassLoader());
+                Class attributeClassification = org.eclipse.persistence.internal.helper.Helper.getClassFromClasseName(factoryMethodParamTypes[0], helper.getClassLoader());
                 mapping.setAttributeClassification(attributeClassification);
                 xmlDescriptor.addMapping((CoreMapping)mapping);
             }
@@ -584,7 +581,7 @@ public class MappingsGenerator {
              mapping.setGetMethodName("getValue");
              mapping.setSetMethodName("setValue");
              mapping.setXPath("text()");
-             Class attributeClassification = org.eclipse.persistence.internal.helper.Helper.getClassFromClasseName(factoryMethodParamTypes[0], getClass().getClassLoader());
+             Class attributeClassification = org.eclipse.persistence.internal.helper.Helper.getClassFromClasseName(factoryMethodParamTypes[0], helper.getClassLoader());
              mapping.setAttributeClassification(attributeClassification);
              xmlDescriptor.addMapping((CoreMapping)mapping);
              
@@ -781,15 +778,16 @@ public class MappingsGenerator {
         if (property.isInverseReference()) {
             return generateInverseReferenceMapping(property, descriptor, namespaceInfo);
         } 
+        if (property.isReference()) {
+            return generateMappingForReferenceProperty(property, descriptor, namespaceInfo);
+        }
         if (property.isAny()) {
             if (helper.isCollectionType(property.getType()) || property.getType().isArray()){
                 return generateAnyCollectionMapping(property, descriptor, namespaceInfo, property.isMixedContent());
             }
             return generateAnyObjectMapping(property, descriptor, namespaceInfo);
         }
-        if (property.isReference()) {
-            return generateMappingForReferenceProperty(property, descriptor, namespaceInfo);
-        }
+
         if (property.isMap()){
         	if (property.isAnyAttribute()) {
         		return generateAnyAttributeMapping(property, descriptor, namespaceInfo);
@@ -1306,9 +1304,7 @@ public class MappingsGenerator {
 
     public Mapping generateMappingForReferenceProperty(Property property, Descriptor descriptor, NamespaceInfo namespaceInfo)  {
         boolean isCollection = helper.isCollectionType(property.getType()) || property.getType().isArray();
-        if (property.isAny()) {
-            return generateAnyCollectionMapping(property, descriptor, namespaceInfo, true);
-        }
+
         Mapping mapping;
         if (isCollection) {
             mapping = new XMLChoiceCollectionMapping();
@@ -1451,6 +1447,7 @@ public class MappingsGenerator {
                 nullPolicy.setNullRepresentedByEmptyNode(false);
                 nullPolicy.setMarshalNullRepresentation(XMLNullRepresentationType.XSI_NIL);
                 nullPolicy.setNullRepresentedByXsiNil(true);
+                nullPolicy.setIgnoreAttributesForNil(false);
             }
             if (!element.isXmlRootElement()) {
                 Class scopeClass = element.getScopeClass();
@@ -1487,6 +1484,13 @@ public class MappingsGenerator {
                 }
             }
         }
+        if(property.isAny()){
+        	if(isCollection){
+                XMLChoiceCollectionMapping xmlChoiceCollectionMapping = (XMLChoiceCollectionMapping) mapping;
+                xmlChoiceCollectionMapping.setIsAny(true);
+        	}
+        }
+        
         return mapping;
     }
 
@@ -1652,8 +1656,10 @@ public class MappingsGenerator {
 
         if (property.getType() != null) {
             String theClass = null;
+            String targetClass = null;
             if (property.isSetXmlJavaTypeAdapter()) {
                 theClass = property.getOriginalType().getQualifiedName();
+                targetClass = property.getType().getQualifiedName();                
             } else {
                 theClass = property.getType().getQualifiedName();
                 
@@ -1663,6 +1669,11 @@ public class MappingsGenerator {
                 JavaClass actualJavaClass = helper.getJavaClass(theClass);
                 Class actualClass =  org.eclipse.persistence.internal.helper.Helper.getClassFromClasseName(actualJavaClass.getQualifiedName(), helper.getClassLoader());
                 mapping.setAttributeClassification(actualClass);
+                if(targetClass != null) {
+                    Class fieldClass = org.eclipse.persistence.internal.helper.Helper.getClassFromClasseName(targetClass, helper.getClassLoader());
+                    mapping.getField().setType(fieldClass);
+                }  
+                
             } catch (Exception e) {
                 // Couldn't find Class (Dynamic?), so set class name instead.
                 mapping.setAttributeClassificationName(theClass);
@@ -1752,7 +1763,10 @@ public class MappingsGenerator {
             ((Field) mapping.getField()).setSchemaType(Constants.SWA_REF_QNAME);
             mapping.setSwaRef(true);
         } else if (property.isMtomAttachment()) {
-            ((Field) mapping.getField()).setSchemaType(Constants.BASE_64_BINARY_QNAME);
+            Field f = (Field) mapping.getField();
+            if (!f.getSchemaType().equals(Constants.HEX_BINARY_QNAME)) {
+                f.setSchemaType(Constants.BASE_64_BINARY_QNAME);
+            }            
         }
         if (property.isInlineBinaryData()) {
             mapping.setShouldInlineBinaryData(true);
@@ -2415,23 +2429,23 @@ public class MappingsGenerator {
             Descriptor descriptor = info.getDescriptor();
             if (descriptor != null) {
                 generateMappings(info, descriptor, javaClass, namespaceInfo);
-            }
-            // set primary key fields (if necessary)
-            CoreMapping mapping;
-            // handle XmlID
-            if (info.isIDSet()) {
-                mapping = descriptor.getMappingForAttributeName(info.getIDProperty().getPropertyName());
-                if (mapping != null) {
-                    descriptor.addPrimaryKeyField(mapping.getField());
-                }
-            }
-            // handle XmlKey
-            if (info.hasXmlKeyProperties()) {
-                for (Property keyProp : info.getXmlKeyProperties()) {
-                    mapping = descriptor.getMappingForAttributeName(keyProp.getPropertyName());
+                // set primary key fields (if necessary)
+                CoreMapping mapping;
+                // handle XmlID
+                if (info.isIDSet()) {
+                    mapping = descriptor.getMappingForAttributeName(info.getIDProperty().getPropertyName());
                     if (mapping != null) {
                         descriptor.addPrimaryKeyField(mapping.getField());
-                    }                    
+                    }
+                }
+                // handle XmlKey
+                if (info.hasXmlKeyProperties()) {
+                    for (Property keyProp : info.getXmlKeyProperties()) {
+                        mapping = descriptor.getMappingForAttributeName(keyProp.getPropertyName());
+                        if (mapping != null) {
+                            descriptor.addPrimaryKeyField(mapping.getField());
+                        }                    
+                    }
                 }
             }
             info.postInitialize();
@@ -3048,7 +3062,7 @@ public class MappingsGenerator {
 	                  mapping.getNullPolicy().setNullRepresentedByXsiNil(true);
 	                  mapping.getNullPolicy().setNullRepresentedByEmptyNode(false);
 
-	                  Class attributeClassification = org.eclipse.persistence.internal.helper.Helper.getClassFromClasseName(attributeTypeName, getClass().getClassLoader());
+	                  Class attributeClassification = org.eclipse.persistence.internal.helper.Helper.getClassFromClasseName(attributeTypeName, helper.getClassLoader());
 	                  mapping.setAttributeClassification(attributeClassification);
 
 	              	  mapping.setShouldInlineBinaryData(false);
@@ -3076,7 +3090,7 @@ public class MappingsGenerator {
 	                      if(nextElement.getJavaType().isPrimitive()) {
 	                          attributeClassification = XMLConversionManager.getDefaultManager().convertClassNameToClass(attributeTypeName);
 	                      } else {
-	                          attributeClassification = org.eclipse.persistence.internal.helper.Helper.getClassFromClasseName(attributeTypeName, getClass().getClassLoader());
+	                          attributeClassification = org.eclipse.persistence.internal.helper.Helper.getClassFromClasseName(attributeTypeName, helper.getClassLoader());
 	                      }
 	                      mapping.setAttributeClassification(attributeClassification);
 	                  }
@@ -3121,6 +3135,7 @@ public class MappingsGenerator {
 	  				} else {
 	  				    desc.setDefaultRootElement("");
 	  				    desc.addRootElement(getQualifiedString(prefix, next.getLocalPart()));
+	  				    desc.setResultAlwaysXMLRoot(true);
 	  				}
 	              } else {
 	                  if(namespaceUri.equals("")) {
@@ -3135,6 +3150,7 @@ public class MappingsGenerator {
                           } else {
                               desc.setDefaultRootElement("");
                               desc.addRootElement(getQualifiedString(prefix, next.getLocalPart()));
+                              desc.setResultAlwaysXMLRoot(true);
                           }
 	  				}
 	  			}

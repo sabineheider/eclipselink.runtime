@@ -16,11 +16,14 @@ import junit.framework.Test;
 import junit.framework.TestCase;
 import junit.framework.TestSuite;
 
+import org.eclipse.persistence.testing.jaxb.file.FileTestCases;
 import org.eclipse.persistence.testing.jaxb.idresolver.IDResolverTestCases;
 import org.eclipse.persistence.testing.jaxb.jaxbcontext.JAXBContextMediaTypeTestCases;
 import org.eclipse.persistence.testing.jaxb.namespaceuri.xml.XMLNamespaceTestCases;
 import org.eclipse.persistence.testing.jaxb.namespaceuri.xml.XMLNamespaceXmlPathTestCases;
 import org.eclipse.persistence.testing.jaxb.nomappings.NoMappingsTestCases;
+import org.eclipse.persistence.testing.jaxb.xmlelementref.nills.XmlElementRefNillStringTestCases;
+import org.eclipse.persistence.testing.jaxb.xmlelementref.nills.XmlElementRefNillWithAttributesTestCases;
 import org.eclipse.persistence.testing.jaxb.xmlelementref.ns.XmlElementRefWithNamespaceTests;
 import org.eclipse.persistence.testing.jaxb.xmlelementref.prefix.XmlElementRefPrefixesTestCases;
 import org.eclipse.persistence.testing.jaxb.xmlvalue.XmlValueByteArrayTestCases;
@@ -106,6 +109,7 @@ public class JAXBTestSuite extends TestCase {
         suite.addTestSuite(org.eclipse.persistence.testing.jaxb.xmlanyelement.ns.DefaultNamespaceCollectionTestCases.class);
         suite.addTestSuite(org.eclipse.persistence.testing.jaxb.xmlanyelement.ns.qualified.XMLAnyElementNamespaceTestCases.class);
         suite.addTestSuite(org.eclipse.persistence.testing.jaxb.xmlanyelement.ns.qualified.DefaultNamespaceTestCases.class);
+        suite.addTestSuite(org.eclipse.persistence.testing.jaxb.xmlanyelement.ns2.DefaultNamespace2TestCases.class);
         suite.addTestSuite(org.eclipse.persistence.testing.jaxb.xmlelementref.collections.ChoiceCollectionTestCases.class);
         suite.addTestSuite(org.eclipse.persistence.testing.jaxb.xmlelementref.collections.ChoiceCollectionNullTestCases.class);
         suite.addTestSuite(org.eclipse.persistence.testing.jaxb.xmlelementref.EmployeeCollectionTestCases.class);
@@ -123,6 +127,7 @@ public class JAXBTestSuite extends TestCase {
         suite.addTestSuite(org.eclipse.persistence.testing.jaxb.xmlelementref.inheritance2.Inheritance2TestCases.class);
         suite.addTestSuite(org.eclipse.persistence.testing.jaxb.xmlelementref.missingref.MissingRefTestCases.class);
         suite.addTestSuite(org.eclipse.persistence.testing.jaxb.xmlelementref.notincontext.XmlElementRefNotGivenToContextTestCases.class);        
+        suite.addTestSuite(org.eclipse.persistence.testing.jaxb.xmlelementwrapper.XmlElementWrapperTestCases.class);
         suite.addTestSuite(org.eclipse.persistence.testing.jaxb.multiplepackage.MultiplePackageTestCases.class);
         suite.addTestSuite(org.eclipse.persistence.testing.jaxb.multiplepackage.MultiplePackageInfoTestCases.class);
         suite.addTestSuite(IDResolverTestCases.class);
@@ -130,7 +135,11 @@ public class JAXBTestSuite extends TestCase {
         suite.addTestSuite(org.eclipse.persistence.testing.jaxb.attachments.contenttype.ContentTypeTestCases.class);
         suite.addTestSuite(XmlElementRefWithNamespaceTests.class);
         suite.addTestSuite(XmlElementRefPrefixesTestCases.class);
+        suite.addTestSuite(FileTestCases.class);
+        suite.addTestSuite(XmlElementRefNillWithAttributesTestCases.class);
+        suite.addTestSuite(XmlElementRefNillStringTestCases.class);
         return suite;
+
     }
 
     public static void main(String[] args) {

@@ -28,8 +28,10 @@ import org.eclipse.persistence.testing.jaxb.xmladapter.compositedirectcollection
 import org.eclipse.persistence.testing.jaxb.xmladapter.direct.CollapsedStringTestCases;
 import org.eclipse.persistence.testing.jaxb.xmladapter.direct.ListToStringAdapterTestCases;
 import org.eclipse.persistence.testing.jaxb.xmladapter.direct.NormalizedStringTestCases;
+import org.eclipse.persistence.testing.jaxb.xmladapter.direct.XmlAdapterDirectExceptionTestCases;
 import org.eclipse.persistence.testing.jaxb.xmladapter.direct.XmlAdapterDirectNullTestCases;
 import org.eclipse.persistence.testing.jaxb.xmladapter.direct.XmlAdapterDirectTestCases;
+import org.eclipse.persistence.testing.jaxb.xmladapter.direct.XmlAdapterSchemaTypeTestCases;
 import org.eclipse.persistence.testing.jaxb.xmladapter.direct.objectlist.ObjectListTestCases;
 import org.eclipse.persistence.testing.jaxb.xmladapter.elementref.XmlAdapterElementRefListTestCases;
 import org.eclipse.persistence.testing.jaxb.xmladapter.elementref.XmlAdapterElementRefTestCases;
@@ -42,6 +44,7 @@ import org.eclipse.persistence.testing.jaxb.xmladapter.list.XmlAdapterListMultip
 import org.eclipse.persistence.testing.jaxb.xmladapter.list.XmlAdapterListSingleBarTestCases;
 import org.eclipse.persistence.testing.jaxb.xmladapter.list.XmlAdapterNestedListSingleBarTestCases;
 import org.eclipse.persistence.testing.jaxb.xmladapter.map.JAXBMapWithAdapterTestCases;
+import org.eclipse.persistence.testing.jaxb.xmladapter.noarg.NoArgCtorAdapterTestCases;
 import org.eclipse.persistence.testing.jaxb.xmladapter.packagelevel.PackageLevelAdapterTestCases;
 import org.eclipse.persistence.testing.jaxb.xmladapter.packagelevel.adapters.PackageLevelAdaptersTestCases;
 
@@ -61,6 +64,7 @@ public class XmlAdapterTestSuite extends TestCase {
         suite.addTestSuite(XmlAdapterCompositeDirectCollectionTestCases.class);
         suite.addTestSuite(XmlAdapterDirectTestCases.class);
         suite.addTestSuite(XmlAdapterDirectNullTestCases.class);
+        suite.addTestSuite(XmlAdapterDirectExceptionTestCases.class);
         suite.addTestSuite(ListToStringAdapterTestCases.class);
         suite.addTestSuite(PackageLevelAdapterTestCases.class);
         suite.addTestSuite(PackageLevelAdaptersTestCases.class);
@@ -84,6 +88,9 @@ public class XmlAdapterTestSuite extends TestCase {
         suite.addTestSuite(AdapterWithInheritanceTestCases.class);
         suite.addTestSuite(AdapterEnumTestCases.class);
         suite.addTestSuite(GenericAdapterTestCases.class);
+        suite.addTestSuite(NoArgCtorAdapterTestCases.class);
+        suite.addTestSuite(XmlAdapterSchemaTypeTestCases.class);
+
         return suite;
     }
 }

@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2006, 2013 Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2006, 2014 Oracle and/or its affiliates. All rights reserved.
  * This program and the accompanying materials are made available under the
  * terms of the Eclipse Public License v1.0 and Eclipse Distribution License v. 1.0
  * which accompanies this distribution.
@@ -74,6 +74,7 @@ import org.eclipse.persistence.jpa.jpql.parser.IdentificationVariableDeclaration
 import org.eclipse.persistence.jpa.jpql.parser.InExpression;
 import org.eclipse.persistence.jpa.jpql.parser.IndexExpression;
 import org.eclipse.persistence.jpa.jpql.parser.InputParameter;
+import org.eclipse.persistence.jpa.jpql.parser.InternalOrderByItemBNF;
 import org.eclipse.persistence.jpa.jpql.parser.JPQLExpression;
 import org.eclipse.persistence.jpa.jpql.parser.JPQLGrammar;
 import org.eclipse.persistence.jpa.jpql.parser.JPQLQueryBNF;
@@ -142,7 +143,7 @@ import static org.eclipse.persistence.jpa.jpql.parser.Expression.*;
  *
  * @see AbstractSemanticValidator
  *
- * @version 2.5
+ * @version 2.5.1
  * @since 2.4
  * @author Pascal Filion
  */
@@ -2268,8 +2269,12 @@ public abstract class AbstractGrammarValidator extends AbstractValidator {
 	                                  String reservedWordProblemKey,
 	                                  String invalidJavaIdentifierProblemKey) {
 
-		// Must not be a reserved identifier
-		if (getExpressionRegistry().isIdentifier(variableName)) {
+		// Must not be a reserved identifier. An exception is ORDER and GROUP because the actual
+		// identifiers are ORDER BY and GROUP BY
+		if (getExpressionRegistry().isIdentifier(variableName) &&
+		    !"ORDER".equalsIgnoreCase(variableName) &&
+		    !"GROUP".equalsIgnoreCase(variableName)) {
+
 			int startPosition = position(expression);
 			int endPosition   = startPosition + variableLength;
 			addProblem(expression, startPosition, endPosition, reservedWordProblemKey, variableName);
@@ -3544,11 +3549,34 @@ public abstract class AbstractGrammarValidator extends AbstractValidator {
 
 		boolean joinFetch = expression.hasFetch();
 
+		// Validate the JOIN identifier
+		String identifier = expression.getIdentifier();
+
+		if (identifier != JOIN             &&
+		    identifier != JOIN_FETCH       &&
+		    identifier != INNER_JOIN       &&
+		    identifier != INNER_JOIN_FETCH &&
+		    identifier != LEFT_JOIN        &&
+		    identifier != LEFT_JOIN_FETCH  &&
+		    identifier != LEFT_OUTER_JOIN  &&
+		    identifier != LEFT_OUTER_JOIN_FETCH) {
+
+			int startPosition = position(expression);
+			int endPosition   = startPosition + identifier.length();
+
+			addProblem(
+				expression,
+				startPosition,
+				endPosition,
+				Join_InvalidIdentifier
+			);
+		}
+
 		// Missing join association path expression
 		if (!expression.hasJoinAssociationPath()) {
 
 			int startPosition = position(expression) +
-			                    expression.getIdentifier().length() +
+			                    identifier.length() +
 			                    (expression.hasSpaceAfterJoin() ? 1 : 0);
 
 			addProblem(
@@ -3582,7 +3610,7 @@ public abstract class AbstractGrammarValidator extends AbstractValidator {
 		    (!joinFetch || expression.hasAs() && isJoinFetchIdentifiable())) {
 
 			int startPosition = position(expression) +
-			                    expression.getIdentifier().length() +
+			                    identifier.length() +
 			                    (expression.hasSpaceAfterJoin() ? 1 : 0) +
 			                    length(expression.getJoinAssociationPath()) +
 			                    (expression.hasSpaceAfterJoinAssociation() ? 1 : 0) +
@@ -3601,7 +3629,7 @@ public abstract class AbstractGrammarValidator extends AbstractValidator {
 		         (expression.hasAs() || expression.hasIdentificationVariable())) {
 
 			int startPosition = position(expression) +
-			                    expression.getIdentifier().length() +
+			                    identifier.length() +
 			                    (expression.hasSpaceAfterJoin() ? 1 : 0) +
 			                    length(expression.getJoinAssociationPath()) +
 			                    (expression.hasSpaceAfterJoinAssociation() ? 1 : 0);
@@ -3929,8 +3957,7 @@ public abstract class AbstractGrammarValidator extends AbstractValidator {
 
 		if (!expression.hasOrderByItems()) {
 			int startPosition = position(expression.getOrderByItems());
-			int endPosition   = startPosition;
-			addProblem(expression, startPosition, endPosition, OrderByClause_OrderByItemMissing);
+			addProblem(expression, startPosition, OrderByClause_OrderByItemMissing);
 		}
 		// Validate the separation of multiple grouping items
 		else {
@@ -3953,10 +3980,20 @@ public abstract class AbstractGrammarValidator extends AbstractValidator {
 		// Missing ordering item
 		if (!expression.hasExpression()) {
 			int startPosition = position(expression);
-			addProblem(expression, startPosition, OrderByItem_MissingStateFieldPathExpression);
+			addProblem(expression, startPosition, OrderByItem_MissingExpression);
 		}
 		else {
-			super.visit(expression);
+			Expression item = expression.getExpression();
+
+			// Invalid order by item
+			if (!isValid(item, InternalOrderByItemBNF.ID)) {
+				int startPosition = position(item);
+				int endPosition   = startPosition + length(item);
+				addProblem(item, startPosition, endPosition, OrderByItem_InvalidExpression);
+			}
+			else {
+				super.visit(expression);
+			}
 		}
 	}
 

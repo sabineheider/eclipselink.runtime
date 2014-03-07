@@ -638,10 +638,12 @@ public class SDOXMLHelperDelegate implements SDOXMLHelper {
    
     public void initializeDescriptor(XMLDescriptor descriptor){
         AbstractSession theSession = (AbstractSession)getXmlContext().getSession();
+        
         //do initialization for new descriptor;        
         descriptor.preInitialize(theSession);
         descriptor.initialize(theSession);
         descriptor.postInitialize(theSession);
+        
         descriptor.getObjectBuilder().initializePrimaryKey(theSession);
         getXmlContext().storeXMLDescriptorByQName(descriptor);                           
     }

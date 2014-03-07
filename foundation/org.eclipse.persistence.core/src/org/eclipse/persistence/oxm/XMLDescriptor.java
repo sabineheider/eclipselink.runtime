@@ -535,9 +535,6 @@ public class XMLDescriptor extends ClassDescriptor implements Descriptor<Attribu
      * Sets the tables
      */
     public void setTables(Vector<DatabaseTable> theTables) {
-        if (null != theTables && theTables.size() > 0) {
-            setDefaultRootElementField(theTables.get(0).getName());
-         }
          super.setTables(theTables);
     }
 
@@ -693,7 +690,7 @@ public class XMLDescriptor extends ClassDescriptor implements Descriptor<Attribu
         	if(hasInheritance() && isChildDescriptor()){
         		XMLField parentField = ((XMLDescriptor)getInheritancePolicy().getParentDescriptor()).getDefaultRootElementField();
         		//if this descriptor has a root element field different than it's parent set the leaf element type of the default root field
-        		if(parentField == null || (parentField !=null && !defaultRootElementField.getXPathFragment().equals(parentField.getXPathFragment()))){
+        		if(parentField == null || (parentField !=null && defaultRootElementField !=null && !defaultRootElementField.getXPathFragment().equals(parentField.getXPathFragment()))){
         			setDefaultRootElementType(schemaReference.getSchemaContextAsQName(getNamespaceResolver()));
         		}
         	}else{

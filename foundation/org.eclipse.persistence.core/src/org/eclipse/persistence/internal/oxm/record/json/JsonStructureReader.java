@@ -314,10 +314,11 @@ public class JsonStructureReader extends XMLReaderAdapter {
                 }
             }
 
-            boolean isTextValue = isTextValue(parentLocalName);
+            boolean isTextValue = false;
             int arraySize = jsonArray.size();
             if (arraySize == 0) {
                 if (contentHandler instanceof UnmarshalRecord) {
+                    isTextValue = isTextValue(parentLocalName);
                     UnmarshalRecord ur = (UnmarshalRecord) contentHandler;
                     XPathNode node = ur.getNonAttributeXPathNode(uri, parentLocalName, parentLocalName, null);
                     if (node != null) {
@@ -336,6 +337,7 @@ public class JsonStructureReader extends XMLReaderAdapter {
             XPathFragment groupingXPathFragment = null;
             XPathFragment itemXPathFragment = null;
             if (contentHandler instanceof UnmarshalRecord) {
+                isTextValue = isTextValue(parentLocalName);
                 UnmarshalRecord unmarshalRecord = (UnmarshalRecord) contentHandler;
                 if (unmarshalRecord.getUnmarshaller().isWrapperAsCollectionName()) {
                     XPathNode unmarshalRecordXPathNode = unmarshalRecord.getXPathNode();
@@ -430,7 +432,7 @@ public class JsonStructureReader extends XMLReaderAdapter {
                 if (textWrapper != null && textWrapper.equals(localName)) {
                     parseValue(jsonValue);
                     return;
-                }
+                }               
             } else if (contentHandler instanceof UnmarshalRecord && ((UnmarshalRecord) contentHandler).getXPathNode() != null) {
                 if (!namespaceAware && localName.equals(Constants.SCHEMA_TYPE_ATTRIBUTE) && !((UnmarshalRecord) contentHandler).getXPathNode().hasTypeChild()) {
                     return;
@@ -439,6 +441,10 @@ public class JsonStructureReader extends XMLReaderAdapter {
                 if (isTextValue) {
                     parseValue(jsonValue);
                     return;
+                }
+                NodeValue nv = ((UnmarshalRecord)contentHandler).getAttributeChildNodeValue(uri, localName);
+                if(attributePrefix == null && nv !=null ){
+                  return;
                 }
             }
             if (jsonValue != null && jsonValue.getValueType() == valueType.NULL) {
@@ -546,7 +552,6 @@ public class JsonStructureReader extends XMLReaderAdapter {
             } else if (childValue.getValueType() == ValueType.NUMBER) {
                 attributes.add(new Attribute(uri, attributeLocalName, attributeLocalName, ((JsonNumber) childValue).toString()));
             } else if (childValue.getValueType() == ValueType.NULL) {
-                attributes.add(new Attribute(uri, attributeLocalName, attributeLocalName, Constants.EMPTY_STRING));
             } else if (childValue.getValueType() == ValueType.FALSE) {
                 attributes.add(new Attribute(uri, attributeLocalName, attributeLocalName, FALSE));
             } else if (childValue.getValueType() == ValueType.TRUE) {

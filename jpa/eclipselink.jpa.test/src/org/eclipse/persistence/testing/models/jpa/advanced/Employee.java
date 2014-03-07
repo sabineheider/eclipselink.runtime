@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 1998, 2013 Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1998, 2014 Oracle and/or its affiliates. All rights reserved.
  * This program and the accompanying materials are made available under the 
  * terms of the Eclipse Public License v1.0 and Eclipse Distribution License v. 1.0 
  * which accompanies this distribution. 
@@ -30,6 +30,8 @@ import org.eclipse.persistence.annotations.IdValidation;
 import org.eclipse.persistence.annotations.JoinFetch;
 import org.eclipse.persistence.annotations.JoinFetchType;
 import org.eclipse.persistence.annotations.Mutable;
+import org.eclipse.persistence.annotations.NamedStoredProcedureQueries;
+import org.eclipse.persistence.annotations.NamedStoredProcedureQuery;
 import org.eclipse.persistence.annotations.ObjectTypeConverter;
 import org.eclipse.persistence.annotations.OptimisticLocking;
 import org.eclipse.persistence.annotations.PrimaryKey;
@@ -37,6 +39,7 @@ import org.eclipse.persistence.annotations.PrivateOwned;
 import org.eclipse.persistence.annotations.Property;
 import org.eclipse.persistence.annotations.Properties;
 import org.eclipse.persistence.annotations.ReadTransformer;
+import org.eclipse.persistence.annotations.StoredProcedureParameter;
 import org.eclipse.persistence.annotations.TypeConverter;
 import org.eclipse.persistence.annotations.WriteTransformer;
 import org.eclipse.persistence.annotations.WriteTransformers;
@@ -52,6 +55,9 @@ import static javax.persistence.GenerationType.*;
 import static org.eclipse.persistence.annotations.CacheCoordinationType.INVALIDATE_CHANGED_OBJECTS;
 import static org.eclipse.persistence.annotations.CacheType.SOFT_WEAK;
 import static org.eclipse.persistence.annotations.ChangeTrackingType.AUTO;
+import static org.eclipse.persistence.annotations.Direction.IN_OUT;
+import static org.eclipse.persistence.annotations.Direction.OUT;
+import static org.eclipse.persistence.annotations.Direction.OUT_CURSOR;
 import static org.eclipse.persistence.annotations.ExistenceType.CHECK_DATABASE;
 import static org.eclipse.persistence.annotations.OptimisticLockingType.VERSION_COLUMN;
 
@@ -160,9 +166,43 @@ import static org.eclipse.persistence.annotations.OptimisticLockingType.VERSION_
 @NamedQuery(
         name="UpdateEmployeeQueryWithLockModeNONE",
         query="UPDATE Employee e set e.salary = 100 where e.firstName like 'blah'"
+),
+//Bug# 426129 - Verify order of named query and named parameters.
+@NamedQuery(
+		name="employee.findPhoneNumberByEmployeIdAndPhoneNumberIdNamedParams",
+		query="SELECT e FROM Employee e, ADV_DEPT d WHERE e.id=:eId and d.id=:dId"
+),
+//Bug# 426129 - Verify order of named query and named parameters, where condition in reverse order.
+@NamedQuery(
+		name="employee.findPhoneNumberByEmployeIdAndPhoneNumberIdNamedParamsReverseOrder",
+		query="SELECT e FROM Employee e, ADV_DEPT d WHERE d.id=:dId and e.id=:eId"
+),
+//Bug# 426129 - Verify order of named query and indexed parameters.
+@NamedQuery(
+		name="employee.findPhoneNumberByEmployeIdAndPhoneNumberIdIndexedParams",
+		query="SELECT e FROM Employee e, ADV_DEPT d WHERE e.id=?1 and d.id=?2"
+),
+//Bug# 426129 - Verify order of named query and indexed parameters, where condition in reverse order.
+@NamedQuery(
+		name="employee.findPhoneNumberByEmployeIdAndPhoneNumberIdIndexedParamsReverseOrder",
+		query="SELECT e FROM Employee e, ADV_DEPT d WHERE d.id=?1 and e.id=?2"
 )
 }
 )
+
+@NamedStoredProcedureQueries({
+    @NamedStoredProcedureQuery(
+        name="SProcEmployee",
+        resultClass=org.eclipse.persistence.testing.models.jpa.advanced.Employee.class,
+        procedureName="SProc_Read_Employee",
+        callByIndex=true,
+        parameters={
+            @StoredProcedureParameter(direction=IN_OUT, name="employee_id_v", queryParameter="EMP_ID", type=Integer.class),
+            @StoredProcedureParameter(direction=OUT, name="f_name_v", queryParameter="F_NAME", type=String.class),
+            @StoredProcedureParameter(direction=OUT, name="huge_proj_id_v", queryParameter="HUGE_PROJ_ID", type=Integer.class)
+        })
+})
+
 @OptimisticLocking(
     type=VERSION_COLUMN
 )

@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 1998, 2013 Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1998, 2014 Oracle and/or its affiliates. All rights reserved.
  * This program and the accompanying materials are made available under the 
  * terms of the Eclipse Public License v1.0 and Eclipse Distribution License v. 1.0 
  * which accompanies this distribution. 
@@ -146,6 +146,14 @@ public class ParameterExpression extends BaseExpression {
     public DatabaseField getField() {
         return field;
     }
+    
+    /**
+     * INTERNAL:
+     * Used to set the internal field value.
+     */
+    public void setField(DatabaseField field) {
+        this.field = field;
+    }
 
     /**
      * This allows for nesting of parametrized expression.
@@ -273,7 +281,9 @@ public class ParameterExpression extends BaseExpression {
                 }
                 // Also check the same field, but a different table for table per class inheritance.
                 // TODO: JPA also allows for field to be renamed in subclasses, this needs to account for that (never has...).
-                value = translationRow.getIndicatingNoEntry(new DatabaseField(this.field.getName()));
+                if (translationRow != null) {
+                    value = translationRow.getIndicatingNoEntry(new DatabaseField(this.field.getName()));
+                }
                 if ((value == AbstractRecord.noEntry) || (value == null)) {
                     throw QueryException.parameterNameMismatch(this.field.getName());
                 }
@@ -401,6 +411,8 @@ public class ParameterExpression extends BaseExpression {
     public Expression twistedForBaseAndContext(Expression newBase, Expression context, Expression oldBase) {
         if (isProperty()) {
             return context.getProperty(getField());
+        } else if (newBase == oldBase) {
+            return this;
         } else {
             return context.getField(getField());
         }

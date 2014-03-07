@@ -44,16 +44,27 @@ public class JsonSchema {
     @XmlElement(name="type")
     private JsonType type;
     
+    @XmlElement(name="anyOf")
+    private Property[] anyOf;
+    
+    @XmlElement(name="enumeration")
+    private List<String> enumeration; 
+    
     @XmlVariableNode("name")
     @XmlElementWrapper(name="properties")
     private Map<String, Property> properties;
+
+    @XmlElement(name="items")
+    private Property items;   
     
+    @XmlElement(name="additionalProperties")
+    private Boolean additionalProperties = null;
+
     @XmlVariableNode("name")
     @XmlElementWrapper(name="definitions")
     private Map<String, Property> definitions;
     
-    @XmlElement(name="item")
-    private JsonSchema item;
+
     
     private List<String> required;
     
@@ -78,6 +89,10 @@ public class JsonSchema {
         return properties;
     }
     
+    public void setProperties(Map<String, Property> props) {
+        this.properties = props;
+    }
+    
     public Map<String, Property> getDefinitions() {
         if(definitions == null) {
             definitions = new LinkedHashMap<String, Property>();
@@ -93,5 +108,36 @@ public class JsonSchema {
         return properties.get(name);
     }
 
+    public Property getItems() {
+        return items;
+    }
 
+    public void setItems(Property items) {
+        this.items = items;
+    }
+
+    public Boolean isAdditionalProperties() {
+        return additionalProperties;
+    }
+
+    public void setAdditionalProperties(Boolean additionalProperties) {
+        this.additionalProperties = additionalProperties;
+    }
+    
+    public void setAnyOf(Property[] anyOf) {
+        this.anyOf = anyOf;
+     }
+
+
+     public Property[] getAnyOf() {
+         return anyOf;
+     }
+
+    public List<String> getEnumeration() {
+        return enumeration;
+    }
+
+    public void setEnumeration(List<String> enumeration) {
+        this.enumeration = enumeration;
+    }
 }

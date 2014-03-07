@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 1998, 2013 Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1998, 2014 Oracle and/or its affiliates. All rights reserved.
  * This program and the accompanying materials are made available under the
  * terms of the Eclipse Public License v1.0 and Eclipse Distribution License v. 1.0
  * which accompanies this distribution.
@@ -28,6 +28,7 @@ import org.eclipse.persistence.testing.tests.jpa.advanced.EntityManagerJUnitTest
 import org.eclipse.persistence.testing.tests.jpa.advanced.ExtendedPersistenceContextJUnitTestSuite;
 import org.eclipse.persistence.testing.tests.jpa.advanced.JoinedAttributeAdvancedJunitTest;
 import org.eclipse.persistence.testing.tests.jpa.advanced.MetadataCachingTestSuite;
+import org.eclipse.persistence.testing.tests.jpa.advanced.NamedQueryJUnitTest;
 import org.eclipse.persistence.testing.tests.jpa.advanced.OptimisticConcurrencyJUnitTestSuite;
 import org.eclipse.persistence.testing.tests.jpa.advanced.OptimisticLockForceIncrementTestSuite;
 import org.eclipse.persistence.testing.tests.jpa.advanced.PessimisticLockEntityRefreshTestSuite;
@@ -46,6 +47,7 @@ import org.eclipse.persistence.testing.tests.jpa.advanced.multitenant.AdvancedMu
 import org.eclipse.persistence.testing.tests.jpa.cacheable.CacheableModelJunitTest;
 import org.eclipse.persistence.testing.tests.jpa.cascadedeletes.CascadeDeletesJUnitTestSuite;
 import org.eclipse.persistence.testing.tests.jpa.complexaggregate.ComplexAggregateTestSuite;
+import org.eclipse.persistence.testing.tests.jpa.config.ConfigPUTestSuite;
 import org.eclipse.persistence.testing.tests.jpa.ddlgeneration.DDLGenerationExtendTablesJUnitTestSuite;
 import org.eclipse.persistence.testing.tests.jpa.ddlgeneration.DDLGenerationJUnitTestSuite;
 import org.eclipse.persistence.testing.tests.jpa.delimited.DelimitedPUTestSuite;
@@ -134,6 +136,8 @@ public class FullRegressionTestSuite extends TestSuite {
         suite.addTest(ComplexAggregateTestSuite.suite());
         suite.addTest(MetadataCachingTestSuite.suite());
         suite.addTest(OptimisticLockForceIncrementTestSuite.suite());
+        suite.addTest(ConfigPUTestSuite.suite());
+        suite.addTest(NamedQueryJUnitTest.suite());
         fullSuite.addTest(suite);
 
         // FieldAccess advanced model

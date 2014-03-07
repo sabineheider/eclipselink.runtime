@@ -40,6 +40,13 @@ public class XMLDirectMappingNodeValue extends MappingNodeValue implements NullC
     public void setXPathNode(XPathNode xPathNode) {
         super.setXPathNode(xPathNode);
         xmlDirectMapping.getNullPolicy().xPathNode(xPathNode, this);
+        if(((Field) xmlDirectMapping.getField()).isTypedTextField()) {
+            XPathFragment typeAttributeXPathFragment = new XPathFragment();
+            typeAttributeXPathFragment.setAttribute(true);
+            typeAttributeXPathFragment.setLocalName(Constants.SCHEMA_TYPE_ATTRIBUTE);
+            typeAttributeXPathFragment.setNamespaceURI(javax.xml.XMLConstants.W3C_XML_SCHEMA_INSTANCE_NS_URI);
+            xPathNode.getParent().addChild(typeAttributeXPathFragment, new TypeNodeValue(), null);
+        }
     }
 
     public boolean isOwningNode(XPathFragment xPathFragment) {
@@ -88,7 +95,10 @@ public class XMLDirectMappingNodeValue extends MappingNodeValue implements NullC
                         marshalRecord.forceValueWrapper();
                     }
                 }
-                
+                Field xmlField = (Field) xmlDirectMapping.getField();
+                if (xmlField.isTypedTextField()) {
+                    updateNamespaces(schemaType, marshalRecord, xmlField);
+                }
                 marshalRecord.closeStartGroupingElements(groupingFragment);           
                 marshalRecord.characters(schemaType, fieldValue, null, xmlDirectMapping.isCDATA());                
             }
@@ -162,6 +172,8 @@ public class XMLDirectMappingNodeValue extends MappingNodeValue implements NullC
 
     public void endElement(XPathFragment xPathFragment, UnmarshalRecord unmarshalRecord) {
         if(unmarshalRecord.isNil() && xmlDirectMapping.getNullPolicy().isNullRepresentedByXsiNil()){
+            Object convertedValue = xmlDirectMapping.getAttributeValue(org.eclipse.persistence.oxm.record.XMLRecord.NIL, unmarshalRecord.getSession(), unmarshalRecord);
+            unmarshalRecord.setAttributeValue(convertedValue, xmlDirectMapping);
             unmarshalRecord.resetStringBuffer();
             return;
         }        

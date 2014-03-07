@@ -29,6 +29,7 @@ import org.eclipse.persistence.internal.helper.Helper;
 import org.eclipse.persistence.internal.sessions.AbstractRecord;
 import org.eclipse.persistence.internal.sessions.AbstractSession;
 import org.eclipse.persistence.oxm.NamespaceResolver;
+import org.eclipse.persistence.oxm.XMLDescriptor;
 import org.eclipse.persistence.oxm.XMLField;
 import org.eclipse.persistence.oxm.record.XMLRecord;
 
@@ -68,6 +69,11 @@ public class QNameInheritancePolicy extends InheritancePolicy {
         Vector<DatabaseTable> uniqueTables = Helper.concatenateUniqueVectors(childTables, parentTables);
         getDescriptor().setTables(uniqueTables);
         
+        if(getDescriptor().isXMLDescriptor() && getParentDescriptor().isXMLDescriptor()){
+	        if(((XMLDescriptor)getDescriptor()).getDefaultRootElementField() == null){
+	        	((XMLDescriptor)getDescriptor()).setDefaultRootElementField(((XMLDescriptor)getParentDescriptor()).getDefaultRootElementField());
+	        }
+        }
         
         // After filtering out any duplicate tables, set the default table
         // if one is not already set. This must be done now before any other
@@ -158,15 +164,18 @@ public class QNameInheritancePolicy extends InheritancePolicy {
         // If we have a namespace resolver, check any of the class-indicator values
         // for prefixed type names and resolve the namespaces.
         if (!this.shouldUseClassNameAsIndicator()){ 
+            if(classIndicatorField != null){
+                XPathFragment frag = ((XMLField) classIndicatorField).getXPathFragment();
+                if (frag.getLocalName().equals(Constants.SCHEMA_TYPE_ATTRIBUTE) && javax.xml.XMLConstants.W3C_XML_SCHEMA_INSTANCE_NS_URI.equals(frag.getNamespaceURI())) {
+                   usesXsiType = true;
+                }
+            }
+
             // Must first clone the map to avoid concurrent modification.
             Iterator<Map.Entry> entries = new HashMap(getClassIndicatorMapping()).entrySet().iterator();
             while (entries.hasNext()) {
                 Map.Entry entry = entries.next();
-                Object key = entry.getKey();
-                XPathFragment frag = ((XMLField) getClassIndicatorField()).getXPathFragment();
-                if (frag.getLocalName().equals(Constants.SCHEMA_TYPE_ATTRIBUTE) && frag.getNamespaceURI() != null && frag.getNamespaceURI().equals(javax.xml.XMLConstants.W3C_XML_SCHEMA_INSTANCE_NS_URI)) {
-                    usesXsiType = true;
-                }
+                Object key = entry.getKey();                
                 if (key instanceof String) {
                     XPathQName qname;
 
@@ -210,6 +219,8 @@ public class QNameInheritancePolicy extends InheritancePolicy {
         }
     }
 
+
+
     /**
      * INTERNAL:
      * This method is invoked only for the abstract descriptors.
@@ -233,7 +244,10 @@ public class QNameInheritancePolicy extends InheritancePolicy {
         if (indicator instanceof String) {
             boolean namespaceAware = ((XMLRecord) rowFromDatabase).isNamespaceAware();
             String indicatorValue = (String)indicator;
-            int index = indicatorValue.indexOf(((XMLRecord)rowFromDatabase).getNamespaceSeparator());
+            int index = -1;
+            if(namespaceAware){
+              index = indicatorValue.indexOf(((XMLRecord)rowFromDatabase).getNamespaceSeparator());
+            }
             if (index == -1) {
                 if (namespaceAware && usesXsiType) {
                     String uri = ((XMLRecord)rowFromDatabase).resolveNamespacePrefix(null);

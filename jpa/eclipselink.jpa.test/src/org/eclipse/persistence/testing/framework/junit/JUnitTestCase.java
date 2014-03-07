@@ -16,6 +16,8 @@
  ******************************************************************************/  
 package org.eclipse.persistence.testing.framework.junit;
 
+import java.io.StringWriter;
+import java.io.Writer;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
@@ -36,6 +38,7 @@ import org.eclipse.persistence.internal.databaseaccess.Platform;
 import org.eclipse.persistence.internal.sessions.AbstractSession;
 import org.eclipse.persistence.internal.sessions.DatabaseSessionImpl;
 import org.eclipse.persistence.internal.jpa.EntityManagerFactoryImpl;
+import org.eclipse.persistence.logging.DefaultSessionLog;
 import org.eclipse.persistence.logging.SessionLog;
 import org.eclipse.persistence.sessions.Connector;
 import org.eclipse.persistence.sessions.DefaultConnector;
@@ -760,20 +763,26 @@ public abstract class JUnitTestCase extends TestCase {
         AbstractSession dbs = getDatabaseSession(persistenceUnit); 
         Object readObject = dbs.readObject(writtenObject);
         if (!dbs.compareObjects(readObject, writtenObject)) {
-            int level = dbs.getLogLevel();
+            SessionLog oldLog = dbs.getSessionLog();
+            dbs.setSessionLog(new DefaultSessionLog());
             dbs.setLogLevel(SessionLog.FINEST);
+            StringWriter newLog = new StringWriter();
+            dbs.setLog(newLog);
             dbs.compareObjects(readObject, writtenObject);
-            dbs.setLogLevel(level);
-            fail("Object from cache: " + readObject + " does not match object that was written: " + writtenObject + ". See log (on finest) for what did not match.");
+            dbs.setSessionLog(oldLog);
+            fail("Object from cache: " + readObject + " does not match object that was written: " + writtenObject + ". " + newLog);
         }
         dbs.getIdentityMapAccessor().initializeAllIdentityMaps();
         readObject = dbs.readObject(writtenObject);
         if (!dbs.compareObjects(readObject, writtenObject)) {
-            int level = dbs.getLogLevel();
+            SessionLog oldLog = dbs.getSessionLog();
+            dbs.setSessionLog(new DefaultSessionLog());
             dbs.setLogLevel(SessionLog.FINEST);
+            StringWriter newLog = new StringWriter();
+            dbs.setLog(newLog);
             dbs.compareObjects(readObject, writtenObject);
-            dbs.setLogLevel(level);
-            fail("Object from database: " + readObject + " does not match object that was written: " + writtenObject + ". See log (on finest) for what did not match.");
+            dbs.setSessionLog(oldLog);
+            fail("Object from database: " + readObject + " does not match object that was written: " + writtenObject + ". " + newLog);
         }
     }
 

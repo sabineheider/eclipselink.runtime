@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2006, 2013 Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2006, 2014 Oracle and/or its affiliates. All rights reserved.
  * This program and the accompanying materials are made available under the
  * terms of the Eclipse Public License v1.0 and Eclipse Distribution License v. 1.0
  * which accompanies this distribution.
@@ -18,7 +18,7 @@ import java.util.ListResourceBundle;
 /**
  * The resource bundle containing the problems encountered in a JPQL query.
  *
- * @version 2.5
+ * @version 2.5.2
  * @since 2.3
  * @author Pascal Filion
  */
@@ -322,8 +322,9 @@ public final class JPQLQueryProblemResourceBundle extends ListResourceBundle {
 			{"INPUT_PARAMETER_WRONG_CLAUSE_DECLARATION",  "Input parameters can only be used in the WHERE clause or HAVING clause of a query."},
 
 			// Join - Grammar
-			{"JOIN_MISSING_IDENTIFICATION_VARIABLE", "An identification variable must be defined for a JOIN expression."},
+			{"JOIN_INVALID_IDENTIFIER",              "The JOIN identifier is not valid."},
 			{"JOIN_INVALID_JOIN_ASSOCIATION_PATH",   "The join association path is not a valid expression."},
+			{"JOIN_MISSING_IDENTIFICATION_VARIABLE", "An identification variable must be defined for a JOIN expression."},
 			{"JOIN_MISSING_JOIN_ASSOCIATION_PATH",   "The join association path is missing from the JOIN expression."},
 
 			// JoinFetch - Grammar
@@ -438,7 +439,8 @@ public final class JPQLQueryProblemResourceBundle extends ListResourceBundle {
 			{"NUMERIC_LITERAL_INVALID", "''{0}'' is not a valid numeric value."},
 
 			// ObjectByItem - Grammar
-			{"ORDER_BY_ITEM_MISSING_STATE_FIELD_PATH_EXPRESSION", "A state field path expression must be specified."},
+			{"ORDER_BY_ITEM_INVALID_EXPRESSION", "The order by item is not a valid expression."},
+			{"ORDER_BY_ITEM_MISSING_EXPRESSION", "An order by item must be specified."},
 
 			// ObjectExpression - Grammar
 			{"OBJECT_EXPRESSION_INVALID_EXPRESSION",        "The encapsulated expression is not a valid expression."},

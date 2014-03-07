@@ -411,6 +411,8 @@ public class MOXyJsonProvider implements MessageBodyReader<Object>, MessageBodyW
             return false;
         } else if(CoreClassConstants.APBYTE == type || CoreClassConstants.STRING == type) {
             return false;
+        } else if(Map.class.isAssignableFrom(type)) {
+            return false;
         } else if(File.class.isAssignableFrom(type)) {
             return false;
         } else if(DataSource.class.isAssignableFrom(type)) {
@@ -420,6 +422,10 @@ public class MOXyJsonProvider implements MessageBodyReader<Object>, MessageBodyW
         } else if(Reader.class.isAssignableFrom(type)) {
             return false;
         } else if(Object.class == type) {
+            return false;
+        } else if(type.isPrimitive()) {
+            return false;
+        } else if(type.isArray() && (type.getComponentType().isArray() || type.getComponentType().isPrimitive() || type.getComponentType().getPackage().getName().startsWith("java."))) {
             return false;
         } else if(JAXBElement.class.isAssignableFrom(type)) {
             Class domainClass = getDomainClass(genericType);
@@ -498,7 +504,9 @@ public class MOXyJsonProvider implements MessageBodyReader<Object>, MessageBodyW
         }
         if(!supportsMediaType(mediaType)) {
             return false;
-        } else if(CoreClassConstants.APBYTE == type || CoreClassConstants.STRING == type) {
+        } else if(CoreClassConstants.APBYTE == type || CoreClassConstants.STRING == type || type.isPrimitive()) {
+            return false;
+        } else if(Map.class.isAssignableFrom(type)) {
             return false;
         } else if(File.class.isAssignableFrom(type)) {
             return false;
@@ -508,11 +516,19 @@ public class MOXyJsonProvider implements MessageBodyReader<Object>, MessageBodyW
             return false;
         } else if(Object.class == type) {
             return false;
+        } else if(type.isPrimitive()) {
+            return false;
+        } else if(type.isArray() && (type.getComponentType().isArray() || type.getComponentType().isPrimitive() || type.getComponentType().getPackage().getName().startsWith("java."))) {
+            return false;
         } else if(JAXBElement.class.isAssignableFrom(type)) {
             Class domainClass = getDomainClass(genericType);
             return isWriteable(domainClass, null, annotations, mediaType) || domainClass == String.class;
         } else if(Collection.class.isAssignableFrom(type)) {
             Class domainClass = getDomainClass(genericType);
+            String packageName = domainClass.getPackage().getName();
+            if(null != packageName && packageName.startsWith("java.")) {
+                return false;
+            }
             return isWriteable(domainClass, null, annotations, mediaType) || domainClass == String.class;
          } else {
              return null != getJAXBContext(type, genericType, annotations, mediaType);
@@ -642,7 +658,7 @@ public class MOXyJsonProvider implements MessageBodyReader<Object>, MessageBodyW
             }
         } catch(UnmarshalException unmarshalException) {
             ResponseBuilder builder = Response.status(Status.BAD_REQUEST);
-            throw new WebApplicationException(builder.build());
+            throw new WebApplicationException(unmarshalException, builder.build());
         } catch(JAXBException jaxbException) {
             throw new WebApplicationException(jaxbException);
         }
@@ -799,6 +815,9 @@ public class MOXyJsonProvider implements MessageBodyReader<Object>, MessageBodyW
      * *&#47;*+json.
      */
     protected boolean supportsMediaType(MediaType mediaType) {
+        if(null == mediaType) {
+            return true;
+        }
         String subtype = mediaType.getSubtype();
         return subtype.equals(JSON) || subtype.endsWith(PLUS_JSON);
     }
@@ -837,6 +856,10 @@ public class MOXyJsonProvider implements MessageBodyReader<Object>, MessageBodyW
             }
 
             preWriteTo(object, type, genericType, annotations, mediaType, httpHeaders, marshaller);
+            
+            if(domainClass.getPackage().getName().startsWith("java.") && !(List.class.isAssignableFrom(type) ||  type.isArray())) {
+                object = new JAXBElement(new QName((String) marshaller.getProperty(MarshallerProperties.JSON_VALUE_WRAPPER)), domainClass, object);
+            }
             marshaller.marshal(object, entityStream);
         } catch(JAXBException jaxbException) {
             throw new WebApplicationException(jaxbException);

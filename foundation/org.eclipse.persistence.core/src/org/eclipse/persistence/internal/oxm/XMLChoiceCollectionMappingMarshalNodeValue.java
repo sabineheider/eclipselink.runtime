@@ -15,6 +15,7 @@ package org.eclipse.persistence.internal.oxm;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 
@@ -34,8 +35,6 @@ import org.eclipse.persistence.internal.oxm.record.ObjectMarshalContext;
 import org.eclipse.persistence.oxm.mappings.nullpolicy.AbstractNullPolicy;
 import org.eclipse.persistence.oxm.mappings.nullpolicy.XMLNullRepresentationType;
 
-import java.util.Iterator;
-
 public class XMLChoiceCollectionMappingMarshalNodeValue extends MappingNodeValue implements ContainerValue {
     private ChoiceCollectionMapping xmlChoiceCollectionMapping;
     private Map<Field, NodeValue> fieldToNodeValues;
@@ -43,11 +42,14 @@ public class XMLChoiceCollectionMappingMarshalNodeValue extends MappingNodeValue
     private NodeValue choiceElementNodeValue;
     private Field xmlField;
     private boolean isMixedNodeValue;
+    private boolean isAny;
+    private NodeValue anyNodeValue;
     private int index = -1;
 
     public XMLChoiceCollectionMappingMarshalNodeValue(ChoiceCollectionMapping mapping, Field xmlField) {
         this.xmlChoiceCollectionMapping = mapping;
         this.xmlField = xmlField;
+        isAny = mapping.isAny();
         initializeNodeValue();
     }
     
@@ -99,6 +101,10 @@ public class XMLChoiceCollectionMappingMarshalNodeValue extends MappingNodeValue
                 choiceElementNodeValue = new XMLCollectionReferenceMappingMarshalNodeValue((CollectionReferenceMapping)xmlMapping);
             }
         }
+        if(isAny){
+        	anyNodeValue = new XMLChoiceCollectionMappingUnmarshalNodeValue(xmlChoiceCollectionMapping, null, xmlChoiceCollectionMapping.getAnyMapping());
+        }
+        	
     }
 
     public boolean marshal(XPathFragment xPathFragment, MarshalRecord marshalRecord, Object object, CoreAbstractSession session, NamespaceResolver namespaceResolver) {
@@ -180,7 +186,7 @@ public class XMLChoiceCollectionMappingMarshalNodeValue extends MappingNodeValue
             		   associatedNodeValue = ((XMLChoiceCollectionMappingUnmarshalNodeValue)associatedNodeValue).getChoiceElementMarshalNodeValue(); 
             	   }
                 }
-                if(frag != null){
+                if(frag != null || associatedNodeValue.isAnyMappingNodeValue()){
                     int valueSize = listValue.size();
                     marshalRecord.startCollection();
  
@@ -208,6 +214,11 @@ public class XMLChoiceCollectionMappingMarshalNodeValue extends MappingNodeValue
     	}
         NodeValue associatedNodeValue = getNodeValueForValue(value);     
         if(associatedNodeValue != null) {
+        	if(associatedNodeValue.isAnyMappingNodeValue()){
+        		//NodeValue unwrappedNodeValue = ((XMLChoiceCollectionMappingUnmarshalNodeValue)associatedNodeValue).getChoiceElementMarshalNodeValue();
+        		return marshalSingleValueWithNodeValue(null, marshalRecord, object, value, session, namespaceResolver, marshalContext, associatedNodeValue); 
+        	}
+        	else{
         	//Find the correct fragment
         	XPathFragment frag = associatedNodeValue.getXPathNode().getXPathFragment();
     		if(frag != null){
@@ -215,19 +226,15 @@ public class XMLChoiceCollectionMappingMarshalNodeValue extends MappingNodeValue
         	    NodeValue unwrappedNodeValue = ((XMLChoiceCollectionMappingUnmarshalNodeValue)associatedNodeValue).getChoiceElementMarshalNodeValue();
         	    return marshalSingleValueWithNodeValue(frag, marshalRecord, object, value, session, namespaceResolver, marshalContext, unwrappedNodeValue);
     		}
+        	}
         }
         return true;
     }
 
     private boolean marshalSingleValueWithNodeValue(XPathFragment xPathFragment, MarshalRecord marshalRecord, Object object, Object value, CoreAbstractSession session, NamespaceResolver namespaceResolver, MarshalContext marshalContext, NodeValue unwrappedNodeValue) {        
-        
-    	Object fieldValue = value;
-    	if(value instanceof Root){
-    		fieldValue = ((Root)value).getObject();
-    	}
+    	
     	if(unwrappedNodeValue != null){
-    	    unwrappedNodeValue.marshalSingleValue(xPathFragment, marshalRecord, object, fieldValue, session, namespaceResolver, marshalContext);
-
+    	    unwrappedNodeValue.marshalSingleValue(xPathFragment, marshalRecord, object, value, session, namespaceResolver, marshalContext);
     	}    	   
     	return true;
     }
@@ -270,6 +277,9 @@ public class XMLChoiceCollectionMappingMarshalNodeValue extends MappingNodeValue
     		Object fieldValue = rootValue.getObject();
     		associatedField = getFieldForName(localName, namespaceUri);
     		if(associatedField == null) {
+    		    if(xmlChoiceCollectionMapping.isAny()) {
+    		        return this.anyNodeValue;
+    		    }
     		    Class theClass = fieldValue.getClass();
     		    while(associatedField == null) {
                     associatedField = (Field) xmlChoiceCollectionMapping.getClassToFieldMappings().get(theClass);
@@ -321,6 +331,9 @@ public class XMLChoiceCollectionMappingMarshalNodeValue extends MappingNodeValue
     		//use this as a placeholder for the nodevalue for mixedcontent
     		return this;
     	}
+    	if (xmlChoiceCollectionMapping.isAny()){
+    		return anyNodeValue;
+    	}
     	return null;
     }
     
@@ -343,6 +356,7 @@ public class XMLChoiceCollectionMappingMarshalNodeValue extends MappingNodeValue
     	Iterator<Field> fields = fieldToNodeValues.keySet().iterator(); 
     	while(fields.hasNext()) {
     		Field nextField = fields.next();
+    		if(nextField != null){
     		XPathFragment fragment = nextField.getXPathFragment();
     		while(fragment != null && (!fragment.nameIsText())) {
     			if(fragment.getNextFragment() == null || fragment.getHasText()) {
@@ -354,6 +368,7 @@ public class XMLChoiceCollectionMappingMarshalNodeValue extends MappingNodeValue
     				}
     			}
     			fragment = fragment.getNextFragment();
+    		}
     		}
     	}
     	return null;
@@ -441,6 +456,14 @@ public class XMLChoiceCollectionMappingMarshalNodeValue extends MappingNodeValue
      */
     public boolean isDefaultEmptyContainer() {
         return getMapping().isDefaultEmptyContainer();
+    }
+    
+    @Override
+    public void setXPathNode(XPathNode xPathNode) {
+        super.setXPathNode(xPathNode);
+        if(this.anyNodeValue != null) {
+            this.anyNodeValue.setXPathNode(xPathNode);
+        }
     }
 
 }
